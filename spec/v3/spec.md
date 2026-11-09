@@ -2,7 +2,7 @@
 
 > Spec-Driven Development · 阶段 1 / 5（Specify）
 > 状态：**已确认**（2026-11-09 用户确认，进入 Plan 阶段）　|　版本：v3.1　|　日期：2026-11-09
-> 工作区：`/Users/chenxin/WorkBuddy/个人相册`
+> 工作区：本仓库根目录
 > 基线：v2 已实现并在线预览（`http://chenyouyi.s3-website-ap-southeast-1.amazonaws.com`），文档 `spec/v2/`
 > v3 文档工作区：`spec/v3/`，依次为 `spec.md`（本文）→ `plan.md` → `tasks.md`
 
@@ -100,7 +100,7 @@ v2 已经把「Apple 官网式的浅色 + 深色章节、超大标题、毛玻�
   - 运行时状态与密钥：`.deploy-state.json`、`src/deploy/distribution-config.json`、`src/deploy/iam-policy.json`、`.env*`、`*.pem`、`*.key`、`.rollback-*/`
   - 源素材（含新增视频）：`photos/**`（仅保留 `.gitkeep` / `tags.csv` / `.albumignore`）
   - 系统与编辑器：`.DS_Store`、`*.log`、`.idea/`、`.vscode/`
-- **仓库安检脚本**（新增 `npm run check:repo`）：扫描暂存区与工作树，命中以下任一即失败并给出文件路径——图片/视频扩展名、> 5MB 的文件、疑似密钥（`AKIA`、`BEGIN PRIVATE KEY`、`aws_secret_access_key`、`ghp_`）、绝对路径 `/Users/chenxin`。
+- **仓库安检脚本**（新增 `npm run check:repo`）：扫描暂存区与工作树，命中以下任一即失败并给出文件路径——图片/视频扩展名、> 5MB 的文件、疑似密钥（`AKIA`、`BEGIN PRIVATE KEY`、`aws_secret_access_key`、`ghp_`）、绝对路径 `/Users/<name>/`。
 - 提供**最小 README**：项目是什么、目录结构、三条命令（build / deploy / check:repo）、隐私声明、为什么不入库照片。
 - **边界**：不引入 Git LFS、不做 CI 自动部署、不用 GitHub Pages 托管站点（站点仍在 S3/CloudFront）。
 

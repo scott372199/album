@@ -58,7 +58,7 @@ P6 集成与发布    T-20 → T-21 → T-22
 - 依赖：T-01
 - 文件：`scripts/check-repo.mjs`、`scripts/install-hooks.mjs`、`package.json`、`README.md`
 - 内容：
-  1. 五类规则（媒体扩展名 / >5MB / 密钥特征 / `/Users/chenxin` 绝对路径 / `dist/` 前缀），基于 `git ls-files -z`，逐条输出 `✗ 文件: 原因`，命中即 `process.exitCode = 1`。
+  1. 五类规则（媒体扩展名 / >5MB / 密钥特征 / `/Users/<name>/` 绝对路径 / `dist/` 前缀），基于 `git ls-files -z`，逐条输出 `✗ 文件: 原因`，命中即 `process.exitCode = 1`。
   2. `install-hooks.mjs` 写 `.git/hooks/pre-commit`（可重复执行，已存在则覆盖并备份为 `.bak`）。
   3. `package.json` 加 `check:repo`、`hook:install`。
   4. README：是什么、目录结构、命令表、隐私声明（照片与视频不入库、产物不含 GPS/机型/文件名）、为何不用前端框架。

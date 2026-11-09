@@ -2,7 +2,7 @@
 
 > Spec-Driven Development · 阶段 1 / 5（Specify）
 > 状态：**已确认**（2026-11-09，进入 Plan 阶段）　|　版本：v2.0　|　日期：2026-11-09
-> 工作区：`/Users/chenxin/WorkBuddy/个人相册`
+> 工作区：本仓库根目录
 > v1 基线（已封版，原地保留）：`spec/spec.md` v0.5、`spec/plan.md` v1.2、`spec/tasks.md` v1.2
 > v2 文档工作区：`spec/v2/`，依次为 `spec.md`（本文）→ `plan.md` → `tasks.md`
 > 本轮方向（用户 2026-11-09 确认）：**视觉重构为 Apple 官网式科技感** ＋ **恢复 HTTPS 与自定义域名**；逐阶段确认，每份文档写完停下等确认。

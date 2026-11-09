@@ -2,7 +2,7 @@
 
 > Spec-Driven Development · 阶段 1 / 5（Specify）
 > 状态：✅ 已确认（2026-11-09，进入 Implement 阶段）　|　版本：v0.5　|　日期：2026-11-09
-> 工作区：`/Users/chenxin/WorkBuddy/个人相册`
+> 工作区：本仓库根目录
 > **v0.5 变更**：桶名按用户指定改为 `chenyouyi`，访问地址 `http://chenyouyi.s3-website-ap-southeast-1.amazonaws.com`。（v0.4 已移除自有域名、DNS / CNAME / 备案及「桶名 = 域名」约束。）
 
 **本文只描述「做什么 / 做到什么程度」，不涉及技术选型与实现细节**（那是 `plan.md` 的职责）。确认后进入 Plan；后续任何需求变更先回改本文。

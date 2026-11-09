@@ -710,7 +710,7 @@ photos/**
 | 媒体文件 | 扩展名 ∈ `{jpg,jpeg,png,heic,heif,webp,gif,mp4,mov,m4v,avif}` |
 | 大文件 | > 5MB（`git ls-files -s` 拿不到大小 → 用 `stat`） |
 | 疑似密钥 | `AKIA[0-9A-Z]{16}`、`BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY`、`aws_secret_access_key`、`ghp_[A-Za-z0-9]{20,}`、`sk-[A-Za-z0-9]{20,}` |
-| 绝对路径 | 文本中出现 `/Users/chenxin` |
+| 绝对路径 | 文本中出现 `/Users/<name>/` |
 | 构建产物 | 路径以 `dist/` 开头 |
 
 实现：`git ls-files -z` 取全部已跟踪文件（含暂存），逐个按扩展名/大小/文本内容判定；输出 `✗ 文件: 原因` 清单。

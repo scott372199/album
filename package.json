@@ -1,12 +1,15 @@
 {
   "name": "personal-photo-album",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
-  "description": "Static personal photo album: local photos -> sanitized WebP -> CloudFront + private S3 over HTTPS",
+  "description": "Static personal photo album: local photos and videos -> sanitized WebP/MP4 -> private S3 + CloudFront",
   "scripts": {
     "samples": "node scripts/make-samples.mjs",
     "build": "node src/build/build.mjs",
+    "verify": "node scripts/verify.mjs",
+    "check:repo": "node scripts/check-repo.mjs",
+    "hook:install": "node scripts/install-hooks.mjs",
     "deploy": "npm run build && node src/deploy/deploy.mjs",
     "deploy:init": "node src/deploy/init.mjs",
     "deploy:dry": "node src/deploy/deploy.mjs --dry-run",
