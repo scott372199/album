@@ -440,4 +440,23 @@ ok('临时预览提供 v1 入口页备份与一键回滚，且备份不被重复
   assert.ok(previewMjs.includes('exists(backupFile)'));
 });
 
+/* 6. 正式部署的缓存头两段式 */
+const deployMjs = await readFile(path.join(ROOT, 'src/deploy/deploy.mjs'), 'utf8');
+
+ok('部署先全量长缓存 sync，再单独覆盖入口页与版本文件', () => {
+  const syncAt = deployMjs.indexOf("'s3', 'sync'");
+  const cpAt = deployMjs.indexOf("'s3', 'cp'");
+  assert.ok(syncAt > 0 && cpAt > syncAt, '顺序必须是先 sync 后 cp');
+  assert.ok(deployMjs.includes('31536000') && deployMjs.includes('immutable'), '产物应长缓存');
+  assert.ok(deployMjs.includes('index.html') && deployMjs.includes('data/version.json'));
+  assert.ok(deployMjs.includes('no-store'), 'version.json 必须 no-store');
+  assert.ok(deployMjs.includes('--metadata-directive'), '覆盖缓存头需 REPLACE 元数据');
+});
+
+ok('同步不把入口页排除在外（--exclude 会连带影响 --delete 判定）', () => {
+  const syncBlock = deployMjs.slice(deployMjs.indexOf('const syncArgs'), deployMjs.indexOf('];', deployMjs.indexOf('const syncArgs')));
+  assert.ok(!syncBlock.includes('index.html'), '入口页不应出现在 sync 的 exclude 中');
+  assert.ok(syncBlock.includes('--delete'));
+});
+
 console.log(`--- 全部通过：${checks} 项断言 ---`);

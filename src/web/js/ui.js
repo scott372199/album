@@ -27,7 +27,10 @@ export function toast(message, ms = 2400) {
 }
 
 export function photoAlt(photo) {
-  return photo.title || `${photo.album} · ${photo.year} 年 ${photo.month} 月`;
+  if (photo.title) return photo.title;
+  const date = `${photo.year} 年 ${photo.month} 月`;
+  // 相册名就是年份时（根目录照片会归到年份相册），不要重复一遍年份
+  return photo.album && photo.album !== String(photo.year) ? `${photo.album} · ${date}` : date;
 }
 
 /** 视频类内容也先拿封面当图用 */
