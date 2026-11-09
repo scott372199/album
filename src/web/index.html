@@ -2,34 +2,43 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#ffffff">
   <title>__TITLE__</title>
   <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMxZDFkMWYiLz48Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSIxNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZjVmNWY3IiBzdHJva2Utd2lkdGg9IjQiLz48Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSI1IiBmaWxsPSIjZjVmNWY3Ii8+PC9zdmc+">
   <link rel="stylesheet" href="__STYLE__">
 </head>
 <body>
-  <a class="skip-link" href="#content">跳到照片</a>
+  <a class="skip-link" href="#catalog">跳到照片</a>
 
   <nav class="site-nav" aria-label="主导航">
     <div class="nav-inner">
       <a class="brand" href="#top">__TITLE__</a>
-      <div class="tabs" role="tablist">
+      <div class="tabs" role="tablist" aria-label="视图">
         <button type="button" class="tab is-active" data-view="timeline" role="tab" aria-selected="true">时间轴</button>
         <button type="button" class="tab" data-view="album" role="tab" aria-selected="false">相册</button>
       </div>
-      <label class="nav-search">
-        <span class="sr-only">搜索照片</span>
-        <input id="q" type="search" placeholder="搜索照片" autocomplete="off" aria-label="搜索照片">
-      </label>
+      <div class="nav-actions">
+        <button type="button" class="nav-action" id="open-story">故事</button>
+        <button type="button" class="nav-action" id="open-wall">照片墙</button>
+        <label class="nav-search">
+          <span class="sr-only">搜索照片</span>
+          <input id="q" type="search" placeholder="搜索" autocomplete="off" aria-label="搜索照片">
+        </label>
+      </div>
     </div>
   </nav>
 
   <header class="hero" id="top">
-    <div class="hero-inner">
-      <p class="eyebrow">PHOTO ARCHIVE · 个人影像档案</p>
-      <h1 id="site-title">__TITLE__</h1>
-      <p id="site-subtitle" class="hero-subtitle"></p>
+    <div class="hero-stage">
+      <img class="hero-media" id="hero-media" alt="" decoding="async" fetchpriority="high">
+      <div class="hero-scrim" aria-hidden="true"></div>
+      <div class="hero-copy">
+        <p class="eyebrow" id="hero-eyebrow">PHOTO ARCHIVE</p>
+        <h1 id="site-title">__TITLE__</h1>
+        <p class="hero-subtitle" id="site-subtitle"></p>
+      </div>
       <div class="hero-hint" aria-hidden="true">
         <span class="hero-hint-line"></span>
         <span>向下滚动</span>
@@ -38,14 +47,24 @@
   </header>
 
   <main>
+    <section class="featured" id="featured" hidden aria-label="精选">
+      <div class="section-head">
+        <p class="section-kicker">SELECTED</p>
+        <h2 class="section-title">精选</h2>
+      </div>
+      <div class="featured-stream" id="featured-stream"></div>
+    </section>
+
     <section class="catalog" id="catalog">
-      <div class="catalog-head">
+      <div class="section-head section-head--row">
         <div>
           <p class="section-kicker">COLLECTION</p>
-          <h2 class="section-title">全部照片</h2>
+          <h2 class="section-title" id="catalog-title">全部照片</h2>
         </div>
         <p id="photo-count" class="photo-count"></p>
       </div>
+
+      <button type="button" id="back" class="back" hidden>&#8249; 返回相册</button>
 
       <div class="toolbar" aria-label="筛选">
         <div class="filters">
@@ -61,46 +80,131 @@
             <span>月份</span>
             <select id="month"><option value="">全部</option></select>
           </label>
-          <button type="button" id="clear" class="clear">清除筛选</button>
+          <button type="button" id="clear" class="clear" hidden>清除筛选</button>
         </div>
       </div>
 
       <div id="content" class="content"></div>
+      <div id="sentinel" class="sentinel" aria-hidden="true"></div>
     </section>
 
-    <section class="story section--dark">
-      <div class="story-inner">
-        <p class="section-kicker section-kicker--dark">THE ARCHIVE</p>
-        <h2 class="story-title">把时间，<br>留在光里。</h2>
-        <div class="story-stats">
-          <div class="stat"><strong id="story-photos">0</strong><span>张照片</span></div>
-          <div class="stat"><strong id="story-albums">0</strong><span>个相册</span></div>
-          <div class="stat"><strong id="story-span">—</strong><span>时间跨度</span></div>
-        </div>
+    <section class="album-section" id="albums-section" hidden>
+      <div class="section-head">
+        <p class="section-kicker">ALBUMS</p>
+        <h2 class="section-title">相册</h2>
+      </div>
+      <div class="album-grid" id="album-grid"></div>
+    </section>
+
+    <section class="cta section--dark" id="story-cta">
+      <div class="cta-inner">
+        <p class="section-kicker section-kicker--dark">STORY</p>
+        <h2 class="cta-title">让它自己讲一遍。</h2>
+        <p class="cta-text">按年份分成章节，配上缓慢的推近与转场，像手机相册里的「回忆」。</p>
+        <button type="button" class="cta-button" id="story-cta-button">播放故事</button>
+      </div>
+    </section>
+
+    <section class="cta section--dark" id="wall-cta">
+      <div class="cta-inner">
+        <p class="section-kicker section-kicker--dark">PHOTO WALL</p>
+        <h2 class="cta-title">放在桌上，让它一直放。</h2>
+        <p class="cta-text">全屏轮播、屏幕常亮、夜里自动变暗。适合插着电的平板。</p>
+        <button type="button" class="cta-button" id="wall-cta-button">进入照片墙</button>
+      </div>
+    </section>
+
+    <section class="stats section--dark" aria-label="统计">
+      <div class="stats-inner">
+        <div class="stat"><strong id="stat-photos">0</strong><span>张照片</span></div>
+        <div class="stat"><strong id="stat-albums">0</strong><span>个相册</span></div>
+        <div class="stat"><strong id="stat-span">—</strong><span>时间跨度</span></div>
       </div>
     </section>
   </main>
 
   <footer class="site-footer section--dark">
     <p id="footer-meta"></p>
-    <p class="footer-note">照片已剥离定位与设备信息</p>
+    <p class="footer-note">照片与视频已剥离定位与设备信息</p>
   </footer>
 
   <div id="lightbox" class="lightbox" hidden role="dialog" aria-modal="true" aria-label="照片查看">
     <div class="lb-topbar">
       <span id="lb-counter" class="lb-counter"></span>
-      <button type="button" id="lb-zoom" class="lb-btn lb-zoom" aria-label="放大">&#43;</button>
+      <button type="button" id="lb-zoom" class="lb-btn lb-zoom" aria-label="放大">+</button>
       <button type="button" id="lb-close" class="lb-btn lb-close" aria-label="关闭">&times;</button>
     </div>
     <button type="button" id="lb-prev" class="lb-btn lb-prev" aria-label="上一张">&#8249;</button>
     <figure class="lb-figure" id="lb-figure">
       <img id="lb-image" alt="">
+      <video id="lb-video" playsinline preload="metadata" hidden></video>
       <figcaption id="lb-meta" class="lb-meta"></figcaption>
     </figure>
     <button type="button" id="lb-next" class="lb-btn lb-next" aria-label="下一张">&#8250;</button>
     <div class="lb-bottom">
-      <button type="button" id="lb-play" class="lb-play">&#9654;&nbsp; 自动播放</button>
+      <div class="lb-controls">
+        <button type="button" id="lb-play" class="lb-play">自动播放</button>
+        <button type="button" id="lb-mute" class="lb-play" hidden>静音</button>
+      </div>
       <div id="lb-thumbs" class="lb-thumbs" role="group" aria-label="照片缩略图"></div>
+    </div>
+  </div>
+
+  <div id="story" class="story" hidden role="dialog" aria-modal="true" aria-label="故事模式">
+    <div class="story-stage" id="story-stage">
+      <div class="story-slide" data-layer="a"></div>
+      <div class="story-slide" data-layer="b"></div>
+      <div class="story-card" id="story-card" hidden>
+        <p class="story-card-index" id="story-card-index"></p>
+        <h2 class="story-card-title" id="story-card-title"></h2>
+        <p class="story-card-sub" id="story-card-sub"></p>
+      </div>
+      <div class="story-end" id="story-end" hidden>
+        <h2>这一段，走完了。</h2>
+        <p id="story-end-stats"></p>
+        <div class="story-end-actions">
+          <button type="button" id="story-replay">再看一次</button>
+          <button type="button" id="story-exit">回到照片</button>
+        </div>
+      </div>
+    </div>
+    <div class="story-bar" id="story-bar">
+      <span class="story-chapter" id="story-chapter"></span>
+      <div class="story-progress"><div class="story-progress-fill" id="story-progress"></div></div>
+      <div class="story-controls">
+        <button type="button" id="story-pace" class="story-btn">标准</button>
+        <button type="button" id="story-pause" class="story-btn">暂停</button>
+        <button type="button" id="story-close" class="story-btn" aria-label="退出故事">&times;</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="wall" class="wall" hidden role="dialog" aria-modal="true" aria-label="照片墙">
+    <div class="wall-stage" id="wall-stage">
+      <div class="wall-slide" data-layer="a"></div>
+      <div class="wall-slide" data-layer="b"></div>
+      <div class="wall-clock" id="wall-clock">
+        <p class="wall-time" id="wall-time"></p>
+        <p class="wall-date" id="wall-date"></p>
+      </div>
+      <div class="wall-hint" id="wall-hint" hidden></div>
+    </div>
+    <div class="wall-bar" id="wall-bar">
+      <button type="button" class="wall-btn" id="wall-prev" aria-label="上一张">&#8249;</button>
+      <button type="button" class="wall-btn" id="wall-toggle">暂停</button>
+      <label class="wall-field">
+        <span>间隔</span>
+        <select id="wall-interval">
+          <option value="5">5 秒</option>
+          <option value="10" selected>10 秒</option>
+          <option value="20">20 秒</option>
+          <option value="30">30 秒</option>
+        </select>
+      </label>
+      <button type="button" class="wall-btn" id="wall-clock-toggle">时钟</button>
+      <button type="button" class="wall-btn" id="wall-night">夜间</button>
+      <button type="button" class="wall-btn" id="wall-next" aria-label="下一张">&#8250;</button>
+      <button type="button" class="wall-btn wall-exit" id="wall-exit">退出</button>
     </div>
   </div>
 

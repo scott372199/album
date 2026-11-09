@@ -88,9 +88,9 @@ export function resolveHero(site, photos) {
 
 /**
  * 精选集：支持照片 id 与 `album:<相册名>` 两种写法。
- * 缺省时每年取最新一张，保证「大图锚点」不至于空着。
+ * 缺省时按时间倒序取最新几张，并跳过 hero，避免首屏同一张照片出现两次。
  */
-export function resolveFeatured(site, photos) {
+export function resolveFeatured(site, photos, { hero = '', limit = 3 } = {}) {
   const picked = new Set();
   for (const token of site.featured) {
     if (token.startsWith('album:')) {
@@ -101,12 +101,14 @@ export function resolveFeatured(site, photos) {
     }
   }
   if (!picked.size) {
-    const seenYear = new Set();
-    for (const photo of photos) {
-      if (seenYear.has(photo.year)) continue;
-      seenYear.add(photo.year);
+    const newestFirst = [...photos].sort((a, b) => b.year - a.year || b.month - a.month);
+    for (const photo of newestFirst) {
+      if (photo.id === hero) continue;
       picked.add(photo.id);
+      if (picked.size >= limit) break;
     }
+    // 照片不足时兜底：至少留一张
+    if (!picked.size && photos.length) picked.add(photos[0].id);
   }
   return picked;
 }

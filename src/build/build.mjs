@@ -209,7 +209,7 @@ async function main() {
   }
 
   const hero = resolveHero(SITE, entries);
-  const featured = resolveFeatured(SITE, entries);
+  const featured = resolveFeatured(SITE, entries, { hero });
   const manifest = buildManifest({ entries, site: SITE, overrides, hero, featured });
   const manifestJson = JSON.stringify(manifest);
   const manifestName = `manifest.${hashOf(manifestJson)}.json`;

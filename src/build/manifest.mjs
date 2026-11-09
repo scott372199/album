@@ -138,6 +138,8 @@ export function buildManifest({ entries, site, overrides, hero, featured }) {
   // 会让「未变化文件跳过上传」失效。
   return {
     site: { title: site.title, subtitle: site.subtitle },
+    wall: site.wall,
+    story: site.story,
     hero: hero || '',
     photos,
     albums: [...albumMap.values()],
