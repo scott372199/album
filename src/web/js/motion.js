@@ -15,12 +15,16 @@ function initReveal() {
   const targets = document.querySelectorAll('.section-head, .year-group, .cta-inner, .stats-inner');
   if (!targets.length) return;
 
-  if (CSS.supports?.('animation-timeline: view()') && !reducedMotion.matches) {
-    targets.forEach((node) => node.classList.add('reveal--css'));
+  // 页面本身不可滚动时（内容比视口短），view() 时间线拿不到推进量，
+  // 元素会永远停在起始帧变得半透明 —— 这种情况直接全显。
+  const scrollable = document.documentElement.scrollHeight > window.innerHeight + 24;
+  if (!scrollable || reducedMotion.matches) {
+    targets.forEach((node) => node.classList.add('is-visible'));
     return;
   }
-  if (reducedMotion.matches) {
-    targets.forEach((node) => node.classList.add('is-visible'));
+
+  if (CSS.supports?.('animation-timeline: view()')) {
+    targets.forEach((node) => node.classList.add('reveal--css'));
     return;
   }
   const observer = new IntersectionObserver((entries) => {
