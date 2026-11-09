@@ -21,45 +21,60 @@ async function prepareInput(srcPath, ext, tmpDir) {
   return target;
 }
 
+const TIERS = [
+  { name: 'thumb.webp', width: 320, height: null, quality: 70 },
+  { name: 'grid.webp', width: 768, height: null, quality: 76 },
+  { name: 'view.webp', width: 2048, height: 2048, quality: 82 },
+];
+
 /**
- * 生成脱敏的缩略图与展示图。
+ * 生成脱敏的三档展示图与 LQIP 占位。
  * 关键：不调用 .withMetadata()，sharp 重新编码后 EXIF 全部消失，
- * 这是 spec FR-02「源头脱敏」的实现点。
+ * 这是 spec FR-02 / FR-18「源头脱敏」的实现点。
  */
 export async function processImage(photo, distRoot, tmpDir) {
   const outDir = path.join(distRoot, 'photos', photo.id);
   await mkdir(outDir, { recursive: true });
 
   const input = await prepareInput(photo.srcPath, photo.ext, tmpDir);
-  const thumbPath = path.join(outDir, 'thumb.webp');
-  const viewPath = path.join(outDir, 'view.webp');
-
   const sourceMeta = await sharp(input).metadata();
   const ratio = sourceMeta.width && sourceMeta.height
     ? Number((sourceMeta.width / sourceMeta.height).toFixed(4))
     : 1;
 
-  const pipeline = () => sharp(input).rotate();
+  const pipeline = () => sharp(input, { animated: false }).rotate();
+  const written = {};
 
-  await pipeline()
-    .resize({ width: 320, withoutEnlargement: true })
-    .webp({ quality: 72 })
-    .toFile(thumbPath);
+  for (const tier of TIERS) {
+    const file = path.join(outDir, tier.name);
+    await pipeline()
+      .resize({
+        width: tier.width,
+        height: tier.height ?? undefined,
+        fit: tier.height ? 'inside' : 'inside',
+        withoutEnlargement: true,
+      })
+      .webp({ quality: tier.quality })
+      .toFile(file);
 
-  await pipeline()
-    .resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
-    .webp({ quality: 82 })
-    .toFile(viewPath);
-
-  // 脱敏断言：输出文件不得携带任何 EXIF 块
-  const outMeta = await sharp(viewPath).metadata();
-  if (outMeta.exif) {
-    throw new Error(`脱敏失败：${viewPath} 仍含 EXIF`);
+    // 脱敏断言：每一档都不得携带 EXIF
+    const meta = await sharp(file).metadata();
+    if (meta.exif) throw new Error(`脱敏失败：${file} 仍含 EXIF`);
+    written[tier.name] = file;
   }
+
+  // 24px 宽的模糊占位，内联进 manifest，避免首屏白块
+  const lqipBuffer = await pipeline()
+    .resize({ width: 24, withoutEnlargement: true })
+    .webp({ quality: 40 })
+    .toBuffer();
+  const lqip = `data:image/webp;base64,${lqipBuffer.toString('base64')}`;
 
   return {
     thumb: `photos/${photo.id}/thumb.webp`,
+    grid: `photos/${photo.id}/grid.webp`,
     view: `photos/${photo.id}/view.webp`,
+    lqip,
     ratio,
   };
 }

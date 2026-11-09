@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile, readdir } from 'node:fs/promises';
+import { access, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeRows, buildHash, parseHashString } from '../src/web/app.js';
@@ -11,6 +11,12 @@ let checks = 0;
 
 function ok(label, fn) {
   fn();
+  checks += 1;
+  console.log(`  ✓ ${label}`);
+}
+
+async function okAsync(label, fn) {
+  await fn();
   checks += 1;
   console.log(`  ✓ ${label}`);
 }
@@ -130,7 +136,7 @@ ok('style.css 含深浅章节、Apple 风格 token、降级与 reduced-motion', 
   }
 });
 
-ok('dist 产物无 http:// 引用', async () => {
+await okAsync('dist 产物无 http:// 引用', async () => {
   const files = [
     path.join(DIST, 'index.html'),
     ...(await readdir(path.join(DIST, 'assets'))).map((f) => path.join(DIST, 'assets', f)),
@@ -143,16 +149,61 @@ ok('dist 产物无 http:// 引用', async () => {
 });
 
 const dataFiles = await readdir(path.join(DIST, 'data'));
-const manifest = JSON.parse(await readFile(path.join(DIST, 'data', dataFiles[0]), 'utf8'));
+const manifestName = dataFiles.find((f) => f.startsWith('manifest.'));
+const manifest = JSON.parse(await readFile(path.join(DIST, 'data', manifestName), 'utf8'));
 
-ok('manifest 字段白名单与站点文案', () => {
+const IMAGE_KEYS = ['id', 'type', 'album', 'year', 'month', 'tags', 'title', 'caption',
+  'ratio', 'lqip', 'featured', 'thumb', 'grid', 'view'];
+const VIDEO_KEYS = ['id', 'type', 'album', 'year', 'month', 'tags', 'title', 'caption',
+  'ratio', 'lqip', 'featured', 'poster', 'src', 'duration'];
+const LIVE_KEYS = [...new Set([...IMAGE_KEYS, 'poster', 'src', 'duration'])];
+
+ok('manifest 按类型遵守字段白名单', () => {
   assert.equal(typeof manifest.site.title, 'string');
+  assert.equal(typeof manifest.hero, 'string');
   for (const photo of manifest.photos) {
-    assert.deepEqual(
-      Object.keys(photo).sort(),
-      ['album', 'caption', 'id', 'month', 'ratio', 'tags', 'thumb', 'title', 'view', 'year'].sort(),
-    );
+    const expected = photo.type === 'video' ? VIDEO_KEYS
+      : photo.type === 'live' ? LIVE_KEYS
+        : photo.type === 'animation' ? ['id', 'type', 'album', 'year', 'month', 'tags', 'title',
+          'caption', 'ratio', 'lqip', 'featured', 'poster', 'src']
+          : IMAGE_KEYS;
+    assert.deepEqual(Object.keys(photo).sort(), [...expected].sort(), `${photo.id} 字段不符`);
   }
+});
+
+ok('manifest 不含源路径 / 原始文件名 / 具体日期 / 文件大小', () => {
+  const text = JSON.stringify(manifest);
+  for (const forbidden of ['srcPath', '"rel"', 'mtime', '"size"', '"day"', 'hasAudio', '.MOV', '.JPG']) {
+    assert.ok(!text.includes(forbidden), `manifest 中出现 ${forbidden}`);
+  }
+});
+
+ok('每条都带 LQIP 占位且为内联 data URI', () => {
+  for (const photo of manifest.photos) {
+    assert.ok(photo.lqip.startsWith('data:image/webp;base64,'), `${photo.id} 缺少 lqip`);
+    assert.ok(photo.lqip.length > 80);
+  }
+});
+
+await okAsync('图片条目三档文件齐全，视频条目有短片与封面', async () => {
+  for (const photo of manifest.photos) {
+    if (photo.type === 'image' || photo.type === 'live') {
+      for (const rel of [photo.thumb, photo.grid, photo.view]) {
+        await access(path.join(DIST, rel));
+      }
+    }
+    if (photo.type === 'video') {
+      await access(path.join(DIST, photo.src));
+      await access(path.join(DIST, photo.poster));
+      assert.ok(photo.duration > 0 && photo.duration <= 30);
+    }
+  }
+});
+
+await okAsync('data/version.json 与 manifest 哈希一致', async () => {
+  const version = JSON.parse(await readFile(path.join(DIST, 'data', 'version.json'), 'utf8'));
+  assert.equal(version.rev, manifestName.replace(/^manifest\./, '').replace(/\.json$/, ''));
+  assert.equal(version.manifest, `data/${manifestName}`);
 });
 
 const report = JSON.parse(await readFile(path.join(DIST, '.build-report.json'), 'utf8'));
