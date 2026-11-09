@@ -1,0 +1,10 @@
+{
+  "bucket": "chenyouyi",
+  "region": "ap-southeast-1",
+  "acmRegion": "us-east-1",
+  "domain": "photos.chenyouyi.top",
+  "siteUrl": "https://photos.chenyouyi.top",
+  "indexDocument": "index.html",
+  "oacName": "chenyouyi-album-oac",
+  "distributionComment": "personal-photo-album-v2"
+}

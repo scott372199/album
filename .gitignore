@@ -1,0 +1,30 @@
+# ---------- 依赖与构建产物 ----------
+node_modules/
+dist/
+.build-cache.json
+.build-report.json
+
+# ---------- 运行时状态与凭据（绝不入库） ----------
+.deploy-state.json
+src/deploy/distribution-config.json
+.env
+.env.*
+*.pem
+*.key
+.rollback-*/
+
+# ---------- 源素材：照片与视频一律不入库 ----------
+# 用 photos/** 而不是 photos/*，连子目录也拦住
+photos/**
+!photos/.gitkeep
+!photos/tags.csv
+!photos/.albumignore
+
+# ---------- 系统与编辑器 ----------
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# 工作区笔记（含账号/资源 ID 等内部信息，不进公开仓库）
+.workbuddy/

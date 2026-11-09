@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>__TITLE__</title>
+  <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMxZDFkMWYiLz48Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSIxNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZjVmNWY3IiBzdHJva2Utd2lkdGg9IjQiLz48Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSI1IiBmaWxsPSIjZjVmNWY3Ii8+PC9zdmc+">
+  <link rel="stylesheet" href="__STYLE__">
+</head>
+<body>
+  <a class="skip-link" href="#content">跳到照片</a>
+
+  <nav class="site-nav" aria-label="主导航">
+    <div class="nav-inner">
+      <a class="brand" href="#top">__TITLE__</a>
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab is-active" data-view="timeline" role="tab" aria-selected="true">时间轴</button>
+        <button type="button" class="tab" data-view="album" role="tab" aria-selected="false">相册</button>
+      </div>
+      <label class="nav-search">
+        <span class="sr-only">搜索照片</span>
+        <input id="q" type="search" placeholder="搜索照片" autocomplete="off" aria-label="搜索照片">
+      </label>
+    </div>
+  </nav>
+
+  <header class="hero" id="top">
+    <div class="hero-inner">
+      <p class="eyebrow">PHOTO ARCHIVE · 个人影像档案</p>
+      <h1 id="site-title">__TITLE__</h1>
+      <p id="site-subtitle" class="hero-subtitle"></p>
+      <div class="hero-hint" aria-hidden="true">
+        <span class="hero-hint-line"></span>
+        <span>向下滚动</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="catalog" id="catalog">
+      <div class="catalog-head">
+        <div>
+          <p class="section-kicker">COLLECTION</p>
+          <h2 class="section-title">全部照片</h2>
+        </div>
+        <p id="photo-count" class="photo-count"></p>
+      </div>
+
+      <div class="toolbar" aria-label="筛选">
+        <div class="filters">
+          <label class="field">
+            <span>标签</span>
+            <select id="tag"><option value="">全部</option></select>
+          </label>
+          <label class="field">
+            <span>年份</span>
+            <select id="year"><option value="">全部</option></select>
+          </label>
+          <label class="field">
+            <span>月份</span>
+            <select id="month"><option value="">全部</option></select>
+          </label>
+          <button type="button" id="clear" class="clear">清除筛选</button>
+        </div>
+      </div>
+
+      <div id="content" class="content"></div>
+    </section>
+
+    <section class="story section--dark">
+      <div class="story-inner">
+        <p class="section-kicker section-kicker--dark">THE ARCHIVE</p>
+        <h2 class="story-title">把时间，<br>留在光里。</h2>
+        <div class="story-stats">
+          <div class="stat"><strong id="story-photos">0</strong><span>张照片</span></div>
+          <div class="stat"><strong id="story-albums">0</strong><span>个相册</span></div>
+          <div class="stat"><strong id="story-span">—</strong><span>时间跨度</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer section--dark">
+    <p id="footer-meta"></p>
+    <p class="footer-note">照片已剥离定位与设备信息</p>
+  </footer>
+
+  <div id="lightbox" class="lightbox" hidden role="dialog" aria-modal="true" aria-label="照片查看">
+    <div class="lb-topbar">
+      <span id="lb-counter" class="lb-counter"></span>
+      <button type="button" id="lb-zoom" class="lb-btn lb-zoom" aria-label="放大">&#43;</button>
+      <button type="button" id="lb-close" class="lb-btn lb-close" aria-label="关闭">&times;</button>
+    </div>
+    <button type="button" id="lb-prev" class="lb-btn lb-prev" aria-label="上一张">&#8249;</button>
+    <figure class="lb-figure" id="lb-figure">
+      <img id="lb-image" alt="">
+      <figcaption id="lb-meta" class="lb-meta"></figcaption>
+    </figure>
+    <button type="button" id="lb-next" class="lb-btn lb-next" aria-label="下一张">&#8250;</button>
+    <div class="lb-bottom">
+      <button type="button" id="lb-play" class="lb-play">&#9654;&nbsp; 自动播放</button>
+      <div id="lb-thumbs" class="lb-thumbs" role="group" aria-label="照片缩略图"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script>window.ALBUM_MANIFEST = "__MANIFEST__";</script>
+  <script type="module" src="__APP__"></script>
+</body>
+</html>
