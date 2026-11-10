@@ -66,6 +66,38 @@ function printPlan() {
   console.log('未执行任何 AWS 操作。去掉 --dry-run 即会真实部署。');
 }
 
+/**
+ * 部署后自检：直接问一次线上，确认入口页与它引用的资源都真的可取。
+ * 用分发域名（DNS 未生效时也可用），避免把「DNS 没配好」误判成「部署失败」。
+ */
+async function smoke() {
+  const origin = state.distributionDomainName
+    ? `https://${state.distributionDomainName}`
+    : config.siteUrl;
+
+  // 不要加查询串：桶策略只给了 GetObject，`/?x=1` 会被 S3 当成 ListBucket 请求而 403
+  const page = await fetch(`${origin}/`, { cache: 'no-store' });
+  if (!page.ok) throw new Error(`入口页返回 ${page.status}`);
+  const html = await page.text();
+
+  const asset = /(?:src|href)="(assets\/[^"]+)"/.exec(html)?.[1];
+  if (!asset) throw new Error('入口页里找不到 assets/ 引用');
+  if (!html.includes('__MANIFEST__') && !/data\/manifest\.[0-9a-f]+\.json/.test(html)) {
+    throw new Error('入口页没有指向 manifest');
+  }
+
+  const assetRes = await fetch(`${origin}/${asset}`, { method: 'HEAD' });
+  if (!assetRes.ok) throw new Error(`${asset} 返回 ${assetRes.status}`);
+
+  const versionRes = await fetch(`${origin}/data/version.json`, { cache: 'no-store' });
+  if (!versionRes.ok) throw new Error(`version.json 返回 ${versionRes.status}`);
+  const version = await versionRes.json();
+  if (!version.rev) throw new Error('version.json 缺少 rev');
+
+  console.log(`线上自检通过：${origin}（入口 ${asset} / rev ${version.rev}）`);
+  return { origin, asset, rev: version.rev };
+}
+
 async function main() {
   if (DRY_RUN) {
     printPlan();
@@ -102,6 +134,24 @@ async function main() {
     id: detail.Id || null,
     status: detail.Status || 'Completed',
   };
+
+  // 失效还在传播时首次自检可能读到旧入口，重试几次即可
+  let smokeResult = null;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      smokeResult = await smoke();
+      break;
+    } catch (err) {
+      if (attempt === 4) {
+        report.smoke = { ok: false, error: err.message };
+        await writeFile(REPORT, `${JSON.stringify(report, null, 2)}\n`);
+        throw new Error(`线上自检失败：${err.message}`);
+      }
+      console.log(`自检第 ${attempt} 次未通过（${err.message}），20s 后重试`);
+      await new Promise((resolve) => setTimeout(resolve, 20000));
+    }
+  }
+  report.smoke = { ok: true, ...smokeResult };
   await writeFile(REPORT, `${JSON.stringify(report, null, 2)}\n`);
 
   console.log('');
