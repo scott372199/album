@@ -313,7 +313,9 @@ P6 集成与发布    T-20 → T-21 → T-22
 - **屏幕常亮（Wake Lock）**：只能在本机 `localhost` 或 HTTPS 下验证，HTTP 的 S3 预览不可验。
 - **iPad Safari 实机**：横屏 1024–1366 未真机看过；竖屏与手机只做了响应式推演。
 - **View Transitions**：只在 Chrome 里验证过；Safari 26 上自动降级为淡入。
-- **CloudFront 与正式域名**：分发仍被账号验证阻塞，未部署到 `https://photos.chenyouyi.top`。
+- ~~CloudFront 与正式域名~~：**已打通**（2026-11-10）。分发 `E2UWEFMOKOQEES` 已 Deployed，
+  可用 HTTPS 访问 `https://d3mvmo06veyiuk.cloudfront.net/`；只差 DNS 记录 2 才能用正式域名。
+- **Wake Lock 现在可以验了**：CloudFront 默认域名是 HTTPS，属安全上下文，照片墙的常亮在此可用。
 
 ### 6.5 提交与标签
 
@@ -325,6 +327,17 @@ P6 集成与发布    T-20 → T-21 → T-22
 | 前端 | `85e468f feat(web): 模块化前端、编辑式栅格与故事 / 照片墙模式` |
 | 部署 | `2fe1e1a feat(deploy): 缓存头两段式；说明文字去重` |
 | 标签 | `v3.0` |
+
+### 6.6 线上状态（2026-11-10）
+
+| 项 | 值 |
+| --- | --- |
+| CloudFront 分发 | `E2UWEFMOKOQEES`（Deployed） |
+| CloudFront 域名 | `d3mvmo06veyiuk.cloudfront.net` |
+| 回源 | S3 REST 端点 + OAC `EQAKQ33RBCH5M` |
+| 首次上传 | 76 个对象（22MB），删除 5 个旧对象 |
+| 缓存头 | 产物 `max-age=31536000, immutable`；`index.html` `no-cache`；`version.json` `no-store` |
+| 待办 | DNS 记录 2：`photos.chenyouyi.top` → `d3mvmo06veyiuk.cloudfront.net` 后，再跑一次 `npm run deploy:init`（不带 `--skip-lock`）把桶转私有 |
 
 ---
 

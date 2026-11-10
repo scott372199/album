@@ -366,8 +366,13 @@ ok('视频转码参数先取时间再清元数据，且带 faststart', async () 
 });
 
 const report = JSON.parse(await readFile(path.join(DIST, '.build-report.json'), 'utf8'));
-ok('构建报告 invalidation 初始为 null', () => {
-  assert.equal(report.invalidation, null);
+ok('构建报告的 invalidation 状态合法（未部署为 null，已部署为结构体）', () => {
+  const value = report.invalidation;
+  if (value === null) return;
+  assert.equal(typeof value, 'object');
+  assert.equal(value.executed, true);
+  assert.ok(Array.isArray(value.paths) && value.paths.includes('/index.html'));
+  assert.ok(value.paths.includes('/data/version.json'));
 });
 
 /* 4. 部署配置 */

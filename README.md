@@ -63,5 +63,12 @@ dist/              构建产物（gitignore）
 
 ## 部署状态
 
-站点域名与 HTTPS 走 CloudFront + ACM；在账号验证完成前，用 S3 静态网站端点做临时预览。
-细节见 `spec/v3/plan.md` §10 与 `spec/v2/spec.md` §11。
+| 通道 | 地址 | 说明 |
+| --- | --- | --- |
+| 线上（HTTPS） | `https://d3mvmo06veyiuk.cloudfront.net/` | CloudFront + OAC + ACM，正式可用 |
+| 正式域名 | `https://photos.chenyouyi.top/` | 待 DNS 记录 2 指向 `d3mvmo06veyiuk.cloudfront.net` |
+| 临时 HTTP | `http://chenyouyi.s3-website-ap-southeast-1.amazonaws.com` | 桶转私有后会下线 |
+
+发布流程：`npm run deploy` —— 先整目录 `sync --delete` 打一年长缓存，再单独覆盖
+`index.html`（no-cache）与 `data/version.json`（no-store），最后失效这两个路径。
+细节见 `spec/v3/plan.md` §10 与 `spec/v3/tasks.md` §6。

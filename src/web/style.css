@@ -250,7 +250,7 @@ h1, h2, h3, p { margin: 0; }
 .hero-stage {
   position: relative;
   width: 100%;
-  height: min(86vh, calc(100vw / var(--hero-ratio, 1.5)));
+  height: min(92vh, calc(100vw / var(--hero-ratio, 1.5)));
   min-height: 340px;
   overflow: hidden;
   background: var(--stage);
@@ -1403,13 +1403,15 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
     padding: 9px var(--pad);
   }
   .tabs { gap: 16px; }
-  .nav-actions { margin-left: auto; gap: 6px; }
+  .nav-actions { width: 100%; margin-left: 0; gap: 6px; }
   .nav-action { height: 30px; padding: 0 11px; font-size: 12px; }
-  .nav-search { order: 3; width: 100%; margin-top: 2px; }
+  /* 搜索框吃掉这一行的剩余宽度，别被挤成一小截 */
+  .nav-search { order: 3; flex: 1 1 auto; min-width: 0; }
   .nav-search input { width: 100%; }
   .nav-search input:focus { width: 100%; }
 
-  .hero-stage { max-height: 72vh; min-height: 240px; }
+  /* 手机上不设最小高度，让照片正好铺满一行，下方不留底色带 */
+  .hero-stage { min-height: 0; }
   .hero-copy { padding: 0 var(--pad) 26px; }
   .hero-subtitle { font-size: 15px; }
 
@@ -1441,7 +1443,6 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
 }
 
 @media (max-width: 420px) {
-  .nav-action { display: none; }
   .wall-btn { min-width: 32px; padding: 0 8px; }
 }
 
