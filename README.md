@@ -63,7 +63,7 @@ dist/              构建产物（gitignore）
 
 ## 把 iPad 当照片墙
 
-1. Safari 打开 `https://d3mvmo06veyiuk.cloudfront.net/#mode=wall`（`#mode=wall` 直接进照片墙）。
+1. Safari 打开 `https://photos.chenyouyi.top/#mode=wall`（`#mode=wall` 直接进照片墙）。
 2. 设置 → 显示与亮度 → 自动锁定 → **永不**（或 15 分钟）。插上电源。
 3. 需要防误触时开「设置 → 辅助功能 → 引导式访问」，三击侧边键锁定在当前页面。
 4. **不要「添加到主屏幕」**：PWA 独立窗口下 iOS 的 Wake Lock 会失效（WebKit 已知问题），
@@ -78,9 +78,11 @@ dist/              构建产物（gitignore）
 
 | 通道 | 地址 | 说明 |
 | --- | --- | --- |
-| 线上（HTTPS） | `https://d3mvmo06veyiuk.cloudfront.net/` | CloudFront + OAC + ACM，正式可用 |
-| 正式域名 | `https://photos.chenyouyi.top/` | 待 DNS 记录 2 指向 `d3mvmo06veyiuk.cloudfront.net` |
-| 临时 HTTP | `http://chenyouyi.s3-website-ap-southeast-1.amazonaws.com` | 桶转私有后会下线 |
+| **正式** | **`https://photos.chenyouyi.top/`** | CloudFront + OAC + ACM，HTTP 自动跳 HTTPS |
+| 备用 | `https://d3mvmo06veyiuk.cloudfront.net/` | 同一分发的默认域名 |
+| ~~临时 HTTP~~ | ~~`http://chenyouyi.s3-website-ap-southeast-1.amazonaws.com`~~ | 已下线（桶转私有、网站托管已关） |
+
+桶是私有的：Public Access Block 四项全开，只有 CloudFront 的 OAC 能读，直连 S3 一律 403。
 
 发布流程：`npm run deploy` —— 先整目录 `sync --delete` 打一年长缓存，再单独覆盖
 `index.html`（no-cache）与 `data/version.json`（no-store），最后失效这两个路径。

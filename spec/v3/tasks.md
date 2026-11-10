@@ -313,9 +313,9 @@ P6 集成与发布    T-20 → T-21 → T-22
 - **屏幕常亮（Wake Lock）**：只能在本机 `localhost` 或 HTTPS 下验证，HTTP 的 S3 预览不可验。
 - **iPad Safari 实机**：横屏 1024–1366 未真机看过；竖屏与手机只做了响应式推演。
 - **View Transitions**：只在 Chrome 里验证过；Safari 26 上自动降级为淡入。
-- ~~CloudFront 与正式域名~~：**已打通**（2026-11-10）。分发 `E2UWEFMOKOQEES` 已 Deployed，
-  可用 HTTPS 访问 `https://d3mvmo06veyiuk.cloudfront.net/`；只差 DNS 记录 2 才能用正式域名。
-- **Wake Lock 现在可以验了**：CloudFront 默认域名是 HTTPS，属安全上下文，照片墙的常亮在此可用。
+- ~~CloudFront 与正式域名~~：**已全部打通**（2026-11-10）。`https://photos.chenyouyi.top/` 正常，
+  HTTP 自动 301 到 HTTPS，证书由 ACM 签发（Amazon RSA 2048 S21，到期 2027-05-26）。
+- **Wake Lock 可以验了**：正式域名是 HTTPS，属安全上下文，照片墙的常亮在此可用。
 
 ### 6.5 提交与标签
 
@@ -337,7 +337,10 @@ P6 集成与发布    T-20 → T-21 → T-22
 | 回源 | S3 REST 端点 + OAC `EQAKQ33RBCH5M` |
 | 首次上传 | 76 个对象（22MB），删除 5 个旧对象 |
 | 缓存头 | 产物 `max-age=31536000, immutable`；`index.html` `no-cache`；`version.json` `no-store` |
-| 待办 | DNS 记录 2：`photos.chenyouyi.top` → `d3mvmo06veyiuk.cloudfront.net` 后，再跑一次 `npm run deploy:init`（不带 `--skip-lock`）把桶转私有 |
+| 正式域名 | `https://photos.chenyouyi.top/`（DNS 已生效，HTTP 301 → HTTPS） |
+| 桶权限 | 已私有：Public Access Block 四项全开，网站托管已关闭，直连 S3 返回 403 |
+| 部署幂等 | `sync --size-only`，无变更时上传 0 个对象 |
+| 循环 | `npm run deploy` 全程约 30s，含线上自检 |
 
 ---
 
