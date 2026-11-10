@@ -6,6 +6,7 @@ import {
   computeEditorialRows, layoutParams, buildHash, parseHashString, buildStory, PACE,
 } from '../src/web/js/state.js';
 import { buildDistributionConfig } from '../src/deploy/distribution-config.mjs';
+import { generatePolicies } from '../src/deploy/aws.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -403,8 +404,9 @@ ok('DistributionConfig 字段正确，不配置 CustomErrorResponses', () => {
   assert.deepEqual(dc.Aliases.Items, [config.domain]);
 });
 
-const bucketPolicy = JSON.parse(await readFile(path.join(ROOT, 'src/deploy/bucket-policy.json'), 'utf8'));
-const iamPolicy = JSON.parse(await readFile(path.join(ROOT, 'src/deploy/iam-policy.json'), 'utf8'));
+/* 策略文件是运行时生成的（不入库），这里直接调生成函数拿对象断言，不需要真跑 AWS。 */
+const policyConfig = { bucket: 'demo-bucket', region: 'ap-southeast-1', domain: 'photos.example.com' };
+const { bucketPolicy, iamPolicy } = await generatePolicies(policyConfig, {}, '000000000000', { write: false });
 
 ok('桶策略仅授权 CloudFront OAC，无公开读', () => {
   const statement = bucketPolicy.Statement[0];
@@ -459,9 +461,14 @@ ok('部署先全量长缓存 sync，再单独覆盖入口页与版本文件', ()
 });
 
 ok('同步不把入口页排除在外（--exclude 会连带影响 --delete 判定）', () => {
-  const syncBlock = deployMjs.slice(deployMjs.indexOf('const syncArgs'), deployMjs.indexOf('];', deployMjs.indexOf('const syncArgs')));
-  assert.ok(!syncBlock.includes('index.html'), '入口页不应出现在 sync 的 exclude 中');
+  const start = deployMjs.indexOf('const syncArgs');
+  const raw = deployMjs.slice(start, deployMjs.indexOf('];', start));
+  // 去掉注释再判断，注释里提到 index.html 是说明文字，不是 exclude 参数
+  const syncBlock = raw.replace(/\/\/[^\n]*/g, '');
+  const excludes = [...syncBlock.matchAll(/'--exclude',\s*'([^']+)'/g)].map((m) => m[1]);
+  assert.ok(!excludes.some((value) => value.includes('index.html')), '入口页不应出现在 exclude 中');
   assert.ok(syncBlock.includes('--delete'));
+  assert.ok(syncBlock.includes('--size-only'), '同尺寸即同内容，避免每轮重传');
 });
 
 console.log(`--- 全部通过：${checks} 项断言 ---`);

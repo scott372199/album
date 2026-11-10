@@ -23,6 +23,10 @@ const syncArgs = [
   '--region', config.region, '--delete',
   '--exclude', '.build-report.json',
   '--cache-control', LONG_CACHE,
+  // 产物文件名带内容哈希，同尺寸即同内容；本地每次构建都会刷新 mtime，
+  // 不加这个的话每轮都会把十几个没变的文件重传一遍。
+  // 无哈希的 index.html 与 version.json 由下面对 cp 单独覆盖，不受影响。
+  '--size-only',
 ];
 
 const META_FILES = [

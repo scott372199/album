@@ -7,6 +7,9 @@ dist/
 # ---------- 运行时状态与凭据（绝不入库） ----------
 .deploy-state.json
 src/deploy/distribution-config.json
+# 桶策略 / IAM 策略由 init 运行时生成，含真实账号与分发 ID，不入公开仓库
+src/deploy/bucket-policy.json
+src/deploy/iam-policy.json
 .env
 .env.*
 *.pem

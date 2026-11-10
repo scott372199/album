@@ -68,7 +68,7 @@ export function selfCheck(config) {
 }
 
 /** OAC 桶策略 + IAM 最小权限。资源 ID 一律运行时注入，不硬编码。 */
-export async function generatePolicies(config, state, accountId) {
+export async function generatePolicies(config, state, accountId, { write = true } = {}) {
   const bucketArn = `arn:aws:s3:::${config.bucket}`;
   const distributionId = state.distributionId || 'DISTRIBUTION_ID';
   const account = accountId || '000000000000';
@@ -133,11 +133,15 @@ export async function generatePolicies(config, state, accountId) {
     ],
   };
 
+  // 这两份是运行时生成的产物（含真实账号与分发 ID），已 gitignore；
+  // 同时把对象本身返回出去，方便 verify 不依赖磁盘文件做断言。
   const bucketPolicyPath = path.join(DEPLOY_DIR, 'bucket-policy.json');
   const iamPolicyPath = path.join(DEPLOY_DIR, 'iam-policy.json');
-  await writeFile(bucketPolicyPath, `${JSON.stringify(bucketPolicy, null, 2)}\n`);
-  await writeFile(iamPolicyPath, `${JSON.stringify(iamPolicy, null, 2)}\n`);
-  return { bucketPolicyPath, iamPolicyPath };
+  if (write) {
+    await writeFile(bucketPolicyPath, `${JSON.stringify(bucketPolicy, null, 2)}\n`);
+    await writeFile(iamPolicyPath, `${JSON.stringify(iamPolicy, null, 2)}\n`);
+  }
+  return { bucketPolicyPath, iamPolicyPath, bucketPolicy, iamPolicy };
 }
 
 export function printDnsRecords(config, state) {
