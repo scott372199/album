@@ -1,5 +1,5 @@
 import { state, buildHash, parseHashString, filterPhotos } from './state.js';
-import { loadManifest, buildIndex } from './data.js';
+import { loadManifest, buildIndex, resolveManifest } from './data.js';
 import { createCatalog, renderFeatured, renderAlbums } from './gallery.js';
 import { initLightbox, openLightbox, closeLightbox, isLightboxOpen } from './lightbox.js';
 import { initStory, openStory, closeStory, isStoryOpen } from './story.js';
@@ -330,8 +330,19 @@ function wire() {
 /* ---------- 启动 ---------- */
 
 async function boot() {
-  const url = window.ALBUM_MANIFEST || 'data/manifest.json';
-  ctx.rev = manifestRev(url);
+  // 先取 version.json 再取清单：前端产物不再包含任何清单地址
+  // Fetch version.json first; the shell no longer embeds a manifest URL
+  let source;
+  try {
+    source = await resolveManifest();
+  } catch (err) {
+    toast('照片清单载入失败，请刷新重试');
+    console.error(err);
+    return;
+  }
+
+  const url = source.url;
+  ctx.rev = source.rev || manifestRev(url);
 
   let manifest;
   try {

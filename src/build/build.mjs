@@ -17,6 +17,28 @@ const CACHE = path.join(ROOT, '.build-cache.json');
 const SITE_FILE = path.join(ROOT, 'site.json');
 const CACHE_VERSION = 3;
 
+/**
+ * 构建目标 / Build target
+ *
+ *   all —— 前端外壳 + 本地素材处理（v3 的完整行为，离线重建用）
+ *   web —— 只产出前端外壳，**完全不读 photos/**
+ *
+ * 拆开的原因是 v4 把照片搬到了服务端：CI 里没有 photos/，也不该有。
+ * 若构建仍依赖照片，发布流水线就必须带着几十 GB 素材跑，这与「合并即发布」冲突。
+ *
+ * The split exists because v4 moved photos server-side: CI has no photos/ and
+ * should not need them. A build that still required them would force the
+ * pipeline to carry tens of gigabytes, which contradicts merge-to-deploy.
+ */
+const TARGET = (() => {
+  const arg = process.argv.slice(2).find((a) => a.startsWith('--target='));
+  const value = arg ? arg.slice('--target='.length) : 'all';
+  if (!['web', 'all'].includes(value)) {
+    throw new Error(`--target 只能是 web 或 all，收到 "${value}"`);
+  }
+  return value;
+})();
+
 async function fileExists(file) {
   try {
     await access(file);
@@ -123,34 +145,25 @@ async function copyWebAssets() {
   return { src: name, kind: 'legacy', files: [path.join(DIST, name)] };
 }
 
-async function main() {
-  const SITE = await loadSite(SITE_FILE);
-
-  await rm(path.join(DIST, 'assets'), { recursive: true, force: true });
-  await rm(path.join(DIST, 'data'), { recursive: true, force: true });
-  await mkdir(path.join(DIST, 'assets'), { recursive: true });
-  await mkdir(path.join(DIST, 'data'), { recursive: true });
-  await mkdir(path.join(DIST, 'photos'), { recursive: true });
-
+/**
+ * 处理 photos/ 下的全部素材，产出 entries。
+ * 只有 target=all 会走到这里 —— web 目标不读 photos/，所以在没有照片的
+ * 机器上（CI）也能构建成功。
+ *
+ * Processes every asset under photos/. Only target=all reaches this; the web
+ * target never touches photos/, which is what lets CI build without them.
+ */
+async function buildFromPhotos({ entries, report, nextCache }) {
   const cache = await loadCache();
   const { photos, duplicates, ignored, scanned, livePairs } = await scanPhotos(PHOTOS);
   const overrides = await loadTagOverrides(path.join(PHOTOS, 'tags.csv'));
 
+  report.duplicates = duplicates;
+  report.ignored = ignored;
+  report.scanned = scanned;
+  report.livePairs = livePairs;
+
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'album-build-'));
-  const entries = [];
-  const report = {
-    added: 0,
-    skipped: 0,
-    failed: [],
-    timeFallback: [],
-    degraded: [],
-    duplicates,
-    ignored,
-    scanned,
-    livePairs,
-    invalidation: null,
-  };
-  const nextCache = {};
 
   try {
     for (const photo of photos) {
@@ -208,11 +221,53 @@ async function main() {
     await rm(tmpDir, { recursive: true, force: true });
   }
 
+  return overrides;
+}
+
+async function main() {
+  const SITE = await loadSite(SITE_FILE);
+
+  await rm(path.join(DIST, 'assets'), { recursive: true, force: true });
+  await rm(path.join(DIST, 'data'), { recursive: true, force: true });
+  await mkdir(path.join(DIST, 'assets'), { recursive: true });
+  await mkdir(path.join(DIST, 'data'), { recursive: true });
+  await mkdir(path.join(DIST, 'photos'), { recursive: true });
+
+  const entries = [];
+  const report = {
+    added: 0,
+    skipped: 0,
+    failed: [],
+    timeFallback: [],
+    degraded: [],
+    duplicates: [],
+    ignored: [],
+    scanned: 0,
+    livePairs: 0,
+    invalidation: null,
+  };
+  const nextCache = {};
+
+  // web 目标下整段跳过：CI 里没有 photos/，也不该有
+  // Skipped for the web target: CI has no photos/ and should not need them
+  const overrides = TARGET === 'all'
+    ? await buildFromPhotos({ entries, report, nextCache })
+    : new Map();
+
   const hero = resolveHero(SITE, entries);
   const featured = resolveFeatured(SITE, entries, { hero });
   const manifest = buildManifest({ entries, site: SITE, overrides, hero, featured });
   const manifestJson = JSON.stringify(manifest);
-  const manifestName = `manifest.${hashOf(manifestJson)}.json`;
+
+  // all：内容哈希命名，可放心长缓存。
+  // web：固定名，只作本地预览用；线上那份由处理函数写入，
+  //      前端发布流程不同步 data/，所以不会互相覆盖。
+  // all uses a content-hashed name for long caching. web uses a fixed name
+  // purely for local preview; production's copy is written by the processor
+  // and the frontend deploy never syncs data/, so they cannot clobber each other.
+  const manifestName = TARGET === 'all'
+    ? `manifest.${hashOf(manifestJson)}.json`
+    : 'manifest.json';
   const manifestFile = path.join(DIST, 'data', manifestName);
   await writeFile(manifestFile, manifestJson);
 
@@ -233,16 +288,29 @@ async function main() {
   const app = await copyWebAssets();
 
   const template = await readFile(path.join(WEB, 'index.html'), 'utf8');
+  // 只注入标题、样式与脚本入口。清单地址已移到运行时解析（见 data.js），
+  // 前端产物因此与照片内容完全解耦。
+  // Only the title, stylesheet and entry script are injected. The manifest URL
+  // is resolved at runtime now, which decouples the bundle from the content.
   const html = template
     .replaceAll('__TITLE__', SITE.title)
     .replaceAll('__STYLE__', `assets/${cssName}`)
-    .replaceAll('__APP__', app.src)
-    .replaceAll('__MANIFEST__', `data/${manifestName}`);
+    .replaceAll('__APP__', app.src);
   await writeFile(path.join(DIST, 'index.html'), html);
 
-  const removedDirs = await cleanStalePhotoDirs(new Set(entries.map((e) => e.id)));
+  // web 目标没有产出照片目录，清理旧目录既无意义也有风险
+  // The web target produces no photo directories, so sweeping them is pointless
+  const removedDirs = TARGET === 'all'
+    ? await cleanStalePhotoDirs(new Set(entries.map((e) => e.id)))
+    : 0;
 
-  await writeFile(CACHE, JSON.stringify({ version: CACHE_VERSION, items: nextCache }, null, 2));
+  // 关键：web 目标绝不能写缓存。nextCache 是空的，写了就把增量缓存的
+  // 全量记录清空，下次 all 构建会重新解码所有素材。
+  // Critical: the web target must never write the cache. nextCache is empty,
+  // and writing it would erase every entry, forcing a full re-decode next time.
+  if (TARGET === 'all') {
+    await writeFile(CACHE, JSON.stringify({ version: CACHE_VERSION, items: nextCache }, null, 2));
+  }
 
   const textFiles = [
     path.join(DIST, 'index.html'),
@@ -285,11 +353,17 @@ async function main() {
   );
 
   console.log('--- 构建完成 ---');
-  console.log(`扫描 ${scanned} 个文件 / 忽略 ${ignored.length} / 去重 ${duplicates.length} / 产出 ${entries.length} 条`);
-  console.log(`新增 ${report.added} / 跳过 ${report.skipped} / 失败 ${report.failed.length} / 降级 ${report.degraded.length}`);
-  console.log(`视频 ${videos.length} 条（${videoSeconds.toFixed(1)}s，${(videoBytes / 1024 / 1024).toFixed(1)}MB），Live Photo ${livePairs} 对`);
-  console.log(`无 EXIF 走兜底 ${report.timeFallback.length} 条，清理旧目录 ${removedDirs} 个`);
-  console.log(`相册 ${manifest.albums.length} 个，manifest ${(Buffer.byteLength(manifestJson) / 1024).toFixed(1)}KB，产物在 dist/`);
+  console.log(`目标 ${TARGET} / target · 外壳资源 ${app.kind}`);
+  if (TARGET === 'all') {
+    console.log(`扫描 ${report.scanned} 个文件 / 忽略 ${report.ignored.length} / 去重 ${report.duplicates.length} / 产出 ${entries.length} 条`);
+    console.log(`新增 ${report.added} / 跳过 ${report.skipped} / 失败 ${report.failed.length} / 降级 ${report.degraded.length}`);
+    console.log(`视频 ${videos.length} 条（${videoSeconds.toFixed(1)}s，${(videoBytes / 1024 / 1024).toFixed(1)}MB），Live Photo ${report.livePairs} 对`);
+    console.log(`无 EXIF 走兜底 ${report.timeFallback.length} 条，清理旧目录 ${removedDirs} 个`);
+    console.log(`相册 ${manifest.albums.length} 个，manifest ${(Buffer.byteLength(manifestJson) / 1024).toFixed(1)}KB，产物在 dist/`);
+  } else {
+    console.log('未读取 photos/：web 目标只产出前端外壳，清单与照片由服务端提供。');
+    console.log('Photos were not read: the web target ships the shell only; content comes from the server.');
+  }
   if (report.degraded.length) {
     for (const file of report.degraded) console.warn(`  ! 视频降级为静图：${file}`);
   }
@@ -297,7 +371,7 @@ async function main() {
     for (const item of report.failed) console.error(`  ✗ ${item.file}: ${item.error}`);
     process.exitCode = 1;
   }
-  if (!entries.length) {
+  if (TARGET === 'all' && !entries.length) {
     console.warn('提示：photos/ 中没有素材，已生成空站点。放入照片或视频后重跑 npm run build 即可。');
   }
 }

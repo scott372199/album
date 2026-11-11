@@ -7,6 +7,8 @@
   "scripts": {
     "samples": "node scripts/make-samples.mjs",
     "build": "node src/build/build.mjs",
+    "build:web": "node src/build/build.mjs --target=web",
+    "build:all": "node src/build/build.mjs --target=all",
     "verify": "node scripts/verify.mjs",
     "check:repo": "node scripts/check-repo.mjs",
     "hook:install": "node scripts/install-hooks.mjs",
