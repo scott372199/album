@@ -1,0 +1,133 @@
+name: deploy-web
+
+# 只发布「代码」，不发布「内容」。
+#
+# v4 之后照片由处理函数写进站点桶，所以这里**绝不能**对桶根做 sync：
+# build:web 的产物里没有 photos/，根级 --delete 会把线上照片全部删掉。
+# 按前缀分域是这条流水线的核心约束：
+#
+#   assets/      可 --delete（文件名带内容哈希，删旧的无副作用）
+#   index.html   单独 cp，不缓存
+#   photos/      不碰（处理函数写入）
+#   data/        不碰（version.json 与清单由处理函数写入）
+#
+# Publishing code only, never content. Photos are written by the processor, so
+# this workflow must never sync the bucket root: build:web has no photos/ dir and
+# a root-level `--delete` would wipe every photo online. Prefix-scoped by design.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/web/**'
+      - 'src/build/**'
+      - 'src/server/**'
+      - 'site.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web
+  # 发布不能并行：两个 run 同时 sync assets/ 会互相删对方的产物
+  # Never run two deploys at once: concurrent asset syncs delete each other
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-1' }}
+  SITE_BUCKET: ${{ vars.SITE_BUCKET }}
+  DISTRIBUTION_ID: ${{ vars.DISTRIBUTION_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖 / Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # --target=web：完全不读 photos/，CI 里也没有素材
+      - name: 构建前端 / Build web bundle
+        run: npm run build:web
+
+      # 断言跑在构建之后：它校验的是 dist/ 的产物，没有产物就没有可校验的东西
+      # Assertions run after the build: they inspect dist/, which needs to exist
+      - name: 结构断言 / Structure assertions
+        run: npm run verify
+
+      - name: 单测 / Unit tests
+        run: npm test
+
+      - name: 确认是「只发代码」的产物 / Assert web-only output
+        run: |
+          set -euo pipefail
+          test -f dist/index.html
+          test -d dist/assets
+          # 产物里不应出现照片目录；出现了说明误用了 build（--target=all）
+          if [ -d dist/photos ]; then
+            echo "::error::dist/photos 存在，说明跑的是全量构建，拒绝发布"
+            exit 1
+          fi
+
+      - name: 配置 AWS 凭证 / Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_APP_DEPLOY_ROLE_ARN }}
+          role-session-name: gha-album-web
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 第一段：assets/ 整目录，长缓存 + 允许删除。
+      # 产物文件名带内容哈希，所以 --size-only 是安全的（同尺寸即同内容），
+      # 也能避免本地/CI 每次构建刷新 mtime 导致的全量重传。
+      - name: 同步 assets（可删）/ Sync assets
+        run: |
+          set -euo pipefail
+          aws s3 sync dist/assets/ "s3://${SITE_BUCKET}/assets/" \
+            --region "${AWS_REGION}" \
+            --delete \
+            --size-only \
+            --cache-control "public, max-age=31536000, immutable"
+
+      # 第二段：入口页单独覆盖为不缓存。
+      # 不用 --exclude 把入口页排除在第一段之外——AWS CLI 的 --exclude 会
+      # 连带影响 --delete 的判定，入口页会被当成「源站已不存在」而删掉。
+      - name: 覆盖入口页 / Upload index.html
+        run: |
+          set -euo pipefail
+          aws s3 cp dist/index.html "s3://${SITE_BUCKET}/index.html" \
+            --region "${AWS_REGION}" \
+            --cache-control "no-cache, must-revalidate" \
+            --content-type "text/html; charset=utf-8" \
+            --metadata-directive REPLACE
+
+      # data/version.json 由处理函数在加照片时失效；前端发布只改了入口页，
+      # 失效它一个路径就够，不必连带打 /。
+      - name: 失效 CDN / Invalidate
+        run: |
+          set -euo pipefail
+          aws cloudfront create-invalidation \
+            --distribution-id "${DISTRIBUTION_ID}" \
+            --paths "/index.html"
+
+      - name: 摘要 / Summary
+        run: |
+          {
+            echo "### 前端已发布 / Web deployed"
+            echo ""
+            echo "- 站点 / site: https://${{ vars.SITE_DOMAIN }}"
+            echo "- 桶前缀 / prefixes: \`assets/\`（可删）、\`index.html\`"
+            echo "- 未触碰 / untouched: \`photos/\`、\`data/\`"
+            echo "- 提交 / commit: \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

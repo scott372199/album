@@ -41,12 +41,12 @@ jobs:
         with:
           node-version: '22'
 
-      # 单测只覆盖纯函数（时区、令牌、哈希、上传规则、清单读写），
+      # 单测只覆盖纯函数（时区、令牌、哈希、上传规则、清单读写、原生桥），
       # 不装依赖也能跑——这正是当初把它们拆出来的原因。
       # Tests only touch pure helpers, so they run with zero installs — which is
       # precisely why those helpers were extracted.
       - name: 运行单测 / Run tests
-        run: node --test "src/server/test/*.test.mjs"
+        run: npm test
 
   image:
     name: 构建并推送 / Build & push

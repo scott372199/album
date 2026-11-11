@@ -204,6 +204,8 @@ P7 收尾  T-29 → T-30 → T-31
 - **内容 / Work**：`CSS.supports('animation-timeline: view()')` 与 View Transitions 守卫；暴露 `window.__canGoBack()` 与 `window.AlbumNative.setKeepScreenOn()`
 - **验收 / Done when**：模拟不支持时内容全部可见（无半透明卡帧）；桥上调用可被原生侧收到
 - **追溯 / Traces to**：FR-19.7、FR-23.4
+- **状态 / Status**：✅ 完成（`src/web/js/native.js` + `main.js` + `wall.js`），6 项单测通过。两个 CSS 守卫 v3 已有（`motion.js` 里 `initReveal` 判 `CSS.supports` 与 `startViewTransition`）。
+- **实施偏差 / Deviations**：返回键拆成**两个**函数——`__canGoBack()` 纯查询、`__goBack()` 执行（返回 `false` 时原生才 `finish()`）。plan 里写的单个 `__canGoBack()` 既查询又执行，容易被后来者误用。屏幕常亮改为一律**先问原生**，因为 WebView 里的 Wake Lock 常被系统拒。
 
 #### T-23 发布 workflow / Deploy workflow
 - **依赖 / Deps**：T-20、T-22
@@ -211,6 +213,11 @@ P7 收尾  T-29 → T-30 → T-31
 - **验收 / Done when**：改一行样式合并后 5 分钟内线上生效；故意破坏构建则流水线失败且线上仍是旧版
 - **追溯 / Traces to**：FR-24.9.1/24.9.3、spec §9-D22
 - **坑 / Pitfall**：`--exclude` 会影响 `--delete` 判定，两段式顺序不能颠倒（v3 已踩）
+- **状态 / Status**：✅ 代码完成（`.github/workflows/deploy-web.yml`）。
+- **实施偏差 / Deviations**：
+  1. **绝不碰桶根**：只 sync `dist/assets/`（可 `--delete`）+ 单传 `index.html`；`photos/` 与 `data/` 完全不碰。v3 的根级 `sync --delete` 在 v4 会删光线上照片。
+  2. **只失效 `/index.html`**：前端发布没改 `data/version.json`，它归处理函数管。
+  3. **`verify` 挪到构建之后**：`verify.mjs` 校验的是 `dist/` 产物，没有产物先跑就是空转失败（本次顺带修掉 `verify.mjs` 只认全量构建清单名的缺陷）。
 
 ### P6 · 安卓客户端
 

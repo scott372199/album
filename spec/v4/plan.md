@@ -491,6 +491,7 @@ client at `src/server/runtime.mjs`; `aws-lambda-ric` is not used.*
 | `src/build/build.mjs` | 增 `--target=web\|all`；web 模式跳过扫描与转码 |
 | `src/web/js/data.js` | 先取 `version.json`，再按 `manifest` 字段取清单 |
 | `src/web/js/upload.js`（新） | 登录、选图、HEIC→JPEG、预签名直传、四态进度 |
+| `src/web/js/native.js`（新） | 原生桥：`setKeepScreenOn()`、`installBackBridge({canGoBack, goBack})`；浏览器里全是空操作 |
 | `src/web/js/motion.js` | 增 `CSS.supports('animation-timeline: view()')` 守卫，不支持则直接全可见 |
 | `src/web/index.html` | 移除清单注入占位；注入令牌端点与 APK 版本端点 |
 | `src/web/app.js` | 挂 `window.__canGoBack()` 与 `window.AlbumNative` 桥（供安卓调用） |

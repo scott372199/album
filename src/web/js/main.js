@@ -5,6 +5,7 @@ import { initLightbox, openLightbox, closeLightbox, isLightboxOpen } from './lig
 import { initStory, openStory, closeStory, isStoryOpen } from './story.js';
 import { initWall, enterWall, exitWall, isWallOpen } from './wall.js';
 import { initMotion, photoTransition } from './motion.js';
+import { installBackBridge } from './native.js';
 import { el, toast, formatSpan, photoAlt } from './ui.js';
 
 const DEFAULT_SUBTITLE = '按时间、相册与标签，重新翻阅这些瞬间。';
@@ -327,6 +328,53 @@ function wire() {
   });
 }
 
+/* ---------- 原生返回键 ---------- */
+
+/**
+ * 页面「有没有内层状态」：有的话返回键应该由页面消化，
+ * 而不是直接退出 App。顺序与用户的心理模型一致——
+ * 先关最上面那一层，再退视图，最后才是退出。
+ *
+ * Whether the page holds inner state. If it does, the back key belongs to the
+ * page: close the topmost layer first, then leave the view, only then quit.
+ */
+function hasInnerState() {
+  return isLightboxOpen()
+    || isStoryOpen()
+    || isWallOpen()
+    || state.view !== 'timeline'
+    || Boolean(state.album || state.q || state.tag || state.year || state.month);
+}
+
+/** 执行一次返回；返回 true 表示页面自己消化了，false 交给原生退出 */
+function goBack() {
+  if (isLightboxOpen()) {
+    closeLightbox();
+    syncUrl(false);
+    return true;
+  }
+  if (isStoryOpen()) {
+    closeStory();
+    return true;
+  }
+  if (isWallOpen()) {
+    exitWall();
+    return true;
+  }
+  if (!hasInnerState()) return false;
+
+  state.view = 'timeline';
+  state.album = '';
+  state.q = '';
+  state.tag = '';
+  state.year = '';
+  state.month = '';
+  refresh();
+  syncUrl(false);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  return true;
+}
+
 /* ---------- 启动 ---------- */
 
 async function boot() {
@@ -376,6 +424,8 @@ async function boot() {
   fillFilters();
   renderSite();
   wire();
+  // 安卓壳通过它决定返回键是关内层还是退出 Activity
+  installBackBridge({ canGoBack: hasInnerState, goBack });
   await applyFromHash({ initial: true });
 }
 

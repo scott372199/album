@@ -1,5 +1,6 @@
 import { el, clockParts, inNightWindow, shuffle, reducedMotion, markWhenReady } from './ui.js';
 import { startVersionWatch } from './update.js';
+import { setKeepScreenOn } from './native.js';
 
 const MAX_VIDEO_MS = 45000;
 
@@ -190,6 +191,15 @@ function updateClock() {
 /* ---------- Wake Lock ---------- */
 
 async function acquireWake() {
+  // 安卓 WebView 里先问原生：WebView 的 Wake Lock 经常被系统直接拒，
+  // 原生侧持有 FLAG_KEEP_SCREEN_ON 才是可靠的。
+  // Ask the native side first inside an Android WebView: its Wake Lock is often
+  // refused outright, while FLAG_KEEP_SCREEN_ON on the native side is reliable.
+  if (setKeepScreenOn(true)) {
+    w.wantWake = true;
+    if (refs.hint) refs.hint.hidden = true;
+    return;
+  }
   if (!('wakeLock' in navigator)) {
     showHint('当前浏览器不支持保持常亮，请用 Safari 打开并参考系统设置。');
     return;
@@ -216,6 +226,7 @@ async function acquireWake() {
 
 function releaseWake() {
   w.wantWake = false;
+  setKeepScreenOn(false);
   if (w.wake) {
     try { w.wake.release(); } catch { /* 忽略 */ }
     w.wake = null;

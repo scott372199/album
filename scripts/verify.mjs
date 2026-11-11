@@ -365,8 +365,17 @@ await okAsync('图片条目三档文件齐全，视频条目有短片与封面',
 
 await okAsync('data/version.json 与 manifest 哈希一致', async () => {
   const version = JSON.parse(await readFile(path.join(DIST, 'data', 'version.json'), 'utf8'));
-  assert.equal(version.rev, manifestName.replace(/^manifest\./, '').replace(/\.json$/, ''));
   assert.equal(version.manifest, `data/${manifestName}`);
+  // 全量构建（--target=all）用内容哈希命名，rev 必须与文件名一致；
+  // web 构建（--target=web）用固定名 manifest.json 以便本地预览，
+  // 此时没有「文件名里的哈希」可比，只校验 rev 本身是个合法哈希。
+  // all: hashed filename, rev must match it. web: fixed name for local preview,
+  // so there is no hash in the name — only assert rev looks like one.
+  if (/^manifest\.[0-9a-f]+\.json$/.test(manifestName)) {
+    assert.equal(version.rev, manifestName.replace(/^manifest\./, '').replace(/\.json$/, ''));
+  } else {
+    assert.match(version.rev, /^[0-9a-f]{8,}$/);
+  }
   assert.equal(version.counts.photos, manifest.photos.filter((p) => p.type !== 'video').length);
   assert.equal(version.counts.videos, manifest.photos.filter((p) => p.type === 'video').length);
 });
