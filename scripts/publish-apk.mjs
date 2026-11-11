@@ -11,10 +11,17 @@
  * APK; both come from `android/app/version.properties`.
  *
  * 用法 / Usage:
- *   SITE_BUCKET=... SITE_DOMAIN=photos.example.com node scripts/publish-apk.mjs
+ *   DOWNLOADS_BUCKET=... SITE_DOMAIN=photos.example.com node scripts/publish-apk.mjs
  *   ... --apk path/to/app-release.apk   # 换一个安装包
  *   ... --notes "修了灯箱翻页"           # 更新提示里显示的说明
  *   ... --dry                           # 只打印要执行的命令
+ *
+ * 注意桶不是站点桶：CloudFront 上 `/apk/*` 单独一条行为，回源到 downloads 桶。
+ * 把安装包发进站点桶会 403——桶策略只认站点桶那条 OAC，而且行为根本不指向它。
+ *
+ * Mind the bucket: `/apk/*` is a separate CloudFront behaviour pointing at the
+ * downloads bucket. Uploading into the site bucket returns nothing but 403 —
+ * the behaviour never routes there.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -75,12 +82,15 @@ function run(args) {
 
 // ---------------------------------------------------------------------------
 
-const bucket = process.env.SITE_BUCKET ?? '';
+// 不拿 SITE_BUCKET 兜底：正是这两个桶很像，才最容易发错地方。
+// No SITE_BUCKET fallback on purpose — the two buckets look alike, which is
+// exactly how you end up uploading to the wrong one.
+const bucket = process.env.DOWNLOADS_BUCKET ?? '';
 const domain = (process.env.SITE_DOMAIN ?? '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
 const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'ap-southeast-1';
 const distributionId = process.env.DISTRIBUTION_ID ?? '';
 
-if (!bucket) fail('缺 SITE_BUCKET（站点桶名）');
+if (!bucket) fail('缺 DOWNLOADS_BUCKET（CloudFront 上 /apk/* 那一条行为的回源桶，不是站点桶）');
 if (!domain) fail('缺 SITE_DOMAIN（对外域名，用来拼清单里的下载地址）');
 
 const { versionCode, versionName } = readVersion();

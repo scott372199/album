@@ -44,8 +44,9 @@ src/
   server/            v4：Lambda 处理函数（auth / processor）与单测
   deploy/          AWS 部署脚本与配置模板
 docker/             v4：处理镜像的 Dockerfile 与本地构建脚本
+android/            v4：安卓客户端（Kotlin 单 Activity + WebView 壳）
 .github/workflows/  v4：镜像构建与前端发布
-scripts/           样例生成、结构验证、仓库安检、密钥哈希
+scripts/           样例生成、结构验证、仓库安检、密钥哈希、APK 发布
 spec/              需求与设计文档（v1 / v2 / v3 / v4）
 dist/              构建产物（gitignore）
 ```
@@ -64,6 +65,7 @@ dist/              构建产物（gitignore）
 | `npm run hook:install` | 安装本地 pre-commit 钩子（可选） |
 | `npm run deploy:preview` | 构建并同步到 S3 预览地址（不带 `--delete`） |
 | `npm run deploy` | 构建 → 同步（含 `--delete`）→ 失效入口页 |
+| `npm run publish:apk` | v4：把签名 APK 与 `apk/version.json` 发到 downloads 桶 |
 
 部署需要本机已配置 AWS CLI 凭证；脚本不会读取或写入任何密钥到仓库。
 
@@ -103,6 +105,48 @@ pins `--platform linux/amd64` and runs a smoke test.*
 
 屏幕上不动 3 秒控制条会自动隐藏，移动鼠标或轻点屏幕可唤回。
 
+## 安卓客户端
+
+壳很小：一个 Activity 装一个全屏 WebView，指向线上站点。**前端资产不打进 APK**——照片
+和 HTML 本来就是两条发布路径，把 HTML 塞进包里会让「改一行样式」变成「发一个安装包」。
+壳只做浏览器做不到的四件事：无地址栏、返回键、选图、屏幕常亮。
+
+**装一次：**
+
+1. 手机浏览器打开 `https://photos.chenyouyi.top/apk/album-1.apk` 下载。
+2. 打开时系统会拦「未知来源应用」。按 ROM 放行：
+   - **小米 / 红米（HyperOS / MIUI）**：设置 → 应用设置 → 应用管理 → 右上角 ⋮ → 安装未知应用
+     → 选浏览器（或文件管理器）→ 允许。部分版本还要关掉「安全模式校验」。
+   - **荣耀 / 华为（MagicOS / HarmonyOS 4 及以下）**：设置 → 安全 → 更多安全设置 → 安装外部来源应用
+     → 选浏览器 → 允许。
+   - **三星（One UI）**：设置 → 应用程序 → 特殊访问权限 → 安装未知应用 → 选浏览器 → 允许。
+3. 装完首次打开若显示「网络不可用」，是断网或站点在部署中；点「重新加载」即可。
+
+**之后不用再手动下载：** App 每 6 小时问一次 `apk/version.json`，发现更大的 `versionCode`
+就提示更新；下载时边下边算 sha256，对不上直接拒绝安装（防半包、防中间人替换）。
+
+**升版本：**
+
+```bash
+# 1. 改版本号（唯一来源）
+vim android/app/version.properties     # versionCode 加一，versionName 跟着改
+# 2. 构建签名包
+cd android && ./gradlew assembleRelease && cd ..
+# 3. 发布
+DOWNLOADS_BUCKET=chenyouyi-downloads SITE_DOMAIN=photos.chenyouyi.top \
+DISTRIBUTION_ID=E2UWEFMOKOQEES npm run publish:apk -- --notes "这次改了什么"
+```
+
+安装包必须发到 **downloads 桶**：CloudFront 上 `/apk/*` 是单独一条行为，回源到
+`chenyouyi-downloads`；发进站点桶会被 403（那条行为根本不指向它）。
+
+**签名密钥**在 `android/album-release.keystore`（gitignore），口令在
+`android/keystore.properties`（同样 gitignore，权限 600）。**这两样丢了就再也无法覆盖安装**，
+只能让所有设备卸载重装。请离线备份——口令管理器里存一份、纸质一份。
+
+`local.properties`（指向本机 Android SDK）也不入库。构建要 JDK 17+ 与 Android SDK 35；
+本机没有全局 Gradle，用仓库自带的 `./gradlew`。
+
 ## 部署状态
 
 | 通道 | 地址 | 说明 |
@@ -112,6 +156,10 @@ pins `--platform linux/amd64` and runs a smoke test.*
 | ~~临时 HTTP~~ | ~~`http://chenyouyi.s3-website-ap-southeast-1.amazonaws.com`~~ | 已下线（桶转私有、网站托管已关） |
 
 桶是私有的：Public Access Block 四项全开，只有 CloudFront 的 OAC 能读，直连 S3 一律 403。
+
+有两个桶，别搞混：`chenyouyi` 装站点（`photos/`、`assets/`、`data/`、`index.html`），
+`chenyouyi-downloads` 只装安装包。CloudFront 上 `/apk/*` 是独立一条行为，回源到后者——
+这样 APK 的缓存策略、失效频率都和大头照片分开，也避免 `sync --delete` 误伤。
 
 发布流程：`npm run deploy` —— 先整目录 `sync --delete` 打一年长缓存，再单独覆盖
 `index.html`（no-cache）与 `data/version.json`（no-store），最后失效这两个路径。

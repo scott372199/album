@@ -268,7 +268,11 @@ P7 收尾  T-29 → T-30 → T-31
 - **内容 / Work**：生成 keystore（用户离线备份）；构建 release APK；上传 `apk/album-<versionCode>.apk` 与 `apk/version.json`；README 写安装与国产 ROM 引导
 - **验收 / Done when**：下载地址可安装；keystore 与口令不在仓库与日志中；引导文案覆盖小米/荣耀/三星
 - **追溯 / Traces to**：FR-20.1/20.2/20.4、FR-25.7
-- **状态 / Status**：◐ 发布脚本完成（`scripts/publish-apk.mjs`，`npm run publish:apk`）；keystore 待生成，release 包当前是未签名产物。
+- **状态 / Status**：✅ 完成。keystore 已生成（RSA 4096 / 10000 天，`android/album-release.keystore` + `keystore.properties`，均 gitignore）；`app-release.apk` 118KB 已签名并通过 `apksigner verify`；已发到 `chenyouyi-downloads`（`apk/album-1.apk` + `apk/version.json`），S3 / 本地 / 清单三处 sha256 一致；README 补了安装步骤与小米 / 荣耀 / 三星的放行路径。
+- **实施偏差 / Deviations**：
+  1. **安装包发到 downloads 桶，不是站点桶**：CloudFront 上 `/apk/*` 是独立一条行为，回源 `chenyouyi-downloads`。第一次发错桶，`/apk/version.json` 直接 403。`publish-apk.mjs` 现在只认 `DOWNLOADS_BUCKET`，**不拿 `SITE_BUCKET` 兜底**——正是这两个桶长得像才最容易发错。
+  2. **没写本地 `deploy` 用的临时预览**：APK 走单条 `aws s3 cp`，不需要像站点那样两段式缓存头；APK 文件名带 versionCode，长缓存天然安全。
+  3. **keystore 缺失时出未签名包而不是回退 debug 签名**：debug 签名的包以后没法覆盖升级，不如直接构建失败。
 
 #### T-28 真机验收 / Device acceptance
 - **依赖 / Deps**：T-27
@@ -377,7 +381,7 @@ P7 收尾  T-29 → T-30 → T-31
 | T-19、T-20 前端改造 / Web rework | ✅ 完成 / Done | 编辑式栅格 + 视频 |
 | T-21 ~ T-23 上传与发布 / Upload & deploy | ✅ 完成 / Done | 38 项断言；上传 UI 只在原生壳里出现 |
 | T-24 ~ T-26 安卓客户端 / Android shell | ✅ 代码完成 / Coded | `assembleDebug` / `assembleRelease` 均通过，真机待 T-28 |
-| T-27 签名与发布 / Signing | ◐ 部分完成 / Partial | 发布脚本就绪，keystore 未生成 |
+| T-27 签名与发布 / Signing | ✅ 完成 / Done | 签名包已发 downloads 桶，三处 sha256 一致 |
 | T-28 真机验收 / Device acceptance | ⏳ 未开始 / Not started | **CP-5**，需要你手持设备 |
 | T-29 ~ T-31 收尾 / Wrap-up | ⏳ 未开始 / Not started | — |
 
