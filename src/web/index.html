@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light">
   <meta name="theme-color" content="#ffffff">
+  <!-- 接口地址在构建时注入；为空表示这套产物没有后端，上传入口不会出现 -->
+  <!-- API base is injected at build time; empty means upload is unavailable -->
+  <meta name="album-api" content="__API_BASE__">
   <title>__TITLE__</title>
   <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMxZDFkMWYiLz48Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSIxNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZjVmNWY3IiBzdHJva2Utd2lkdGg9IjQiLz48Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSI1IiBmaWxsPSIjZjVmNWY3Ii8+PC9zdmc+">
   <link rel="stylesheet" href="__STYLE__">
@@ -22,6 +25,7 @@
       <div class="nav-actions">
         <button type="button" class="nav-action" id="open-story">故事</button>
         <button type="button" class="nav-action" id="open-wall">照片墙</button>
+        <button type="button" class="nav-action" id="open-upload" hidden>上传</button>
         <label class="nav-search">
           <span class="sr-only">搜索照片</span>
           <input id="q" type="search" placeholder="搜索" autocomplete="off" aria-label="搜索照片">
@@ -205,6 +209,52 @@
       <button type="button" class="wall-btn" id="wall-night">夜间</button>
       <button type="button" class="wall-btn" id="wall-next" aria-label="下一张">&#8250;</button>
       <button type="button" class="wall-btn wall-exit" id="wall-exit">退出</button>
+    </div>
+  </div>
+
+  <!--
+    v4 上传面板。默认隐藏：只有安卓壳里（存在原生桥）且配置了接口地址时才显示。
+    放在文档流里而不是动态创建，是为了让样式和可访问性都能静态审查。
+    Upload panel, hidden by default: shown only inside the Android shell (native
+    bridge present) with an API base configured.
+  -->
+  <div class="upload" id="upload" hidden role="dialog" aria-modal="true" aria-labelledby="upload-title">
+    <div class="upload-panel">
+      <header class="upload-head">
+        <h2 class="upload-title" id="upload-title">上传</h2>
+        <button type="button" class="upload-close" id="upload-close" aria-label="关闭">&times;</button>
+      </header>
+
+      <form class="upload-form" id="upload-login">
+        <p class="upload-note">手机号 + 共享密钥。登录一次，7 天内不用再输。</p>
+        <label class="upload-field">
+          <span>手机号</span>
+          <input id="upload-phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="18650090309" required>
+        </label>
+        <label class="upload-field">
+          <span>共享密钥</span>
+          <input id="upload-key" type="password" autocomplete="current-password" required>
+        </label>
+        <p class="upload-error" id="upload-error" hidden></p>
+        <button type="submit" class="upload-primary" id="upload-submit">登录</button>
+      </form>
+
+      <div class="upload-body" id="upload-body" hidden>
+        <label class="upload-field">
+          <span>放进哪个相册</span>
+          <input id="upload-album" type="text" maxlength="40" autocomplete="off">
+        </label>
+        <label class="upload-pick">
+          <input id="upload-files" type="file" accept="image/*,video/*" multiple hidden>
+          <span class="upload-pick-text">选择照片或视频</span>
+          <span class="upload-pick-hint">图片 30MB / 视频 200MB 以内，一次最多 20 个</span>
+        </label>
+        <ul class="upload-list" id="upload-list" aria-live="polite"></ul>
+        <div class="upload-foot">
+          <span class="upload-count" id="upload-count"></span>
+          <button type="button" class="upload-link" id="upload-logout">退出登录</button>
+        </div>
+      </div>
     </div>
   </div>
 

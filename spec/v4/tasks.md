@@ -198,6 +198,12 @@ P7 收尾  T-29 → T-30 → T-31
 - **内容 / Work**：`js/upload.js`：登录态、选图、HEIC→JPEG（`createImageBitmap` + `OffscreenCanvas` q0.95）、算 SHA256、取预签名、直传、四态进度、失败重试
 - **验收 / Done when**：20 个文件批量可传；超限在前端即拦；进度与结果准确；失败可见原因
 - **追溯 / Traces to**：FR-21.4/21.5/21.8、FR-23.3
+- **状态 / Status**：✅ 完成（`src/web/js/upload.js` + 面板标记 + 样式）。已用无头 Chrome 验过门控：`?upload=1` 时入口出现、登录表单可见；普通访问入口保持 `hidden`。
+- **实施偏差 / Deviations**：
+  1. **不传 `takenAt`**。浏览器只有 `File.lastModified`（常是拷贝时间），而服务端优先级是 `takenAt → EXIF → LastModified`，上报 mtime 会盖掉真实 EXIF。让服务端读 EXIF 更准。
+  2. **HEIC 解不出就当场拒**，不「原样上传」。服务端 sharp 不带 libheif，原样上传只会进死信队列，不如当场提示。
+  3. **入口只在安卓壳里出现**（有原生桥 + 构建时配了 `ALBUM_API_BASE`）。`?upload=1` 是调试逃生口，只影响可见性，授权仍在服务端。
+  4. **失败不自动重试**：重选同一批文件即可。key 是内容哈希，重传天然幂等，加自动重试只会让「到底传没传上去」更难判断。
 
 #### T-22 能力检测与原生桥 / Capability guard & native bridge
 - **依赖 / Deps**：T-21

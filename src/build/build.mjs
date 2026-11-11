@@ -39,6 +39,27 @@ const TARGET = (() => {
   return value;
 })();
 
+/**
+ * 接口地址（登录 / 取上传地址）。构建时注入 index.html。
+ *
+ * 这个值会被写进一个 HTML 属性里，所以不能原样信任环境变量：
+ * 只接受 https 形式的主机名与可选路径，其他一律当作「没有后端」，
+ * 免得多打一个引号就把整个页面的属性结构破坏掉。
+ *
+ * Injected into index.html at build time. The value lands inside an HTML
+ * attribute, so it is validated rather than trusted: only https host plus
+ * optional path is accepted; anything else means "no backend".
+ */
+const API_BASE = (() => {
+  const raw = (process.env.ALBUM_API_BASE || '').trim().replace(/\/+$/, '');
+  if (!raw) return '';
+  if (!/^https:\/\/[a-z0-9.-]+(:\d+)?(\/[a-z0-9_\-/]*)?$/i.test(raw)) {
+    console.warn(`ALBUM_API_BASE 不是合法的 https 地址，已忽略：${raw}`);
+    return '';
+  }
+  return raw;
+})();
+
 async function fileExists(file) {
   try {
     await access(file);
@@ -288,13 +309,15 @@ async function main() {
   const app = await copyWebAssets();
 
   const template = await readFile(path.join(WEB, 'index.html'), 'utf8');
-  // 只注入标题、样式与脚本入口。清单地址已移到运行时解析（见 data.js），
+  // 只注入标题、样式、脚本入口与接口地址。清单地址已移到运行时解析（见 data.js），
   // 前端产物因此与照片内容完全解耦。
-  // Only the title, stylesheet and entry script are injected. The manifest URL
-  // is resolved at runtime now, which decouples the bundle from the content.
+  // Only the title, stylesheet, entry script and API base are injected. The
+  // manifest URL is resolved at runtime now, which decouples the bundle from the
+  // content.
   const html = template
     .replaceAll('__TITLE__', SITE.title)
     .replaceAll('__STYLE__', `assets/${cssName}`)
+    .replaceAll('__API_BASE__', API_BASE)
     .replaceAll('__APP__', app.src);
   await writeFile(path.join(DIST, 'index.html'), html);
 

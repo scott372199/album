@@ -1470,3 +1470,231 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
 
   .hero-hint-line { animation: none !important; }
 }
+
+/* ==========================================================================
+   v4 上传面板 / Upload panel
+   只在安卓壳里出现（见 js/upload.js），浏览器访问者看不到这一段。
+   Only reachable inside the Android shell; browser visitors never see it.
+   ========================================================================== */
+
+body.is-uploading { overflow: hidden; }
+
+.upload {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.42);
+  padding: 0;
+}
+
+.upload-panel {
+  width: min(520px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--paper);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 22px calc(var(--pad) * 0.6) calc(22px + env(safe-area-inset-bottom, 0px));
+  box-shadow: var(--shadow-lift);
+}
+
+@media (min-width: 768px) {
+  .upload { align-items: center; padding: 24px; }
+  .upload-panel { border-radius: var(--radius-lg); padding: 26px 28px; }
+}
+
+.upload-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.upload-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.upload-close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--paper-2);
+  color: var(--ink-2);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.upload-close:hover { background: rgba(0, 0, 0, 0.09); color: var(--ink); }
+
+.upload-note {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+.upload-field {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.upload-field > span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.upload-field input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper-3);
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+}
+.upload-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--paper);
+}
+
+.upload-primary {
+  width: 100%;
+  height: 46px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s var(--ease);
+}
+.upload-primary:disabled { opacity: 0.5; cursor: default; }
+
+.upload-error {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #c0392b;
+}
+
+.upload-pick {
+  display: block;
+  margin-bottom: 14px;
+  padding: 20px 16px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--paper-3);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
+}
+.upload-pick:hover { border-color: var(--accent); background: var(--paper); }
+
+.upload-pick-text {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.upload-pick-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.upload-list {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.upload-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.upload-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.upload-row-status {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.upload-row-bar {
+  grid-column: 1 / -1;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+
+.upload-row-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.2s var(--ease-in-out);
+}
+
+.upload-row.is-done .upload-row-fill { background: #2f9e5f; }
+.upload-row.is-done .upload-row-status { color: #2f9e5f; }
+.upload-row.is-failed .upload-row-fill { background: #c0392b; }
+.upload-row.is-failed .upload-row-status {
+  color: #c0392b;
+  white-space: normal;
+  text-align: right;
+}
+
+.upload-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.upload-count {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.upload-link {
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.upload-link:hover { color: var(--ink); }

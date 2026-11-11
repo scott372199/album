@@ -59,7 +59,10 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       # --target=web：完全不读 photos/，CI 里也没有素材
+      # ALBUM_API_BASE 留空时，产物里不含接口地址，上传入口也就不会出现
       - name: 构建前端 / Build web bundle
+        env:
+          ALBUM_API_BASE: ${{ vars.ALBUM_API_BASE }}
         run: npm run build:web
 
       # 断言跑在构建之后：它校验的是 dist/ 的产物，没有产物就没有可校验的东西

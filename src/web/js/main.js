@@ -6,6 +6,7 @@ import { initStory, openStory, closeStory, isStoryOpen } from './story.js';
 import { initWall, enterWall, exitWall, isWallOpen } from './wall.js';
 import { initMotion, photoTransition } from './motion.js';
 import { installBackBridge } from './native.js';
+import { initUpload } from './upload.js';
 import { el, toast, formatSpan, photoAlt } from './ui.js';
 
 const DEFAULT_SUBTITLE = '按时间、相册与标签，重新翻阅这些瞬间。';
@@ -426,6 +427,8 @@ async function boot() {
   wire();
   // 安卓壳通过它决定返回键是关内层还是退出 Activity
   installBackBridge({ canGoBack: hasInnerState, goBack });
+  // 上传入口只在「有原生桥 + 配了接口地址」时才挂载，浏览器里是空操作
+  initUpload();
   await applyFromHash({ initial: true });
 }
 

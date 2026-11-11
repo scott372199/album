@@ -244,17 +244,27 @@ ok('所有具名 import 都能在目标模块找到对应导出', () => {
   }
 });
 
-ok('index.html 只保留三个构建占位符且无绝对外链', () => {
+ok('index.html 只保留四个构建占位符且无绝对外链', () => {
   // v4 起 __MANIFEST__ 被移除：清单地址在运行时由 version.json 解析，
-  // 前端产物不再包含任何内容地址。
-  // __MANIFEST__ was removed in v4: the manifest URL is resolved at runtime
-  // from version.json, so the bundle embeds no content addresses.
-  for (const token of ['__TITLE__', '__STYLE__', '__APP__']) {
+  // 前端产物不再包含任何内容地址。__API_BASE__ 是接口地址（登录/取上传地址），
+  // 属于配置而不是内容，构建时注入。
+  // __MANIFEST__ was removed in v4. __API_BASE__ is configuration (the auth and
+  // upload-url endpoint), not content, so it is injected at build time.
+  for (const token of ['__TITLE__', '__STYLE__', '__APP__', '__API_BASE__']) {
     assert.ok(html.includes(token), `缺少占位符 ${token}`);
   }
   assert.ok(!html.includes('__MANIFEST__'), 'index.html 不应再注入清单地址');
   assert.ok(!html.includes('ALBUM_MANIFEST'), 'index.html 不应再注入全局清单变量');
   assert.ok(!html.includes('http://') && !html.includes('https://'));
+});
+
+await okAsync('接口地址在构建时注入，产物里不留占位符', async () => {
+  const distHtml = await readFile(path.join(DIST, 'index.html'), 'utf8');
+  assert.ok(!distHtml.includes('__API_BASE__'), 'dist/index.html 仍有未替换的接口占位符');
+  assert.ok(
+    /<meta name="album-api" content="[^"]*">/.test(distHtml),
+    'dist/index.html 缺少 album-api meta',
+  );
 });
 
 await okAsync('清单改为运行时解析，且 web 构建不依赖 photos/', async () => {
