@@ -59,6 +59,21 @@ jobs:
         id: tag
         run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
 
+      # Secret 没配时，OIDC 这一步会报一句「Credentials could not be loaded,
+      # please verify that your role exists」。这句话不会告诉你是谁没配，
+      # 所以在它之前先把话说清楚。
+      # Surface a missing repository secret here: the OIDC action otherwise
+      # fails with a message that never names the unset secret.
+      - name: 检查仓库配置 / Check repository secrets
+        env:
+          ROLE_ARN: ${{ secrets.AWS_APP_DEPLOY_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ROLE_ARN}" ]; then
+            echo "::error::缺少 Secret AWS_APP_DEPLOY_ROLE_ARN（Settings → Secrets and variables → Actions → Secrets），值为 gha_app_deploy 角色的 ARN"
+            exit 1
+          fi
+
       # 没有长期密钥：OIDC 换一次 15 分钟的临时凭证
       # No long-lived keys: OIDC trades for 15-minute credentials
       - name: 配置 AWS 凭证 / Configure AWS credentials
