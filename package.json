@@ -14,6 +14,7 @@
     "test:server": "node --test \"src/server/test/*.test.mjs\"",
     "test:web": "node --test \"src/web/test/*.test.mjs\"",
     "hash-key": "node scripts/hash-key.mjs",
+    "publish:apk": "node scripts/publish-apk.mjs",
     "check:repo": "node scripts/check-repo.mjs",
     "hook:install": "node scripts/install-hooks.mjs",
     "deploy": "npm run build && node src/deploy/deploy.mjs",

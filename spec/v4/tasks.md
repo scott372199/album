@@ -232,24 +232,43 @@ P7 收尾  T-29 → T-30 → T-31
 - **内容 / Work**：`android/` 工程，minSdk 26 / targetSdk 35；单 Activity；WebView 设置（JS、DOM Storage、禁混合内容）；沉浸式全屏；加载线上站点
 - **验收 / Done when**：`./gradlew assembleDebug` 成功；模拟器或真机能打开首页且无地址栏
 - **追溯 / Traces to**：FR-19.1/19.2、plan §9.2
+- **状态 / Status**：✅ 构建通过（`android/`，AGP 8.7.3 + Gradle 8.9 + Kotlin 2.0.21）。debug 2.1MB / release 110KB（R8）。真机「能打开首页」并入 T-28 验收。
+- **实施偏差 / Deviations**：
+  1. **不打包前端资产**：壳只加载线上站点。把 HTML 打进 APK 会让「改一行样式」变成「发一个 APK」，而照片与 HTML 本来就是两条发布路径。
+  2. **不区分 debug/release 包名**：`applicationIdSuffix` 会带来两套图标和一次额外卸载，收益不值。代价是 debug 包与 release 包签名不同，互装要先卸载。
+  3. **只垫顶部安全区**：`setDecorFitsSystemWindows(false)` 之后给 WebView 加 `padding-top = 状态栏+挖孔`，底部不垫——页面自己用 `env(safe-area-inset-bottom)` 与 16~22px 留白躲开了手势条。这一条是因为 `.site-nav` 是 `position: sticky; top: 0`，被顶到挖孔底下会缺一块。
+  4. **强制关掉算法暗色**：`WebSettingsCompat.setAlgorithmicDarkeningAllowed(false)`。小米/OPPO 的深色模式会给 WebView 反色，照片被压暗，违反「不加滤镜、不改色彩」。
+  5. **只放行站点自身**：站外链接交给系统浏览器。原生桥对 WebView 里**每个**文档生效，随便加载第三方页面等于把 `AlbumNative` 交出去。
 
 #### T-25 交互桥 / Interaction bridge
 - **依赖 / Deps**：T-24
 - **内容 / Work**：`onShowFileChooser` + `PickMultipleVisualMedia`；返回键经 `evaluateJavascript` 询问页面；`setKeepScreenOn` → `FLAG_KEEP_SCREEN_ON`；错误页 → 内置 `offline.html`
 - **验收 / Done when**：能选图并触发网页上传；灯箱打开时返回键关灯箱；照片墙模式 15 分钟不息屏；断网显示离线页
 - **追溯 / Traces to**：FR-19.3/19.4/19.5/19.6
+- **状态 / Status**：✅ 代码完成（`MainActivity.kt` + `AlbumBridge.kt` + `assets/offline.html`）。四项行为待真机确认（T-28）。
+- **实施偏差 / Deviations**：
+  1. **返回键两段式**：先 `__canGoBack()` 查询，为真才 `__goBack()`；`__goBack()` 回 `false` 才 `finish()`。与 `native.js` 的契约一致。
+  2. **`onCreateWindow` 返回 false**：弹窗直接不创建。站点没有需要新窗口的链接，支持它只会多一条绕过导航限制的路径。
+  3. **离线页只在主框架失败时出现**：子资源失败（某张图裂了）不该把整页换掉；5xx 才算「服务端现在不行」，4xx 不换。
+  4. **最多选 30 张**：`PickMultipleVisualMedia(30)`。再多就分批，不把用户的内存当无限的。
 
 #### T-26 应用内更新 / In-app update
 - **依赖 / Deps**：T-25
 - **内容 / Work**：拉 `apk/version.json` 比对 versionCode → 提示 → `DownloadManager` → 校验 sha256 → `FileProvider` + `ACTION_VIEW` 安装
 - **验收 / Done when**：改 versionCode 后旧版能发现并完成更新；sha256 不符时拒绝安装
 - **追溯 / Traces to**：FR-20.3、plan §9.2
+- **状态 / Status**：✅ 代码完成（`UpdateManager.kt` + `scripts/publish-apk.mjs`）。端到端待 T-27 有签名包后验证。
+- **实施偏差 / Deviations**：
+  1. **不用 `DownloadManager`**：它把文件写进公共下载目录，拿回来是 content:// URI，算 sha256 得再整份读一遍；校验失败时那份文件还留在外面。改成自己下到 app 私有目录、边下边算摘要，写完才改名，校验不过就删。
+  2. **更新地址必须是本站**：清单里的 `url` 不以站点地址开头就拒绝。否则「校验 sha256」只是在替别人的服务器核对它自己给的哈希。
+  3. **检查频率 6 小时一次**：清单本身也走 CDN，每次进 App 都打一次没意义；失败不写时间戳，断网恢复后还能再试。
 
 #### T-27 签名与发布 / Signing & release
 - **依赖 / Deps**：T-26
 - **内容 / Work**：生成 keystore（用户离线备份）；构建 release APK；上传 `apk/album-<versionCode>.apk` 与 `apk/version.json`；README 写安装与国产 ROM 引导
 - **验收 / Done when**：下载地址可安装；keystore 与口令不在仓库与日志中；引导文案覆盖小米/荣耀/三星
 - **追溯 / Traces to**：FR-20.1/20.2/20.4、FR-25.7
+- **状态 / Status**：◐ 发布脚本完成（`scripts/publish-apk.mjs`，`npm run publish:apk`）；keystore 待生成，release 包当前是未签名产物。
 
 #### T-28 真机验收 / Device acceptance
 - **依赖 / Deps**：T-27
@@ -351,7 +370,16 @@ P7 收尾  T-29 → T-30 → T-31
 
 | 任务 / Task | 状态 / Status | 备注 / Notes |
 | --- | --- | --- |
-| T-01 ~ T-31 | 未开始 / Not started | — |
+| T-01 ~ T-11 基础设施四层 / Infra layers | ✅ 完成 / Done | `album-infra` 已 apply 且四层 `plan` 归零 |
+| T-12 ~ T-15 服务端函数 / Server handlers | ✅ 完成 / Done | 一镜像两入口，40 项单测 |
+| T-16、T-17 第二段 / Compute wiring | ◐ 代码完成 / Coded | 待真实 `image_tag` 后 `enable_functions = true` |
+| T-18 联调 / Integration | ⏳ 未开始 / Not started | 依赖 T-17 |
+| T-19、T-20 前端改造 / Web rework | ✅ 完成 / Done | 编辑式栅格 + 视频 |
+| T-21 ~ T-23 上传与发布 / Upload & deploy | ✅ 完成 / Done | 38 项断言；上传 UI 只在原生壳里出现 |
+| T-24 ~ T-26 安卓客户端 / Android shell | ✅ 代码完成 / Coded | `assembleDebug` / `assembleRelease` 均通过，真机待 T-28 |
+| T-27 签名与发布 / Signing | ◐ 部分完成 / Partial | 发布脚本就绪，keystore 未生成 |
+| T-28 真机验收 / Device acceptance | ⏳ 未开始 / Not started | **CP-5**，需要你手持设备 |
+| T-29 ~ T-31 收尾 / Wrap-up | ⏳ 未开始 / Not started | — |
 
 ### 6.1 关键数字 / Key numbers（待填）
 

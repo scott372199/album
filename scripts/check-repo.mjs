@@ -21,6 +21,8 @@ const MEDIA_EXT = new Set([
 const TEXT_EXT = new Set([
   '.md', '.mjs', '.js', '.cjs', '.json', '.css', '.html', '.htm',
   '.csv', '.txt', '.yml', '.yaml', '.toml', '.sh', '.env', '.example',
+  // 安卓工程：不列进来会被当成二进制，密钥与绝对路径扫描就整块跳过了
+  '.kt', '.kts', '.java', '.xml', '.properties', '.pro', '.gradle',
 ]);
 
 const MAX_BYTES = 5 * 1024 * 1024;
