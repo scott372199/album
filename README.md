@@ -9,6 +9,16 @@
 
 当前版本 **v3**（2026-11-10 验收上线）：`https://photos.chenyouyi.top/`。迭代记录见 `spec/v3/`。
 
+**v4 进行中**：增加安卓客户端、手机端按需上传（Lambda 处理）、Terraform 分层 IaC。
+前端产物与照片内容解耦（`build:web` 只发代码，照片由处理函数写入），
+处理函数见 `src/server/`，镜像构建见 `docker/` 与 `.github/workflows/build-image.yml`。
+文档见 `spec/v4/`。
+
+*Work in progress (v4): an Android client, on-demand uploads processed by Lambda, and
+layered Terraform IaC. The frontend bundle is decoupled from content — `build:web`
+ships code only, photos are written by the processor (`src/server/`, image build in
+`docker/` and `.github/workflows/build-image.yml`). Docs live in `spec/v4/`.*
+
 ## v3 有什么
 
 | 能力 | 说明 |
@@ -31,9 +41,12 @@ photos/            源照片与视频（gitignore，不入库）
 src/
   build/           扫描、读 EXIF、图片三档、视频转码、manifest
   web/             页面源码（index.html / style.css / js/）
+  server/            v4：Lambda 处理函数（auth / processor）与单测
   deploy/          AWS 部署脚本与配置模板
-scripts/           样例生成、结构验证、仓库安检
-spec/              需求与设计文档（v1 / v2 / v3）
+docker/             v4：处理镜像的 Dockerfile 与本地构建脚本
+.github/workflows/  v4：镜像构建与前端发布
+scripts/           样例生成、结构验证、仓库安检、密钥哈希
+spec/              需求与设计文档（v1 / v2 / v3 / v4）
 dist/              构建产物（gitignore）
 ```
 
@@ -43,6 +56,9 @@ dist/              构建产物（gitignore）
 | --- | --- |
 | `npm run samples` | 生成几张测试图片，验证管线是否通 |
 | `npm run build` | 扫描 `photos/` → 产出 `dist/` |
+| `npm run build:web` | v4：只发布前端代码，不读 `photos/`（照片由处理函数写入） |
+| `npm run test:server` | v4：处理函数单测（纯函数，零依赖即可跑） |
+| `npm run hash-key` | v4：生成共享密钥与它的 scrypt 哈希 |
 | `npm run verify` | 结构断言（不连网、不碰 AWS） |
 | `npm run check:repo` | 仓库安检：媒体 / 密钥 / 大文件 / 绝对路径 |
 | `npm run hook:install` | 安装本地 pre-commit 钩子（可选） |
@@ -50,6 +66,17 @@ dist/              构建产物（gitignore）
 | `npm run deploy` | 构建 → 同步（含 `--delete`）→ 失效入口页 |
 
 部署需要本机已配置 AWS CLI 凭证；脚本不会读取或写入任何密钥到仓库。
+
+**处理镜像**在主路径上由 CI 构建：`.github/workflows/build-image.yml` 在 ubuntu runner 上
+构建 `linux/amd64` 并推到 ECR（tag 为 git 短 sha）。本机是 Apple Silicon，直接 `docker build`
+会产出 arm64 镜像，Lambda 起不来；确实需要本地推一版时用 `docker/build-push.sh <tag>`（已带
+`--platform linux/amd64` 与镜像自检）。
+
+*The handler image is built by CI on the main path: `.github/workflows/build-image.yml`
+builds `linux/amd64` on an ubuntu runner and pushes to ECR, tagged with the short git SHA.
+This machine is Apple Silicon, so a plain `docker build` yields an arm64 image that Lambda
+refuses to start; for the rare local push use `docker/build-push.sh <tag>`, which already
+pins `--platform linux/amd64` and runs a smoke test.*
 
 ## 为什么不把照片放进仓库
 

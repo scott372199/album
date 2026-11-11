@@ -29,7 +29,6 @@ permissions:
 env:
   AWS_REGION: ap-southeast-1
   ECR_REPOSITORY: album-processor
-  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   test:
