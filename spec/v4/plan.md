@@ -90,14 +90,14 @@ album/
 │   │   ├── build.mjs      # 改为 dispatcher：--target=web|all
 │   │   └── ...
 │   └── server/            # 新增：处理函数源码
-│       ├── auth/handler.mjs
-│       ├── processor/handler.mjs
-│       ├── processor/image.mjs
-│       ├── processor/video.mjs
-│       ├── lib/{manifest,s3,log,token}.mjs
-│       └── package.json
+│       ├── runtime.mjs    # 自带 runtime client，替代 aws-lambda-ric
+│       ├── auth/{handler,rules,attempts,upload}.mjs
+│       ├── processor/{handler,image,video,manifest,store,derive}.mjs
+│       ├── lib/{config,http,log,params,scrypt,token}.mjs
+│       ├── test/*.test.mjs
+│       └── package.json   # 独立依赖树与锁文件（镜像里只装这一份）
 ├── docker/
-│   ├── Dockerfile         # node:22-slim + ffmpeg + sharp
+│   ├── Dockerfile         # node:22-bookworm-slim + apt ffmpeg + sharp
 │   └── build-push.sh
 ├── android/               # 新增：Gradle 工程
 │   ├── app/src/main/java/top/chenyouyi/album/{MainActivity,AlbumBridge,UpdateManager}.kt
@@ -114,7 +114,7 @@ album-infra/
 ├── README.md              # 四层职责、依赖方向、导入步骤、回滚
 ├── Makefile               # fmt / validate / plan / apply 便捷入口
 ├── layers/
-│   ├── 00-bootstrap/      # state 桶、锁表、OIDC、三个角色
+│   ├── 00-bootstrap/      # state 桶、OIDC、三个角色
 │   │   ├── main.tf  variables.tf  outputs.tf  backend.hcl  prod.tfvars
 │   ├── 10-storage/        # 三个桶 + 策略 + 生命周期
 │   ├── 20-edge/           # OAC + CloudFront + 缓存策略 + 路径行为
@@ -142,7 +142,7 @@ album-infra/
 | --- | --- |
 | `aws_s3_bucket` **tfstate** | 名 `chenyouyi-tfstate`；版本控制开；SSE-S3；PAB 四项全开 |
 | `aws_s3_bucket_versioning` / `_server_side_encryption_configuration` / `_public_access_block` | 同上桶的附属配置 |
-| `aws_dynamodb_table` **tflock** | 名 `chenyouyi-tflock`；PAY_PER_REQUEST；hash key `LockID` |
+| ~~`aws_dynamodb_table` tflock~~ | **已取消**：Terraform 1.10 起 S3 后端原生锁（`use_lockfile = true`）足够，少一个资源、少一份权限（2026-11-11 实施时调整） |
 | `aws_iam_openid_connect_provider` | `token.actions.githubusercontent.com`，audience `sts.amazonaws.com` |
 | `aws_iam_role` **gha_infra_plan** | 只读 + 可读 state；trust 限定 `repo:scott372199/album-infra:*` |
 | `aws_iam_role` **gha_infra_apply** | 可写基础设施资源；同上 trust |
@@ -203,11 +203,19 @@ album-infra/
 > **为什么两个函数共用一个镜像**：sharp 与 ffmpeg 的依赖完全重叠，一个镜像两个入口省一次构建与一份存储，且版本严格一致。
 > ***Why one image, two functions**: sharp and ffmpeg dependencies overlap entirely; one image with two entrypoints saves a build and keeps versions locked together.*
 
+> **认证函数必须能写源桶**：预签名 URL 是用 Lambda 的执行角色签名，不是用调用者身份。
+> 所以 `s3:PutObject` 要授到认证角色的 `incoming/*` 上，否则签出来的地址会被 S3 拒绝。
+> `ALLOWED_ORIGIN` 不再由函数读取——CORS 交给 API Gateway 的路由配置统一加。
+> *The auth function needs `s3:PutObject` on `incoming/*`: presigned URLs are
+> signed with the function's own role, not the caller's identity. CORS is
+> handled by the API Gateway route config, so the function does not read
+> `ALLOWED_ORIGIN`.*
+
 ### 3.5 层间数据流 / Data flow between layers
 
 | 从 / From | 到 / To | 传递内容 / Passed |
 | --- | --- | --- |
-| L0 | 全部 | 角色 ARN、state 桶名、锁表名 |
+| L0 | 全部 | 角色 ARN、state 桶名 |
 | L1 | L2 | 三个桶的 `bucket_regional_domain_name` 与 ARN |
 | L1 | L3 | 两桶名（源/站点） |
 | L2 | L3 | 分发 ID（失效用） |
@@ -326,7 +334,7 @@ import {
 
 | 层 / Layer | 通过条件 / Gate |
 | --- | --- |
-| L0 | `apply` 后 state 桶可读写，锁表可争用；三个角色可被 Actions 假定 |
+| L0 | `apply` 后 state 桶可读写（锁文件即在该前缀下）；三个角色可被 Actions 假定 |
 | L1 | `plan` 为空；线上首页仍 200；直连 S3 仍 403 |
 | L2 | `plan` 为空；正式域名 200；CF 默认域名 200；旧 HTTP 端点仍 404 |
 | L3 | 全部资源为新建，`apply` 后 `plan` 为空；`/health` 返回 200 |
@@ -404,7 +412,7 @@ import {
 5. 拍摄年月：`takenAt`（客户端）→ EXIF `DateTimeOriginal` → 对象 `LastModified`。**只保留年月**。
 6. 写产物到站点桶：`media/<id>/thumb.webp`、`view.webp`、`poster.webp`、`clip.mp4`，均带长缓存头。
 7. 读当前清单 → 追加/替换条目 → 写新清单 `data/manifest.<hash>.json` → 更新 `data/version.json`。
-8. 失效 `/` 与 `/data/version.json`。
+8. 失效 `/data/version.json`。
 9. **删除源桶对象**（P02，必做）。放在最后一步：先确认产物与清单都写成功，再删原图；顺序反了就会丢素材。
    ***Delete the source object** (P02, mandatory). Done last: confirm both outputs and manifest are written before removing the original — reversing the order loses material.*
 
@@ -415,19 +423,55 @@ import {
 
 ```json
 // data/version.json  (Cache-Control: no-store)
-{ "v": "2026-11-11T12:00:00Z", "manifest": "data/manifest.a1b2c3d4.json" }
+{ "rev": "a1b2c3d4", "manifest": "data/manifest.a1b2c3d4.json",
+  "counts": { "photos": 21, "videos": 1 } }
 // data/manifest.<hash>.json  (immutable, 长缓存)
-{ "photos": [ { "id": "a1b2c3d4", "y": 2026, "m": 11, "album": "2026",
-                "kind": "image", "w": 4032, "h": 3024, "ar": 1.3333,
-                "tags": ["家人"], "thumb": "media/a1b2c3d4/thumb.webp",
-                "view": "media/a1b2c3d4/view.webp" } ],
-  "albums": [ { "name": "2026", "count": 1, "cover": "a1b2c3d4" } ] }
+{ "site": { "title": "个人相册", "subtitle": "" },
+  "wall": { "interval": 10, "clock": true, "night": { "from": "22:00", "to": "07:00" } },
+  "story": { "pace": "normal" }, "hero": "",
+  "photos": [ { "id": "a1b2c3d4", "type": "image", "album": "2026",
+                "year": 2026, "month": 11, "tags": ["2026", "家人"],
+                "title": "", "caption": "", "ratio": 1.3333, "lqip": "data:image/webp;base64,…",
+                "featured": false,
+                "thumb": "photos/a1b2c3d4/thumb.webp",
+                "grid": "photos/a1b2c3d4/grid.webp",
+                "view": "photos/a1b2c3d4/view.webp" } ],
+  "albums": [ { "name": "2026", "count": 1, "cover": "a1b2c3d4", "coverType": "image" } ] }
 ```
 
 - 清单文件名带内容哈希 → 可永久缓存；`version.json` 不缓存 → 发布即生效。
   *Hashed manifest filenames allow immutable caching; `version.json` is no-store so publishing is instant.*
 - 前端冷启动多一次往返（`version.json` → 清单），代价约一个 RTT，换取「Lambda 能增量发布」。
   *Cold start costs one extra round trip, in exchange for incremental publishing.*
+
+> **字段与 v3 完全一致，不是新设计。** 早稿里写的是 `kind/y/m/ar` + `media/<id>/…`，
+> 实现时改回 v3 的 `type/year/month/ratio` + `photos/<id>/…`，原因有两个：
+> ① 同一个前端要同时渲染「本地构建的照片」和「服务端追加的照片」，两套 schema 会直接
+> 把画廊搞坏；② 沿用 `photos/` 路径，v3 已上线的 21 张照片不需要迁移。
+> 处理函数只改 `photos` 与 `albums`，顶层的 `site/wall/story/hero` 原样保留。
+>
+> ***Fields match v3 exactly, and deliberately.** The draft used `kind/y/m/ar` with
+> `media/<id>/…`; the implementation kept v3's `type/year/month/ratio` and
+> `photos/<id>/…` because one frontend renders both locally built and
+> server-appended photos (two schemas would break the gallery), and keeping the
+> `photos/` prefix means the 21 photos already live in v3 need no migration. The
+> processor touches only `photos` and `albums`, preserving site/wall/story/hero.*
+
+### 7.6 镜像与运行时 / Image & runtime
+
+镜像是 `node:22-bookworm-slim` + `apt install ffmpeg` + `npm ci`，入口是自带的
+`src/server/runtime.mjs`（约 80 行的 runtime client），**不使用** `aws-lambda-ric`。
+*The image is bookworm-slim + apt ffmpeg + `npm ci`, with a hand-written runtime
+client at `src/server/runtime.mjs`; `aws-lambda-ric` is not used.*
+
+| 选择 / Choice | 理由 / Why |
+| --- | --- |
+| 不用官方 Lambda 基础镜像 | 它是 AL2023，仓库里没有 ffmpeg；装它得去找静态二进制，构建不确定性更大 |
+| 不用 `aws-lambda-ric` | 那个包要原生编译（cmake + g++），分钟级且易失败；runtime API 本身只有「取任务 → 回结果」 |
+| ubuntu runner 构建 | 本机是 Apple Silicon，直接 build 会产出 arm64 镜像，Lambda 起不来 |
+
+镜像标签用 git 短 sha（`IMMUTABLE`，推第二次会被拒），基础设施层用 `-var image_tag=<tag>` 指向它。
+*Tags are short git SHAs (ECR is IMMUTABLE); the infra layer takes `-var image_tag=<tag>`.*
 
 ### 7.5 失败处理 / Failures
 

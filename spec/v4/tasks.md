@@ -132,18 +132,24 @@ P7 收尾  T-29 → T-30 → T-31
 - **内容 / Work**：`docker/Dockerfile`（`node:22-bookworm-slim` + apt ffmpeg + `npm ci` 含 sharp）；`build-push.sh` 支持指定 tag；镜像内自检 sharp 与 ffmpeg 可用
 - **验收 / Done when**：本地 `docker run` 能执行 `sharp --version` 等价检查与 `ffmpeg -version`；镜像体积记录在 README
 - **追溯 / Traces to**：O-11、spec §11.6、plan §3.4
+- **状态 / Status**：✅ 代码完成（`docker/Dockerfile`、`docker/build-push.sh`、`.github/workflows/build-image.yml`）。**构建在 ubuntu runner 上做，不在本机**——Apple Silicon 直接 build 会产出 arm64 镜像。
+- **实施偏差 / Deviations**：入口改为自带 `src/server/runtime.mjs`，不用 `aws-lambda-ric`（后者要原生编译，慢且易失败）。`ENTRYPOINT` 固定为 `node /var/task/runtime.mjs`，`CMD` 承载 handler，所以 infra 的 `command=["auth/handler.handler"]` 不变。
 
 #### T-13 认证函数 / Auth handler
 - **依赖 / Deps**：T-12
 - **内容 / Work**：`src/server/auth/handler.mjs`：校验手机号哈希白名单 + 共享密钥 scrypt 哈希 + 失败计数（DynamoDB/TTL）→ 签发 JWT（1h）+ 刷新令牌（7d）；日志手机号掩码
 - **验收 / Done when**：单测覆盖正确/错误/超限三种路径；日志中无明文手机号；响应体不含内部错误细节
 - **追溯 / Traces to**：FR-21.1/21.2、FR-25.3、plan §7.1
+- **状态 / Status**：✅ 代码完成，40 项单测通过（`npm run test:server`）。一个函数三个路由，按 `event.routeKey` 分发。
+- **实施偏差 / Deviations**：① 白名单在 SSM 里存**明文手机号**（SecureString）而不是哈希——11 位号码空间只有千亿量级，哈希挡不住穷举，纯属安全剧场；令牌主体仍用 HMAC 派生，明文不进令牌。② `/auth` 兼做刷新：请求体带 `refresh` 即换新访问令牌，路由表不必多一条。
 
 #### T-14 图片处理 / Image processing
 - **依赖 / Deps**：T-12
 - **内容 / Work**：`processor/image.mjs`：`thumb.webp`(320w) + `view.webp`(2048 长边)，不调 `withMetadata`，输出后断言无 EXIF；年月提取（`takenAt` → EXIF → `LastModified`）
 - **验收 / Done when**：用**带 GPS 的真实样张**跑通，产物 EXIF 为空；年月正确；宽高比与原图一致
 - **追溯 / Traces to**：FR-22.2、FR-25.1、plan §7.3
+- **状态 / Status**：✅ 代码完成。**待真实样张验证**（需一张带 GPS 的照片走完整链路，属 T-18 联调范围）。
+- **实施偏差 / Deviations**：产出**三档**（320 / 768 / 2048）而不是两档。前端 `srcsetFor()` 会在三档间挑，缺 768 会让平板直接拉 2048 的图。
 
 #### T-15 视频处理 / Video processing
 - **依赖 / Deps**：T-12
@@ -151,6 +157,8 @@ P7 收尾  T-29 → T-30 → T-31
 - **验收 / Done when**：用 `IMG_2265.MOV` 跑通，输出无 `creation_time`/`location`/`make`；竖屏方向正确
 - **追溯 / Traces to**：FR-22.3、plan §7.3
 - **坑 / Pitfall**：**先 ffprobe 取 `creation_time` 再加 `-map_metadata -1`**，否则年月一起被清
+- **状态 / Status**：✅ 代码完成，**待 `IMG_2265.MOV` 实跑验证**。
+- **实施偏差 / Deviations**：`video_max_height` 解释为**短边**上限（1080p 的通行含义）。按长边封顶会把竖屏手机视频压到 608×1080。
 
 #### T-16 剩余模块 / Remaining modules
 - **依赖 / Deps**：T-12

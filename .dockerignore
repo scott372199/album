@@ -1,0 +1,16 @@
+# 只让镜像拿到「源码 + 依赖清单」，其余一律不进构建上下文。
+# 尤其是 photos/（原始素材，绝不能进镜像层）与本机的 node_modules。
+# Only source and manifests reach the image. photos/ (original material) and the
+# host's node_modules must never enter a layer.
+
+.git
+.github
+node_modules
+**/node_modules
+photos
+dist
+spec
+android
+scripts
+*.md
+!src/server/*.md

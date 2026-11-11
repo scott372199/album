@@ -1,0 +1,128 @@
+name: build-image
+
+# 处理镜像在 CI 里构建，不在本机。
+# 本机是 Apple Silicon，直接 build 会产出 arm64 镜像，Lambda 起不来；
+# 而 ubuntu runner 天生就是 amd64，连交叉编译都不需要。
+#
+# The handler image is built in CI, not locally: this machine is Apple Silicon,
+# and an arm64 image simply refuses to start on Lambda. An ubuntu runner is
+# amd64 to begin with, so no cross-compilation is involved.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/server/**'
+      - 'docker/**'
+      - '.dockerignore'
+      - '.github/workflows/build-image.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: build-image-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-1
+  ECR_REPOSITORY: album-processor
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  test:
+    name: 单测 / unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # 单测只覆盖纯函数（时区、令牌、哈希、上传规则、清单读写），
+      # 不装依赖也能跑——这正是当初把它们拆出来的原因。
+      # Tests only touch pure helpers, so they run with zero installs — which is
+      # precisely why those helpers were extracted.
+      - name: 运行单测 / Run tests
+        run: node --test "src/server/test/*.test.mjs"
+
+  image:
+    name: 构建并推送 / Build & push
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 取短标签 / Short tag
+        id: tag
+        run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      # 没有长期密钥：OIDC 换一次 15 分钟的临时凭证
+      # No long-lived keys: OIDC trades for 15-minute credentials
+      - name: 配置 AWS 凭证 / Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_APP_DEPLOY_ROLE_ARN }}
+          role-session-name: gha-album-image
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: ECR 登录 / Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ECR 是 IMMUTABLE：同一 tag 已存在时直接跳过，重跑工作流不会红
+      - name: 检查镜像是否已存在 / Skip if already pushed
+        id: probe
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
+              --image-ids "imageTag=$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "镜像已存在，跳过构建 / already pushed, skipping"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 安装 buildx / Set up Buildx
+        if: steps.probe.outputs.exists == 'false'
+        uses: docker/setup-buildx-action@v3
+
+      - name: 构建并推送 / Build & push
+        id: build
+        if: steps.probe.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 把「推到哪儿、用了哪个 tag」写在任务摘要里，
+      # 之后到 infra 仓库手动 apply 时直接抄，不必再去 ECR 翻。
+      - name: 摘要 / Summary
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          EXISTS: ${{ steps.probe.outputs.exists }}
+        run: |
+          {
+            echo "### 镜像 / Image"
+            echo ""
+            echo "- 仓库 / repository: \`$REGISTRY/$ECR_REPOSITORY\`"
+            echo "- 标签 / tag: \`$TAG\`"
+            echo "- 已存在跳过 / skipped: $EXISTS"
+            echo "- digest: \`${{ steps.build.outputs.digest }}\`"
+            echo ""
+            echo "基础设施层用这个 tag：\`-var image_tag=$TAG\`"
+          } >> "$GITHUB_STEP_SUMMARY"
