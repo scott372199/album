@@ -84,6 +84,26 @@ jobs:
             exit 1
           fi
 
+      # 配置缺失要在这一步就说清楚。否则后面 aws 命令会报一个
+      # 「s3:///assets/ 不是合法路径」之类的错，看日志的人得猜半天。
+      # Surface missing configuration here instead of letting the aws commands
+      # fail with a cryptic message about an empty bucket URL.
+      - name: 检查仓库配置 / Check repository variables
+        env:
+          ALBUM_API_BASE: ${{ vars.ALBUM_API_BASE }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${SITE_BUCKET}" ] || missing+=("SITE_BUCKET")
+          [ -n "${DISTRIBUTION_ID}" ] || missing+=("DISTRIBUTION_ID")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::缺少仓库 Variables：${missing[*]}（Settings → Secrets and variables → Actions → Variables）"
+            exit 1
+          fi
+          if [ -z "${ALBUM_API_BASE}" ]; then
+            echo "::warning::ALBUM_API_BASE 未设置，产物不含接口地址，上传入口不会出现"
+          fi
+
       - name: 配置 AWS 凭证 / Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
