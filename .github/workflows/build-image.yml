@@ -22,6 +22,11 @@ concurrency:
   group: build-image-${{ github.ref }}
   cancel-in-progress: false
 
+# 并发组不取消在跑的那一个，所以一个卡住的 job 会把后面的全部堵死；
+# 每个 job 都设了 timeout-minutes，最坏情况是显式失败而不是无声排队。
+# The concurrency group never cancels a running job, so one hung job blocks
+# every later run; each job carries a timeout so the worst case is a visible
+# failure rather than a silent queue.
 permissions:
   id-token: write
   contents: read
@@ -34,6 +39,7 @@ jobs:
   test:
     name: 单测 / unit tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -52,6 +58,8 @@ jobs:
     name: 构建并推送 / Build & push
     needs: test
     runs-on: ubuntu-latest
+    # 拉基镜像 + apt ffmpeg + npm ci + 推 200MB，20 分钟够宽松了
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
