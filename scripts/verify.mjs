@@ -514,4 +514,122 @@ ok('同步不把入口页排除在外（--exclude 会连带影响 --delete 判�
   assert.ok(syncBlock.includes('--size-only'), '同尺寸即同内容，避免每轮重传');
 });
 
+// ---------------------------------------------------------------------------
+// v4：跨语言与跨仓库的契约
+//
+// 这几条防的都是「改一处、另一处静默失效」——原生桥的方法名、版本号的
+// 唯一来源、发布流水线碰了不该碰的前缀。它们在正常跑测试时都不会报错，
+// 只在真机或线上才现形。
+// ---------------------------------------------------------------------------
+
+await okAsync('代码里没有硬编码的桶名 / 账号 / 分发 ID', async () => {
+  const files = [
+    ...(await walk(path.join(ROOT, 'src'))).filter((f) => /\.(mjs|js)$/.test(f)),
+    ...(await walk(path.join(ROOT, 'scripts'))).filter((f) => /\.mjs$/.test(f)),
+  ];
+  // config.json 本身就是配置，不算硬编码；这里只拦代码里出现真值——
+  // 一旦散落在代码里，换桶或换分发就得满仓库找。
+  //
+  // 字面量拆开拼：本文件自己就是扫描目标，写整串会立刻自报。
+  // `top/chenyouyi/album` 是安卓包名，不是资源配置，用负向断言排除。
+  // Split on purpose: this file is itself scanned. `top/chenyouyi/album` is a
+  // Java package name, not a resource reference, so it is excluded.
+  const forbidden = [
+    ['chen', 'youyi'].join(''),
+    ['156487532', '333'].join(''),
+    ['E2UWEFMO', 'KOQEES'].join(''),
+    ['d3mvmo06', 'veyiuk'].join(''),
+  ];
+  for (const file of files) {
+    const text = await readFile(file, 'utf8');
+    for (const token of forbidden) {
+      assert.ok(
+        !new RegExp(`(?<!top/)${token}`).test(text),
+        `${path.relative(ROOT, file)} 硬编码了 ${token}；应放配置或环境变量`,
+      );
+    }
+  }
+});
+
+await okAsync('前端调用的原生桥方法都在 AlbumBridge 里注解过', async () => {
+  const nativeSrc = await readFile(path.join(ROOT, 'src/web/js/native.js'), 'utf8');
+  const bridgeSrc = await readFile(
+    path.join(ROOT, 'android/app/src/main/java/top/chenyouyi/album/AlbumBridge.kt'),
+    'utf8',
+  );
+  // native.js 里形如 `window.AlbumNative.setKeepScreenOn(` 的调用
+  const called = new Set(
+    [...nativeSrc.matchAll(/AlbumNative\.(\w+)\s*\(/g)].map((m) => m[1]),
+  );
+  // Kotlin 侧只认带 @JavascriptInterface 注解的方法；少一个注解，那方法在
+  // 网页里就是 undefined，而且浏览器里跑测试永远发现不了
+  const exposed = new Set(
+    [...bridgeSrc.matchAll(/@JavascriptInterface\s+fun\s+(\w+)\s*\(/g)].map((m) => m[1]),
+  );
+  assert.ok(called.size > 0, 'native.js 应当调用至少一个桥方法');
+  for (const name of called) {
+    assert.ok(exposed.has(name), `AlbumBridge 缺少 @JavascriptInterface 方法 ${name}`);
+  }
+  assert.ok(nativeSrc.includes('window.AlbumNative'), 'native.js 应检测 window.AlbumNative');
+});
+
+await okAsync('返回键契约的两端都存在', async () => {
+  const nativeSrc = await readFile(path.join(ROOT, 'src/web/js/native.js'), 'utf8');
+  const mainSrc = await readFile(path.join(ROOT, 'src/web/js/main.js'), 'utf8');
+  const activity = await readFile(
+    path.join(ROOT, 'android/app/src/main/java/top/chenyouyi/album/MainActivity.kt'),
+    'utf8',
+  );
+  for (const fn of ['__canGoBack', '__goBack']) {
+    assert.ok(nativeSrc.includes(`window.${fn}`), `native.js 应挂上 ${fn}`);
+    assert.ok(activity.includes(fn), `MainActivity 应调用 ${fn}`);
+  }
+  assert.ok(
+    /installBackBridge\(\{[^}]*canGoBack[^}]*goBack/.test(mainSrc),
+    'main.js 必须把 canGoBack / goBack 一起交给原生桥',
+  );
+});
+
+await okAsync('安卓版本号只有一个来源', async () => {
+  const gradle = await readFile(path.join(ROOT, 'android/app/build.gradle.kts'), 'utf8');
+  const props = await readFile(path.join(ROOT, 'android/app/version.properties'), 'utf8');
+  assert.ok(gradle.includes('version.properties'), 'build.gradle.kts 应从 version.properties 读版本');
+  assert.ok(/versionCode\s*=\s*appVersionCode/.test(gradle), 'versionCode 应取自文件');
+  assert.ok(/versionName\s*=\s*appVersionName/.test(gradle), 'versionName 应取自文件');
+  assert.ok(/^versionCode=\d+$/m.test(props), 'version.properties 缺少合法的 versionCode');
+  assert.ok(/^versionName=\S+$/m.test(props), 'version.properties 缺少 versionName');
+
+  const publish = await readFile(path.join(ROOT, 'scripts/publish-apk.mjs'), 'utf8');
+  assert.ok(publish.includes('version.properties'), '发布脚本必须读同一个文件');
+});
+
+await okAsync('前端发布流水线不碰 photos/ 与 data/', async () => {
+  const wf = await readFile(path.join(ROOT, '.github/workflows/deploy-web.yml'), 'utf8');
+  const code = wf.replace(/#[^\n]*/g, '');
+  // 根级 sync --delete 会把处理函数写进去的照片删光（v4 最危险的一条）
+  assert.ok(
+    !/s3\s+sync\s+dist\/\s/.test(code),
+    '不得对 dist/ 整体 sync —— 产物里没有 photos/，根级 delete 会清空线上照片',
+  );
+  assert.ok(code.includes('dist/assets/'), '应只同步 assets/');
+  // 出现 photos/ 本身不是问题——流水线里有一处专门的守卫就是为了在产物误含
+  // 照片目录时拒绝发布。真正要拦的是「往上写」：任何把照片目录当目标的 s3 路径。
+  assert.ok(!/s3:\/\/\S*photos/.test(code), '不得上传到 photos/ 前缀 —— 那里归处理函数管');
+  assert.ok(code.includes('dist/photos'), '应保留「产物里有 photos/ 就拒绝发布」的守卫');
+  assert.ok(!/\/data\/"+?\s*--delete/.test(code), 'data/ 归处理函数管，不应被 sync --delete');
+});
+
+await okAsync('镜像构建关掉了 provenance（否则 Lambda 拒绝 index 清单）', async () => {
+  const wf = await readFile(path.join(ROOT, '.github/workflows/build-image.yml'), 'utf8');
+  assert.ok(/provenance:\s*false/.test(wf), 'buildx 默认附加的证明清单会让 Lambda 拒收镜像');
+  assert.ok(/platforms:\s*linux\/amd64/.test(wf), 'Lambda 不接受 arm64 镜像');
+});
+
+await okAsync('签名材料与本地 SDK 路径被忽略', async () => {
+  const ignore = await readFile(path.join(ROOT, '.gitignore'), 'utf8');
+  for (const token of ['*.keystore', 'keystore.properties', 'local.properties']) {
+    assert.ok(ignore.includes(token), `.gitignore 应忽略 ${token}`);
+  }
+});
+
 console.log(`--- 全部通过：${checks} 项断言 ---`);

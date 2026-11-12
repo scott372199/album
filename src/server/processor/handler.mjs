@@ -2,6 +2,7 @@ import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { env } from '../lib/config.mjs';
 import { log, errorFields } from '../lib/log.mjs';
+import { backoffMs } from '../lib/retry.mjs';
 import * as store from './store.mjs';
 import { processImage } from './image.mjs';
 import { processVideo } from './video.mjs';
@@ -27,6 +28,15 @@ import {
 
 const TMP_ROOT = '/tmp/album';
 
+/**
+ * 清单指针写冲突时最多重读几轮、每轮基础退避多少毫秒。
+ * 并发上传一批 20 张，冲突轮数一般是个位数；5 轮 × 最慢 250ms 足够，
+ * 又不至于把一个真正卡住的事件拖到超时。
+ * Retry budget for pointer contention.
+ */
+const MANIFEST_ATTEMPTS = 5;
+const MANIFEST_RETRY_MS = 50;
+
 const ARTIFACT_TYPES = {
   'thumb.webp': 'image/webp',
   'grid.webp': 'image/webp',
@@ -49,28 +59,94 @@ async function writeArtifacts(siteBucket, id, buffers) {
  * 固定名是本地 `build:web` 的产物，线上首次部署时它就是当时的清单，
  * 于是「服务端第一次追加照片」不会把已有照片全部抹掉。
  */
-async function readCurrentManifest(siteBucket) {
+/**
+ * 读当前清单，连同指针文件自身的 ETag 一起返回——提交时要拿它做条件写。
+ * 固定名是本地 `build:web` 的产物，线上首次部署时它就是当时的清单，
+ * 于是「服务端第一次追加照片」不会把已有照片全部抹掉。
+ *
+ * Returns the manifest together with the pointer's ETag, which the commit step
+ * needs for a conditional write.
+ */
+async function readVersionAndManifest(siteBucket) {
   const versionKey = env('VERSION_KEY', 'data/version.json');
   const manifestKey = env('MANIFEST_KEY', 'data/manifest.json');
 
   let version = null;
   try {
-    version = await store.readJson(siteBucket, versionKey);
+    version = await store.getJsonWithEtag(siteBucket, versionKey);
   } catch (err) {
     log.warn('manifest.version_unreadable', errorFields(err));
   }
 
   const pointers = [
-    typeof version?.manifest === 'string' ? version.manifest : '',
+    typeof version?.value?.manifest === 'string' ? version.value.manifest : '',
     manifestKey,
   ].filter(Boolean);
 
   for (const key of pointers) {
     const value = await store.readJson(siteBucket, key);
-    if (value) return normalizeManifest(value);
+    if (value) return { version, manifest: normalizeManifest(value) };
   }
-  return emptyManifest();
+  return { version, manifest: emptyManifest() };
 }
+
+/**
+ * 把一条记录并进清单，并推进指针。
+ *
+ * 并发上传时多个事件会同时跑：它们各自读到同一版清单，各自加一条，后写的
+ * 会把先写的那条冲掉。原先靠「预留并发 = 1」把这里串起来，但新账号的总并发
+ * 只有 50，AWS 不接受任何预留值（留 1 个就跌破非预留下限 50）。
+ *
+ * 所以改成条件写：指针文件带 `If-Match: <读到的 ETag>`，一旦有人抢先写过就
+ * 返回 412，这边重读、重新合并、再写。代价是冲突时多做一轮，好处是不再
+ * 依赖并发额度，也不会静默丢照片。
+ *
+ * Concurrent uploads each read the same manifest, add their own entry, and the
+ * last writer wins — silently dropping the others. This used to be serialised
+ * by a reserved concurrency of 1, but a new account is capped at 50 total and
+ * AWS rejects any reservation against that. Conditional writes replace it: the
+ * pointer carries `If-Match: <etag>`, a loser gets 412, and it re-reads, re-merges
+ * and retries.
+ */
+async function commitManifest(siteBucket, record) {
+  const versionKey = env('VERSION_KEY', 'data/version.json');
+
+  for (let attempt = 1; attempt <= MANIFEST_ATTEMPTS; attempt += 1) {
+    const { version, manifest } = await readVersionAndManifest(siteBucket);
+    const next = upsertPhoto(manifest, record);
+    const counts = countTypes(next.photos);
+    const rev = sha256(Buffer.from(JSON.stringify(next), 'utf8')).slice(0, 12);
+    const manifestKey = `data/manifest.${rev}.json`;
+
+    // 先写清单、后写指针：中间断掉只是多一份孤儿清单，页面仍渲染旧版本；
+    // 顺序反了就会有一段时间「指针指向不存在的文件」，整站白屏。
+    await store.putJson(siteBucket, manifestKey, next, {
+      cacheControl: store.CACHE_IMMUTABLE,
+    });
+
+    try {
+      await store.putJsonConditional(siteBucket, versionKey, {
+        rev,
+        manifest: manifestKey,
+        counts,
+      }, {
+        cacheControl: store.CACHE_NO_STORE,
+        ifMatch: version?.etag || null,
+        ifNoneMatch: version ? null : '*',
+      });
+      return { rev, manifestKey, counts, attempts: attempt };
+    } catch (err) {
+      if (!store.isPreconditionFailed(err)) throw err;
+      // 别人先写了一步，重读再合并。抖动一下，避免两个实例同步重试又撞上。
+      log.info('manifest.contended', { attempt, rev });
+      await sleep(backoffMs(attempt, MANIFEST_RETRY_MS));
+    }
+  }
+
+  throw new Error(`清单更新冲突，重试 ${MANIFEST_ATTEMPTS} 次仍失败 / manifest contention`);
+}
+
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
 async function artifactsExist(siteBucket, id, kind) {
   // 视频可能被降级成静图（只剩三档图），所以两种产物都要探：
@@ -110,7 +186,7 @@ async function processObject({ bucket, key }) {
   await mkdir(workDir, { recursive: true });
 
   try {
-    const current = await readCurrentManifest(siteBucket);
+    const { manifest: current } = await readVersionAndManifest(siteBucket);
 
     // 图片整段读进内存（30MB 上限），视频落盘（200MB 上限，还能更大）
     let buffer = null;
@@ -169,19 +245,8 @@ async function processObject({ bucket, key }) {
       }
     }
 
-    const next = upsertPhoto(current, record);
-    const rev = sha256(Buffer.from(JSON.stringify(next), 'utf8')).slice(0, 12);
-    const manifestKey = `data/manifest.${rev}.json`;
+    const { rev } = await commitManifest(siteBucket, record);
     const versionKey = env('VERSION_KEY', 'data/version.json');
-
-    // 先写清单、后写指针：中间断掉只是多一份孤儿清单，页面仍渲染旧版本；
-    // 顺序反了就会有一段时间「指针指向不存在的文件」，整站白屏。
-    await store.putJson(siteBucket, manifestKey, next, { cacheControl: store.CACHE_IMMUTABLE });
-    await store.putJson(siteBucket, versionKey, {
-      rev,
-      manifest: manifestKey,
-      counts: countTypes(next.photos),
-    }, { cacheControl: store.CACHE_NO_STORE });
 
     // 失效失败不该让整次处理重来：version.json 本身就是 no-store，
     // 最坏情况是极少数边缘节点多缓存几秒。
