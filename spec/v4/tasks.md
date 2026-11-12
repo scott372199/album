@@ -464,3 +464,58 @@ P7 收尾  T-29 → T-30 → T-31
 200 photos/month lands around $0.09 (¥0.65). The only line that grows linearly is S3 storage,
 and the processor discards originals, so 4K footage never accumulates.*
 
+
+---
+
+## 7. 验收后的修复 / Fixes after acceptance
+
+> 真机验收（T-28）暴露出一个 v4 期间没能复现的问题：**大视频上传必现失败**。
+> 这段记录的是排查结论与最终修法，不算新功能。
+
+### 7.1 症状与取证 / Symptom and evidence
+
+三轮真机测试，规律一致：同一批里的第一份能传上去，后面的全部失败。
+
+| 观察 | 值 |
+| --- | --- |
+| 失败文案（第一版） | 「网络中断」，15 次上传里 4 次 |
+| 失败文案（加诊断后） | `连接中断 · 已发 0%（0B/150.2MB）· 0.4s · 站点正常 188ms` |
+| 服务端 | 预签名全部成功，**没有一条 `upload.rejected`**；成功那一次 PUT 用了 118 秒 |
+| 重试 | 换新签的地址、退避 3 次，仍全部失败 |
+
+`已发 0 字节` + `0.4 秒` + `站点 188ms` 这三条放在一起，把「手机没网」「跨境链路差」
+「签名过期」「CORS」全部排除——请求根本没往外交数据。
+
+### 7.2 根因判断 / Root cause
+
+`xhr.send(File)` 要求网络栈拿到 `content://` URI 背后的**文件描述符**；而算 sha256 用的
+`blob.arrayBuffer()` 走的是另一条读取管道。于是出现「哈希算得出来、文件发不出去」这种
+看着矛盾的组合。第二批及之后的 URI 拿不到描述符，第一次那条还能用——正好对上「第一份
+成功、后面全挂」。
+
+顺带解释了另一个现象：**选 3 个视频只进来 1 个**。文件选择器返回的 URI 也是在
+`openFileDescriptor` 那一步被 WebView 丢掉的，重启手机（清掉进程状态）后恢复正常。
+
+*`xhr.send(File)` needs a real file descriptor behind the content:// URI, while
+`blob.arrayBuffer()` uses a different pipe — hence "hashing works, uploading doesn't".
+The same mechanism explains why only one of three picked videos ever reached the page.*
+
+### 7.3 修法 / Fix
+
+**再也别把 `File` 交给网络栈。** 大文件切 8MB 分片，每片 `slice().arrayBuffer()` 读进内存
+再发；小文件同样读进内存。
+
+- 服务端：`> 16MB` 的文件走 `CreateMultipartUpload` + 逐片 `UploadPart` 预签名，
+  返回 `{ multipart, uploadId, partSize, parts[] }`；新增 `POST /upload-complete`
+  由服务端调 `CompleteMultipartUpload`
+- 客户端：每片独立重试，抖动只损失 8MB；进程里同时只有一片 8MB，150MB 的视频也不会
+  撑爆 WebView 的堆
+- 纯函数 `multipartPlan` / `parseComplete` 放在 `rules.mjs`，可单测（不需要 AWS）
+- 未完成的分片由源桶既有的 `abort_incomplete_multipart_upload = 7 天` 回收
+
+### 7.4 验证 / Verification
+
+本地端到端跑过一次（25.5MB 视频 / 4 片）：预签名 → 4 次 PUT 全部 200 并返回 ETag →
+`/upload-complete` 200 → 对象 25541347 B、`video/mp4` → 处理函数 `process.done`、
+转码产物 `clip.mp4` + `poster.webp`。验证后已删除该照片、清单回退到验证前的 rev、
+缓存已失效。断言 38 项、单测 64 项全绿。
