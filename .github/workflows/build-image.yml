@@ -72,13 +72,19 @@ jobs:
       # 所以在它之前先把话说清楚。
       # Surface a missing repository secret here: the OIDC action otherwise
       # fails with a message that never names the unset secret.
-      - name: 检查仓库配置 / Check repository secrets
+      # 角色 ARN 不算秘密：没有信任策略的匹配它毫无用处。
+      # 放 Variables 或 Secrets 都认——只认一处的话，填错位置就会报
+      # 「Credentials could not be loaded」，看不出是没配。
+      # A role ARN is not a secret: without a matching trust policy it is inert.
+      # Accept it from either Variables or Secrets; accepting only one turns a
+      # misplaced value into an error that never names what is missing.
+      - name: 检查仓库配置 / Check repository configuration
         env:
-          ROLE_ARN: ${{ secrets.AWS_APP_DEPLOY_ROLE_ARN }}
+          ROLE_ARN: ${{ vars.AWS_APP_DEPLOY_ROLE_ARN || secrets.AWS_APP_DEPLOY_ROLE_ARN }}
         run: |
           set -euo pipefail
           if [ -z "${ROLE_ARN}" ]; then
-            echo "::error::缺少 Secret AWS_APP_DEPLOY_ROLE_ARN（Settings → Secrets and variables → Actions → Secrets），值为 gha_app_deploy 角色的 ARN"
+            echo "::error::缺少 AWS_APP_DEPLOY_ROLE_ARN。填在 Settings → Secrets and variables → Actions 下的 Variables 或 Secrets 都可以，值为 arn:aws:iam::<账号>:role/<项目>-gha-app-deploy"
             exit 1
           fi
 
@@ -87,7 +93,7 @@ jobs:
       - name: 配置 AWS 凭证 / Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_APP_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_APP_DEPLOY_ROLE_ARN || secrets.AWS_APP_DEPLOY_ROLE_ARN }}
           role-session-name: gha-album-image
           aws-region: ${{ env.AWS_REGION }}
 

@@ -88,16 +88,18 @@ jobs:
       # 「s3:///assets/ 不是合法路径」之类的错，看日志的人得猜半天。
       # Surface missing configuration here instead of letting the aws commands
       # fail with a cryptic message about an empty bucket URL.
-      - name: 检查仓库配置 / Check repository variables
+      - name: 检查仓库配置 / Check repository configuration
         env:
           ALBUM_API_BASE: ${{ vars.ALBUM_API_BASE }}
+          ROLE_ARN: ${{ vars.AWS_APP_DEPLOY_ROLE_ARN || secrets.AWS_APP_DEPLOY_ROLE_ARN }}
         run: |
           set -euo pipefail
           missing=()
           [ -n "${SITE_BUCKET}" ] || missing+=("SITE_BUCKET")
           [ -n "${DISTRIBUTION_ID}" ] || missing+=("DISTRIBUTION_ID")
+          [ -n "${ROLE_ARN}" ] || missing+=("AWS_APP_DEPLOY_ROLE_ARN")
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "::error::缺少仓库 Variables：${missing[*]}（Settings → Secrets and variables → Actions → Variables）"
+            echo "::error::缺少配置：${missing[*]}（Settings → Secrets and variables → Actions；前两个在 Variables，角色 ARN 两处都认）"
             exit 1
           fi
           if [ -z "${ALBUM_API_BASE}" ]; then
@@ -107,7 +109,8 @@ jobs:
       - name: 配置 AWS 凭证 / Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_APP_DEPLOY_ROLE_ARN }}
+          # Variables 或 Secrets 都认，理由同 build-image.yml
+          role-to-assume: ${{ vars.AWS_APP_DEPLOY_ROLE_ARN || secrets.AWS_APP_DEPLOY_ROLE_ARN }}
           role-session-name: gha-album-web
           aws-region: ${{ env.AWS_REGION }}
 
