@@ -385,6 +385,42 @@ targeted invalidation, lifecycle backstops, CORS with exposed ETag, immutable im
 
 ## 5. GitHub：用到了哪些能力 / GitHub capabilities in use
 
+### 5.0 那些命令到底跑在哪台机器上 / Where the commands actually run
+
+`runs-on:` 指的不是任何人的电脑，而是 **GitHub 托管的一台一次性虚拟机**：job 开始新建，
+job 结束销毁，上面装过的东西、拉过的镜像层、留下的容器一并消失。三条流水线都是这样。
+
+| 流水线 / Workflow | `runs-on` | 这台机器上有什么 / What it ships with |
+| --- | --- | --- |
+| `deploy-web` | `ubuntu-latest` | Node 22（`setup-node` 再钉一次）、`aws` CLI |
+| `build-image` | `ubuntu-latest` | Docker 引擎 + buildx 插件（`setup-buildx-action` 只是把 builder 换成 `docker-container` 驱动，以便多平台 + `cache-to: gha`） |
+| `infra`（在 `album-infra`） | `ubuntu-latest` | `terraform`（由 `hashicorp/setup-terraform` 装） |
+
+规格（2026 年官方值，`album` / `album-android` 都是公开仓库）：
+
+| | 公开仓库 / Public | 私有仓库 / Private |
+| --- | --- | --- |
+| Linux `ubuntu-latest` | **4 vCPU / 16 GB / 14 GB SSD，免费且不限额** | 2 vCPU / 8 GB / 14 GB，Free 套餐每月 2000 分钟 |
+| 单 job 上限 | 6 小时 | 6 小时 |
+| 并发 | Free 套餐约 20 个 Linux job | 同左 |
+
+三个由此推出的结论：
+
+1. **镜像必须在这里构建**：本机是 Apple Silicon，`docker build` 出 arm64，Lambda 起不来；
+   runner 天生 amd64，连交叉编译都不需要。
+2. **buildx 不需要特权、不需要嵌套虚拟化**：`docker-container` 驱动是在 Docker daemon 里
+   再起一个 BuildKit 容器。真正要 KVM 的是「跑 Android 模拟器」，不是编译。
+3. **`ubuntu-latest` 是个会移动的标签**：它正在从 24.04 迁到 26.04（2026-10-19 起，
+   11-19 完成），默认 Java 17→25、Docker 28→29、Node 22→24。要可复现就钉成
+   `ubuntu-24.04`，别用 `-latest`。
+
+*`runs-on` is an ephemeral GitHub-hosted VM, fresh per job and destroyed after. Public repos get
+4 vCPU / 16 GB for free with no minute cap. The image must be built there because a local
+Apple Silicon build is arm64. And `ubuntu-latest` is a moving label — pin `ubuntu-24.04` if you
+want reproducibility.*
+
+### 5.1 用到了哪些能力 / Capabilities
+
 | 能力 / Feature | 用在哪 / Where | 作用 / What it buys |
 | --- | --- | --- |
 | Actions | 两个仓库共 3 条流水线 | 唯一 CI |

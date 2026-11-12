@@ -292,6 +292,29 @@ keystore、口令、`keystore.properties` 都不入库——这是安卓没有 C
 *One version file, two consumers. The keystore never enters a repo or a pipeline, which is the
 only reason Android has no CI.*
 
+### 9.1 能不能让 GitHub 跑 gradlew？ / Could CI build the APK?
+
+**技术上完全能。** `ubuntu-latest` 就是安卓 CI 的标准环境：cmdline-tools、platform-tools、
+build-tools 36、platforms android-36、NDK 全预装，`ANDROID_HOME` 已设，JDK 17/21 都在；
+公开仓库还免费不限额（4 vCPU / 16 GB）。所以拦住我们的从来不是能力，是**签名私钥**。
+
+| 方案 / Option | 做法 / How | 代价 / Cost |
+| --- | --- | --- |
+| **A. 只验证能编** | `./gradlew assembleDebug` + `scripts/check.mjs` 8 项自检 + 上传 artifact；正式包仍本机签 | 零密钥风险；多一条流水线维护，收益仅「换台机器也能确认没编坏」 |
+| **B. CI 出未签名包** | `assembleRelease` 去掉签名 → artifact → 本机 `apksigner` | 跨机器搬文件，比现在更慢 |
+| **C. keystore 进 Secrets** | base64 存 `UPLOAD_KEYSTORE_B64` + 三个口令，用 `-Pandroid.injected.signing.*` 注入 | 任何能改 workflow 的人都能把密钥带走；**密钥换不了**（一换所有人卸载重装） |
+
+还有一条既有行为会让 A 之外的方案直接失败：构建脚本在找不到 keystore 时**故意报错**，
+不回退 debug 签名（debug 签的包以后无法覆盖升级）。所以 CI 里 `assembleRelease` 必然红。
+
+**当前结论：不加。** 本机发布是「`assembleRelease` + `publish-apk.mjs`」两条命令、一分钟内
+完成，比等 CI 排队快；加 CI 唯一真实的收益是「不在本机时也能发版」，而那恰恰是方案 A
+解决不了的（A 不发版）。真需要时按 A 做。
+
+*Feasible in principle — the runner ships the whole Android toolchain — but the blocker is the
+signing key, and no option makes publishing both keyless and convenient. The local two-command
+flow wins; option A is the fallback if CI verification is ever wanted.*
+
 ---
 
 ## 10. 四条不变量 / Four invariants
