@@ -307,9 +307,10 @@ P7 收尾  T-29 → T-30 → T-31
 - **内容 / Work**：荣耀 / 小米 / 三星中至少两台实测 §9-A1~A6 与 B7~B13
 - **验收 / Done when**：检查表逐项勾选，异常项记录
 - **检查点 / Checkpoint**：**CP-5**
-- **状态 / Status**：◐ 部分通过（2026-11-12）。三星上 A 类功能（浏览、灯箱、故事、照片墙、
-  更新检查）均正常；**B 类上传一开始只有 1/3 成功**，见 §7 的排查与修复。修复后用户连续上传
-  多次全部成功。仍待人工确认：荣耀 / 小米各一台，以及 iPad 上的照片墙 + Wake Lock 常亮。
+- **状态 / Status**：◐ 基本通过（2026-11-12）。**三星、荣耀、小米三台均实测通过**：A 类
+  （浏览、灯箱、故事、照片墙、更新检查）全部正常。B 类上传一开始只有 1/3 成功，见 §7 的排查
+  与修复；修复后三台连续多轮上传全部成功。**仅剩 iPad 上的照片墙 + Wake Lock 常亮待人工确认**
+  ——那是 Safari 侧的行为，与这台 APK 无关，故不阻塞 T-28 的安卓部分。
 
 ### P7 · 收尾 / Wrap-up
 
@@ -426,10 +427,11 @@ P7 收尾  T-29 → T-30 → T-31
 | T-19、T-20 前端改造 / Web rework | ✅ 完成 / Done | 编辑式栅格 + 视频 |
 | T-21 ~ T-23 上传与发布 / Upload & deploy | ✅ 完成 / Done | 36 项断言；上传 UI 只在原生壳里出现；`deploy-web` 已真实跑通 |
 | T-24 ~ T-27 安卓客户端 / Android shell | ✅ 已迁出 / Moved | 代码与历史迁到独立仓库 `album-android`，那边 8 项自检；真机待 T-28 |
-| T-28 真机验收 / Device acceptance | ◐ 部分通过 / Partial | **CP-5**：三星 A 类全过；上传问题修复后连续多轮全部成功（见 §7）。荣耀 / 小米与 iPad 照片墙待人工确认 |
+| T-28 真机验收 / Device acceptance | ◐ 安卓部分通过 / Android done | **CP-5**：三星 + 荣耀 + 小米三台 A 类全过；上传修复后三台连续多轮全部成功（见 §7）。仅 iPad 照片墙 + Wake Lock 待确认 |
 | T-29 断言扩充 / Extend verify | ✅ 完成 / Done | 38 项断言（安卓那 10 项随代码迁到新仓库）；单测 64 项 |
 | T-30 ~ T-31 收尾 / Wrap-up | ✅ 完成 / Done | 旧脚本已删、README 重写、CI/CD 教程成文、成本实测 |
 | §7 验收后修复 / Post-acceptance fix | ✅ 完成 / Done | 大视频改 8MB 分片，连续多轮上传全部成功 |
+| §8 文档重构 / Doc restructure | ✅ 完成 / Done | `docs/` 收敛为「架构 / 联动 / 安全」三份 + 索引；旧 `cicd-architecture.md` 并入后删除；README 降为入口 |
 
 ### 6.1 关键数字 / Key numbers（2026-11-12 实测）
 
@@ -523,3 +525,37 @@ The same mechanism explains why only one of three picked videos ever reached the
 `/upload-complete` 200 → 对象 25541347 B、`video/mp4` → 处理函数 `process.done`、
 转码产物 `clip.mp4` + `poster.webp`。验证后已删除该照片、清单回退到验证前的 rev、
 缓存已失效。断言 38 项、单测 64 项全绿。
+
+---
+
+## 8. 文档重构 / Documentation restructure
+
+> 2026-11-12，验收之后。v4 期间文档分散在 `spec/v4/{spec,plan,tasks}.md`、根 `README.md`、
+> `docs/cicd-architecture.md` 三处，内容重复（同一张架构图出现三次、同一套 OIDC 讲解出现两次），
+> 且没有一份是「现在的系统长什么样」。这一节记录怎么收敛的。
+
+### 8.1 分工 / Division of labour
+
+| 目录 / Path | 是什么 / What it is | 是否回改 / Frozen |
+| --- | --- | --- |
+| `docs/01-architecture.md` | 用了什么：前端、安卓壳、AWS 服务、GitHub 能力、Terraform 四层 | 随系统演进更新 |
+| `docs/02-flows.md` | 怎么连起来：8 条流的时序、契约、失败分支、排错表、术语表 | 同上 |
+| `docs/03-security.md` | 凭什么安全：威胁模型、七道边界、泄露演练、残余风险、自检清单 | 同上 |
+| `docs/README.md` | 索引：按角色给阅读顺序、一分钟地图、数字速查、与旧文档的关系 | 同上 |
+| `spec/vN/` | 过程记录：为什么当初这么定、哪一步踩了什么坑 | **冻结** |
+| 根 `README.md` | 入口 + 速查 + 三条边界 + 照片墙设置 | 随系统演进更新 |
+
+### 8.2 处置 / What happened to the old docs
+
+- `docs/cicd-architecture.md`（519 行）**已删除**，内容全部并入新三份：
+  OIDC 原理与「陌生人能不能签 JWT」→ 03 §2；三个角色与信任策略逐行 → 03 §2、§3；
+  Terraform 四层与 state → 01 §6；三条流水线 → 02 §6~§8；排错表 → 02 附录 A；术语 → 02 附录 B。
+  删除而非保留，理由：留着就是第二个真相源，下次改一处忘另一处。
+- 根 `README.md` 从 232 行降到约 130 行，只留入口、命令、三条边界、线上状态、照片墙步骤；
+  原先内联的「两个函数」「API Gateway 干什么」「为什么不用重装 App」三节移入 01 §3、§4.5、02 §6.3。
+- `spec/v4/*` 不回改：它记录的是**过程**，与「系统现状」是两种文档，混在一起才叫重复。
+
+### 8.3 验证 / Verification
+
+`npm run check:repo` 84 个文件通过（新增 4 份文档、删除 1 份）；`npm run verify` 38 项、
+`npm test` 64 项不受影响（断言只读 `src/` 与 `.github/`）。
