@@ -328,7 +328,9 @@ function timeoutFor(bytes) {
   return Math.min(MAX_TIMEOUT, MIN_TIMEOUT + mb * 3000);
 }
 
-function put(url, headers, blob, onProgress) {
+function put(url, headers, body, onProgress) {
+  // body 可能是 File/Blob（走文件流），也可能是 Uint8Array（走内存）
+  const size = body.size ?? body.byteLength ?? 0;
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     let sent = 0;
@@ -336,7 +338,7 @@ function put(url, headers, blob, onProgress) {
     for (const [name, value] of Object.entries(headers || {})) {
       xhr.setRequestHeader(name, value);
     }
-    xhr.timeout = timeoutFor(blob.size);
+    xhr.timeout = timeoutFor(size);
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return;
       sent = event.loaded;
@@ -344,7 +346,7 @@ function put(url, headers, blob, onProgress) {
     };
     const fail = (error) => {
       error.sent = sent;
-      error.total = blob.size;
+      error.total = size;
       reject(error);
     };
     xhr.onload = () => {
@@ -393,35 +395,58 @@ async function requestUrls(album, entries) {
   });
 }
 
+/** 一个字节都没出去，就把文件读进内存再发；上限按 WebView 的堆给 */
+const MEMORY_FALLBACK_MAX = 180 * 1024 * 1024;
+
 /**
  * 单张上传：失败按 RETRY_DELAYS 退避重试，每次重试前重新取地址。
  * 重签而不是复用旧地址，是为了顺带修掉「403 预签名过期」这一种失败。
  *
- * One upload with backoff; the URL is re-signed before every retry, which also
- * repairs the 403-expired-signature case for free.
+ * 还有一条只在真机上才见得到的路径：**文件明明读得出来，但网络栈发不出去。**
+ * `xhr.send(File)` 要求底层能拿到这个 content:// URI 的文件描述符，而
+ * `blob.arrayBuffer()` 走的是另一条管道（我们算 sha256 时已经成功读完整份文件）。
+ * 所以「0 字节 + 0.4 秒 + 网络正常」这个组合基本只有一个解释：发给网络栈的那条
+ * 路拿不到后备数据。这种时候换成内存里的字节再发一次，绕开文件描述符。
+ *
+ * One retry does something different on purpose: if not a single byte left the
+ * device, the file-backed body is the suspect (`blob.arrayBuffer()` already proved
+ * the bytes are readable), so the next attempt sends an in-memory copy instead.
  */
 async function uploadOne(album, entry, first) {
+  const maxAttempts = 1 + RETRY_DELAYS.length;
   let item = first;
-  let remaining = RETRY_DELAYS.length;
 
-  for (let attempt = 0; ; attempt += 1) {
-    if (attempt > 0) {
-      entry.row.set(`重试 ${attempt}`, 0);
-      await sleep(RETRY_DELAYS[attempt - 1] + Math.random() * 400);
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (attempt > 1) {
+      entry.row.set(`重试 ${attempt - 1}`, 0);
+      await sleep(RETRY_DELAYS[attempt - 2] + Math.random() * 400);
       [item] = await requestUrls(album, [entry]);
     }
     const started = Date.now();
     try {
-      const label = attempt === 0 ? '上传中' : `重试 ${attempt}`;
-      await put(item.url, item.headers, entry.blob, (ratio) => entry.row.set(label, ratio));
+      const label = attempt === 1 ? '上传中' : `重试 ${attempt - 1}`;
+      const body = entry.bytes || entry.blob;
+      await put(item.url, item.headers, body, (ratio) => entry.row.set(label, ratio));
+      entry.bytes = null;
       return;
     } catch (err) {
       err.ms = Date.now() - started;
-      err.tries = attempt + 1;
-      // 每次失败后取「剩余预算」与「这个错误自带的预算」中更小的那个：
-      // 超时自带 0，于是不会自动重试。
-      remaining = Math.min(remaining - 1, Number.isFinite(err.retries) ? err.retries : remaining - 1);
-      if (!err.retryable || remaining < 1) throw err;
+      err.tries = attempt;
+      err.url = item.url;
+      // 内存副本只在本次上传期间存在：两三段 150MB 的视频同时留在内存里
+      // 会把 WebView 的堆吃掉，而重读一遍只要一两秒。
+      entry.bytes = null;
+      if (!err.retryable) throw err;
+      // 超时自带 retries=0，于是不会自动重试
+      const allowed = Number.isFinite(err.retries) ? Math.min(maxAttempts, 1 + err.retries) : maxAttempts;
+      if (attempt >= allowed) throw err;
+      if (err.sent === 0 && entry.blob.size <= MEMORY_FALLBACK_MAX) {
+        try {
+          entry.bytes = new Uint8Array(await entry.blob.arrayBuffer());
+        } catch {
+          // 读不出来就算了，继续按原来的路径重试
+        }
+      }
     }
   }
 }
@@ -433,21 +458,42 @@ function fmtBytes(value) {
   return `${bytes}B`;
 }
 
-/**
- * 失败后量一次站点本身还能不能访问。同源 GET，几十毫秒，比任何猜测都直接：
- * 「自检正常」= 手机有网、只有这条 PUT 不通；「自检也不通」= 手机此刻断网。
- *
- * One same-origin GET right after a failure: it separates "the phone is offline"
- * from "only this PUT is broken" far more cheaply than any guess.
- */
-async function selfCheck() {
+async function timed(url, options) {
   const started = Date.now();
   try {
-    const response = await fetch(`${location.origin}/data/version.json?probe=${started}`, { cache: 'no-store' });
-    return response.ok ? `自检正常 ${Date.now() - started}ms` : `自检失败 ${response.status}`;
+    const response = await fetch(url, options);
+    // no-cors 的响应是 opaque，看不到状态码，能 resolve 就说明 TCP+TLS+HTTP 走通了
+    return { ok: response.ok || response.type === 'opaque', status: response.status, ms: Date.now() - started };
   } catch {
-    return '自检也不通';
+    return { ok: false, status: 0, ms: Date.now() - started };
   }
+}
+
+/**
+ * 失败后量两条路，几十毫秒，比任何猜测都直接：
+ *
+ * - **站点**（同源 GET，走 CloudFront）→ 手机有没有网
+ * - **S3 主机**（`no-cors`，只看能不能握手）→ 上传这条路通不通
+ *
+ * 两条路不是同一台机器，站点通不代表 S3 通。`no-cors` 不要求 CORS 头，
+ * 所以「解析失败 = 网络层就没通」，不会被跨域错误混淆。
+ *
+ * Two probes: the site itself (same-origin, CloudFront) for "is the phone online",
+ * and the upload host with `no-cors` for "is this path reachable at all". They are
+ * different machines; one working says nothing about the other.
+ */
+async function selfCheck(uploadUrl) {
+  const site = await timed(`${location.origin}/data/version.json?probe=${Date.now()}`, { cache: 'no-store' });
+  const parts = [`站点${site.ok ? '正常' : '不通'} ${site.ms}ms`];
+  if (uploadUrl) {
+    try {
+      const bucket = await timed(`${new URL(uploadUrl).origin}/`, { mode: 'no-cors', cache: 'no-store' });
+      parts.push(`S3${bucket.ok ? '可达' : '不可达'} ${bucket.ms}ms`);
+    } catch {
+      parts.push('S3地址无法解析');
+    }
+  }
+  return parts.join(' · ');
 }
 
 async function failureText(err) {
@@ -456,7 +502,7 @@ async function failureText(err) {
   const percent = total ? Math.round(((Number(err.sent) || 0) / total) * 100) : 0;
   const elapsed = err.ms ? `${(err.ms / 1000).toFixed(1)}s` : '—';
   const tries = `已重试 ${Math.max(0, (err.tries || 1) - 1)} 次`;
-  const probe = await selfCheck();
+  const probe = await selfCheck(err.url);
   // 万一以后能接 adb，console 里这份比屏幕上那行更全
   console.warn('upload.failed', {
     status: err.status, sent: err.sent, total, tries: err.tries, ms: err.ms, probe,
