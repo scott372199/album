@@ -545,4 +545,21 @@ await okAsync('预签名把 content-type 与 x-amz-meta-* 纳入签名', async (
   assert.ok(rules.includes('x-amz-meta-'), '应拼出 x-amz-meta-<name> 形式的头名');
 });
 
+await okAsync('前端引用的元素 id 都存在于模板里', async () => {
+  // el('x') 只是 getElementById 的薄包装：拼错一个 id 不报错，只会在运行时
+  // 「点了没反应」。加按钮/输入框时最容易踩，所以静态对齐一次。
+  const dir = path.join(ROOT, 'src/web/js');
+  const html = await readFile(path.join(ROOT, 'src/web/index.html'), 'utf8');
+  const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
+  const missing = new Set();
+  for (const file of await readdir(dir)) {
+    if (!file.endsWith('.js')) continue;
+    const code = await readFile(path.join(dir, file), 'utf8');
+    for (const m of code.matchAll(/\bel\(\s*'([^']+)'\s*\)/g)) {
+      if (!ids.has(m[1])) missing.add(`${file}: ${m[1]}`);
+    }
+  }
+  assert.deepEqual([...missing], [], `模板里找不到这些 id：${[...missing].join(', ')}`);
+});
+
 console.log(`--- 全部通过：${checks} 项断言 ---`);

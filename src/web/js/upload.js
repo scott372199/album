@@ -4,7 +4,7 @@ import { hasNativeBridge } from './native.js';
 /**
  * 上传面板：登录 → 选图 → 直传 S3。
  *
- * 三条约束决定了这里的设计：
+ * 四条约束决定了这里的设计：
  *
  * 1. **入口只在安卓壳里出现**（存在原生桥且构建时配了接口地址）。
  *    站点本身是「只读相册」，浏览器访问者不该看到上传按钮。
@@ -13,6 +13,10 @@ import { hasNativeBridge } from './native.js';
  *    上报 mtime 反而会盖掉真实的 EXIF 拍摄时间。让服务端读 EXIF 更准。
  * 3. **HEIC 转换失败就不传**。服务端镜像里的 sharp 不带 libheif，解不了 HEIC，
  *    原样上传只会进死信队列；与其静默失败，不如当场告诉用户换个格式。
+ * 4. **单张 PUT 必须重试**。手机网络到新加坡的 S3 是一次长连接，
+ *    连接被重置时浏览器只给 `xhr.onerror`（status 0），既不知道原因也没有补
+ *    偿；一次 5 张里抖掉 1~2 张是常态。重传是幂等的（key 是内容哈希，
+ *    重签地址 15 分钟有效），所以直接重试，而不是把失败丢给用户。
  *
  * Upload panel: login, pick, direct-to-S3.
  *   1. Only inside the Android shell — the site itself is a read-only album.
@@ -20,9 +24,15 @@ import { hasNativeBridge } from './native.js';
  *      shadow the real EXIF capture time on the server.
  *   3. Undecodable HEIC is refused rather than uploaded: the server-side sharp has
  *      no libheif, so the object would only end up in the DLQ.
+ *   4. A single PUT is retried. One long-lived connection to S3 in Singapore gets
+ *      reset often on mobile networks, and the browser reports that only as
+ *      `xhr.onerror` (status 0). Re-uploading is idempotent (the key is the content
+ *      hash, the presigned URL lives 15 minutes), so retry instead of surfacing it.
  */
 
 const MAX_BATCH = 20;
+/** 3 次重试的等待时间（毫秒），总补偿 ≈ 13 秒，压在预签名 15 分钟有效期之内 */
+const RETRY_DELAYS = [1200, 3500, 8000];
 const TOKEN_KEY = 'album.token';
 const REFRESH_KEY = 'album.refresh';
 const HEIC = /\.hei[cf]$/i;
@@ -31,6 +41,11 @@ const state = {
   token: '',
   refresh: '',
   busy: false,
+  /** 本次会话里失败、仍可重试的条目（保留 blob，点「重试失败项」直接续传） */
+  failed: [],
+  /** 连 blob 都拿不到的失败（HEIC 解不开等），只能计数，无法重试 */
+  bad: 0,
+  ok: 0,
 };
 
 function apiBase() {
@@ -257,7 +272,40 @@ function makeRow(name) {
       item.classList.add('is-failed');
       this.set(reason, 1);
     },
+    reset() {
+      item.classList.remove('is-done', 'is-failed');
+      this.set('准备中', 0);
+    },
   };
+}
+
+/**
+ * `xhr.onerror` / `ontimeout` 都只给 status 0——断网、连接被重置、跨域被拦，
+ * 浏览器一律报同一个码，前端拿不到区别。所以这里的措辞只能说到「连接断了」，
+ * 真正区分要靠重试：能过去的就是网络抖动，过不去再回头看 CORS 与权限。
+ *
+ * status 0 from `onerror`/`ontimeout` is the browser's catch-all: offline, reset,
+ * CORS-blocked all look identical. The wording stays vague on purpose; the retry
+ * loop is what actually tells a flaky link from a misconfiguration.
+ */
+function connectionError(message) {
+  const error = new Error(message);
+  error.status = 0;
+  error.retryable = true;
+  return error;
+}
+
+/**
+ * 哪些失败值得重试：
+ * - 403 → 多半是预签名过期，重试前会重新取地址，所以能修好
+ * - 5xx / 408 / 429 → 服务端临时问题
+ * - 其它 4xx → 请求本身就错了（超限、key 不对），重试只是浪费 13 秒
+ */
+function httpError(status) {
+  const error = new Error(`上传失败 ${status}`);
+  error.status = status;
+  error.retryable = status >= 500 || status === 403 || status === 408 || status === 429;
+  return error;
 }
 
 function put(url, headers, blob, onProgress) {
@@ -273,10 +321,11 @@ function put(url, headers, blob, onProgress) {
     };
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new Error(`上传失败 ${xhr.status}`));
+      else reject(httpError(xhr.status));
     };
-    xhr.onerror = () => reject(new Error('网络中断'));
-    xhr.ontimeout = () => reject(new Error('超时'));
+    xhr.onerror = () => reject(connectionError('连接中断'));
+    xhr.ontimeout = () => reject(connectionError('上传超时'));
+    xhr.onabort = () => reject(connectionError('上传被中断'));
     xhr.send(blob);
   });
 }
@@ -289,12 +338,96 @@ function chunk(list, size) {
   return out;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** 取一批预签名地址；`key` 由内容哈希决定，所以同一张图反复取地址得到同一个 key */
+async function requestUrls(album, entries) {
+  const response = await call('/upload-url', {
+    album,
+    files: entries.map((entry) => ({ name: entry.name, size: entry.blob.size, sha256: entry.sha256 })),
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    const error = new Error(detail.error || '取上传地址失败');
+    error.status = response.status;
+    error.retryable = false;
+    throw error;
+  }
+  const { items } = await response.json();
+  const byKey = new Map(items.map((item) => [item.key, item]));
+  return entries.map((entry) => {
+    const item = byKey.get(entry.key);
+    if (!item) throw new Error('服务端未返回地址');
+    return item;
+  });
+}
+
+/**
+ * 单张上传：失败按 RETRY_DELAYS 退避重试，每次重试前重新取地址。
+ * 重签而不是复用旧地址，是为了顺带修掉「403 预签名过期」这一种失败。
+ *
+ * One upload with backoff; the URL is re-signed before every retry, which also
+ * repairs the 403-expired-signature case for free.
+ */
+async function uploadOne(album, entry, first) {
+  let item = first;
+
+  for (let attempt = 0; ; attempt += 1) {
+    const label = attempt === 0 ? '上传中' : `重试 ${attempt}/${RETRY_DELAYS.length}`;
+    if (attempt > 0) {
+      entry.row.set(label, 0);
+      await sleep(RETRY_DELAYS[attempt - 1] + Math.random() * 400);
+      [item] = await requestUrls(album, [entry]);
+    }
+    try {
+      await put(item.url, item.headers, entry.blob, (ratio) => entry.row.set(label, ratio));
+      return;
+    } catch (err) {
+      if (!err.retryable || attempt >= RETRY_DELAYS.length) throw err;
+    }
+  }
+}
+
+async function run(album, entries) {
+  for (const batch of chunk(entries, MAX_BATCH)) {
+    let signed;
+    try {
+      signed = await requestUrls(album, batch);
+    } catch (err) {
+      for (const entry of batch) {
+        entry.row.fail(err.message);
+        state.failed.push(entry);
+      }
+      continue;
+    }
+
+    for (let index = 0; index < batch.length; index += 1) {
+      const entry = batch[index];
+      try {
+        await uploadOne(album, entry, signed[index]);
+        entry.row.done();
+        state.ok += 1;
+      } catch (err) {
+        const tried = err.retryable ? `（已重试 ${RETRY_DELAYS.length} 次）` : '';
+        entry.row.fail(`${err.message}${tried}`);
+        state.failed.push(entry);
+      }
+    }
+  }
+}
+
+function updateCount() {
+  const failed = state.failed.length + state.bad;
+  el('upload-count').textContent = `${state.ok} 个已上传${failed ? `，${failed} 个失败` : ''}`;
+  el('upload-retry').hidden = state.failed.length === 0;
+}
+
 async function uploadFiles(files) {
   if (state.busy) return;
   state.busy = true;
-  const album = el('upload-album').value.trim();
-  let ok = 0;
-  let failed = 0;
+  el('upload-retry').hidden = true;
 
   try {
     const prepared = [];
@@ -303,56 +436,41 @@ async function uploadFiles(files) {
       try {
         const ready = await prepare(file);
         const sha256 = await sha256Hex(ready.blob);
-        prepared.push({ ...ready, sha256, row });
+        prepared.push({
+          ...ready,
+          sha256,
+          key: `incoming/${sha256.slice(0, 16)}${extOf(ready.name)}`,
+          row,
+        });
       } catch (err) {
         row.fail(err.message);
-        failed += 1;
+        state.bad += 1;
       }
     }
 
-    for (const batch of chunk(prepared, MAX_BATCH)) {
-      const response = await call('/upload-url', {
-        album,
-        files: batch.map((entry) => ({
-          name: entry.name,
-          size: entry.blob.size,
-          sha256: entry.sha256,
-        })),
-      });
-
-      if (!response.ok) {
-        const detail = await response.json().catch(() => ({}));
-        for (const entry of batch) entry.row.fail(detail.error || '取上传地址失败');
-        failed += batch.length;
-        continue;
-      }
-
-      const { items } = await response.json();
-      const byKey = new Map(items.map((item) => [item.key, item]));
-
-      for (const entry of batch) {
-        const key = `incoming/${entry.sha256.slice(0, 16)}${extOf(entry.name)}`;
-        const item = byKey.get(key);
-        if (!item) {
-          entry.row.fail('服务端未返回地址');
-          failed += 1;
-          continue;
-        }
-        try {
-          entry.row.set('上传中', 0);
-          await put(item.url, item.headers, entry.blob, (ratio) => entry.row.set('上传中', ratio));
-          entry.row.done();
-          ok += 1;
-        } catch (err) {
-          entry.row.fail(err.message);
-          failed += 1;
-        }
-      }
-    }
+    await run(el('upload-album').value.trim(), prepared);
   } finally {
     state.busy = false;
-    el('upload-count').textContent = `${ok} 个已上传${failed ? `，${failed} 个失败` : ''}`;
-    if (ok) toast('已上传，几秒后刷新即可看到');
+    updateCount();
+    if (state.ok) toast('已上传，几秒后刷新即可看到');
+  }
+}
+
+/** 只重跑失败项，已成功的不会重传（key 是内容哈希，重传也只是覆盖） */
+async function retryFailed() {
+  if (state.busy || !state.failed.length) return;
+  const pending = state.failed;
+  state.failed = [];
+  state.busy = true;
+  el('upload-retry').hidden = true;
+
+  try {
+    for (const entry of pending) entry.row.reset();
+    await run(el('upload-album').value.trim(), pending);
+  } finally {
+    state.busy = false;
+    updateCount();
+    if (state.ok) toast('已上传，几秒后刷新即可看到');
   }
 }
 
@@ -392,10 +510,15 @@ export function initUpload() {
   el('open-upload').addEventListener('click', open);
   el('upload-close').addEventListener('click', close);
   el('upload-login').addEventListener('submit', login);
+  el('upload-retry').addEventListener('click', retryFailed);
   el('upload-logout').addEventListener('click', () => {
     clearTokens();
     el('upload-list').replaceChildren();
     el('upload-count').textContent = '';
+    el('upload-retry').hidden = true;
+    state.failed = [];
+    state.bad = 0;
+    state.ok = 0;
     showLogin('');
   });
   el('upload-files').addEventListener('change', (event) => {
