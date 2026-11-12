@@ -133,6 +133,16 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+          # buildx 默认给推送到仓库的镜像附加 provenance 证明，产物就变成一个
+          # OCI index（真镜像 + 证明清单）。Lambda 只接受单平台的 image
+          # manifest，遇到 index 直接报「The image manifest, config or layer
+          # media type ... is not supported」——一句完全看不出问题在哪的话。
+          # Buildx attaches provenance attestations by default on push, turning
+          # the output into an OCI index (image + attestation). Lambda only
+          # accepts a single-platform image manifest and rejects the index with
+          # an error that names neither provenance nor the index.
+          provenance: false
+          sbom: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
