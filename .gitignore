@@ -5,16 +5,12 @@ dist/
 .build-report.json
 
 # ---------- 运行时状态与凭据（绝不入库） ----------
+# v3 的命令式部署脚本已删除，这两个文件只在旧版本里用过，留着防止意外回流
 .deploy-state.json
-src/deploy/distribution-config.json
-# 桶策略 / IAM 策略由 init 运行时生成，含真实账号与分发 ID，不入公开仓库
-src/deploy/bucket-policy.json
-src/deploy/iam-policy.json
 .env
 .env.*
 *.pem
 *.key
-.rollback-*/
 
 # ---------- 源素材：照片与视频一律不入库 ----------
 # 用 photos/** 而不是 photos/*，连子目录也拦住
@@ -22,19 +18,6 @@ photos/**
 !photos/.gitkeep
 !photos/tags.csv
 !photos/.albumignore
-
-# ---------- 安卓客户端 ----------
-android/.gradle/
-android/build/
-android/app/build/
-android/local.properties
-android/.kotlin/
-# 签名文件与口令绝不入库；没有它们只是出未签名包，不会构建失败
-android/keystore.properties
-*.jks
-*.keystore
-# 本地把 APK 发到桶里时的中间产物
-apk-out/
 
 # ---------- 系统与编辑器 ----------
 .DS_Store

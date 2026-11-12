@@ -5,8 +5,6 @@ import { fileURLToPath } from 'node:url';
 import {
   computeEditorialRows, layoutParams, buildHash, parseHashString, buildStory, PACE,
 } from '../src/web/js/state.js';
-import { buildDistributionConfig } from '../src/deploy/distribution-config.mjs';
-import { generatePolicies } from '../src/deploy/aws.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -419,100 +417,18 @@ ok('构建报告的 invalidation 状态合法（未部署为 null，已部署为
   assert.ok(value.paths.includes('/data/version.json'));
 });
 
-/* 4. 部署配置 */
-const config = JSON.parse(await readFile(path.join(ROOT, 'src/deploy/config.json'), 'utf8'));
-
-ok('config.json 为 v2 配置，无 website endpoint 残留', () => {
-  assert.equal(config.acmRegion, 'us-east-1');
-  assert.equal(config.region, 'ap-southeast-1');
-  assert.ok(config.siteUrl.startsWith('https://'));
-  assert.ok(!JSON.stringify(config).includes('s3-website'));
-});
-
-ok('DistributionConfig 字段正确，不配置 CustomErrorResponses', () => {
-  const state = {
-    oacId: 'OAC_ID',
-    certificateArn: 'arn:aws:acm:us-east-1:000000000000:certificate/demo',
-  };
-  const dc = buildDistributionConfig(config, state, 'CACHE_POLICY_ID');
-  assert.equal(dc.DefaultRootObject, 'index.html');
-  assert.equal(dc.DefaultCacheBehavior.ViewerProtocolPolicy, 'redirect-to-https');
-  assert.equal(dc.DefaultCacheBehavior.CachePolicyId, 'CACHE_POLICY_ID');
-  assert.equal(dc.ViewerCertificate.SSLSupportMethod, 'sni-only');
-  assert.equal(dc.ViewerCertificate.MinimumProtocolVersion, 'TLSv1.2_2021');
-  assert.equal(dc.CustomErrorResponses.Quantity, 0);
-  assert.equal(dc.Origins.Items[0].OriginAccessControlId, 'OAC_ID');
-  assert.equal(dc.Origins.Items[0].S3OriginConfig.OriginAccessIdentity, '');
-  assert.ok(!dc.Origins.Items[0].DomainName.includes('s3-website'));
-  assert.deepEqual(dc.Aliases.Items, [config.domain]);
-});
-
-/* 策略文件是运行时生成的（不入库），这里直接调生成函数拿对象断言，不需要真跑 AWS。 */
-const policyConfig = { bucket: 'demo-bucket', region: 'ap-southeast-1', domain: 'photos.example.com' };
-const { bucketPolicy, iamPolicy } = await generatePolicies(policyConfig, {}, '000000000000', { write: false });
-
-ok('桶策略仅授权 CloudFront OAC，无公开读', () => {
-  const statement = bucketPolicy.Statement[0];
-  assert.equal(statement.Principal.Service, 'cloudfront.amazonaws.com');
-  assert.equal(statement.Action, 's3:GetObject');
-  assert.ok(statement.Condition.StringEquals['AWS:SourceArn']);
-  assert.ok(!JSON.stringify(bucketPolicy).includes('"*"'));
-});
-
-ok('IAM 最小权限含 ACM 与 CloudFront，且移除 v1 的建桶权限', () => {
-  const actions = iamPolicy.Statement.flatMap((s) => s.Action);
-  assert.ok(actions.includes('acm:DescribeCertificate'));
-  assert.ok(actions.includes('cloudfront:CreateInvalidation'));
-  assert.ok(actions.includes('s3:DeleteBucketWebsite'));
-  assert.ok(!actions.includes('s3:CreateBucket'));
-  assert.ok(!actions.includes('s3:PutBucketWebsite'));
-});
-
-/* 5. 临时预览通道：CloudFront 账号验证期的过渡命令，必须严格不越界 */
-const previewMjs = await readFile(path.join(ROOT, 'src/deploy/preview.mjs'), 'utf8');
-const syncStart = previewMjs.indexOf('const syncArgs');
-const previewSync = previewMjs.slice(syncStart, previewMjs.indexOf('];', syncStart));
-
-ok('临时预览只同步 S3 对象：不 --delete、不动 CloudFront / 桶配置', () => {
-  assert.ok(previewSync.includes("'s3', 'sync'"));
-  assert.ok(!previewSync.includes('--delete'));
-  for (const forbidden of [
-    'put-bucket-policy', 'put-public-access-block', 'delete-bucket-website',
-    'create-invalidation', 'create-distribution',
-  ]) {
-    assert.ok(!previewMjs.includes(forbidden), `预览脚本不应执行 ${forbidden}`);
-  }
-});
-
-ok('临时预览提供 v1 入口页备份与一键回滚，且备份不被重复覆盖', () => {
-  assert.ok(previewMjs.includes('.rollback-v1'));
-  assert.ok(previewMjs.includes('--rollback'));
-  assert.ok(previewMjs.includes('exists(backupFile)'));
-});
-
-/* 6. 正式部署的缓存头两段式 */
-const deployMjs = await readFile(path.join(ROOT, 'src/deploy/deploy.mjs'), 'utf8');
-
-ok('部署先全量长缓存 sync，再单独覆盖入口页与版本文件', () => {
-  const syncAt = deployMjs.indexOf("'s3', 'sync'");
-  const cpAt = deployMjs.indexOf("'s3', 'cp'");
-  assert.ok(syncAt > 0 && cpAt > syncAt, '顺序必须是先 sync 后 cp');
-  assert.ok(deployMjs.includes('31536000') && deployMjs.includes('immutable'), '产物应长缓存');
-  assert.ok(deployMjs.includes('index.html') && deployMjs.includes('data/version.json'));
-  assert.ok(deployMjs.includes('no-store'), 'version.json 必须 no-store');
-  assert.ok(deployMjs.includes('--metadata-directive'), '覆盖缓存头需 REPLACE 元数据');
-});
-
-ok('同步不把入口页排除在外（--exclude 会连带影响 --delete 判定）', () => {
-  const start = deployMjs.indexOf('const syncArgs');
-  const raw = deployMjs.slice(start, deployMjs.indexOf('];', start));
-  // 去掉注释再判断，注释里提到 index.html 是说明文字，不是 exclude 参数
-  const syncBlock = raw.replace(/\/\/[^\n]*/g, '');
-  const excludes = [...syncBlock.matchAll(/'--exclude',\s*'([^']+)'/g)].map((m) => m[1]);
-  assert.ok(!excludes.some((value) => value.includes('index.html')), '入口页不应出现在 exclude 中');
-  assert.ok(syncBlock.includes('--delete'));
-  assert.ok(syncBlock.includes('--size-only'), '同尺寸即同内容，避免每轮重传');
-});
+/* 4. 基础设施配置
+ *
+ * v3 时代这里断言的是 src/deploy/ 下那套命令式脚本生成的 CloudFront /
+ * 桶策略 / IAM 策略。v4 之后四层由 album-infra 仓库的 Terraform 管理，
+ * 断言跟着代码一起搬走了：那边 `make check` 有 58 项离线断言，`terraform
+ * plan` 本身就是最强的结构断言。前端仓库不再持有任何资源配置。
+ *
+ * v3 asserted the config produced by the imperative scripts that used to
+ * live in src/deploy/. Since v4 those four layers belong to Terraform in
+ * album-infra; the assertions moved with the code (58 offline checks plus
+ * `terraform plan` itself). This repo holds no resource configuration.
+ */
 
 // ---------------------------------------------------------------------------
 // v4：跨语言与跨仓库的契约
@@ -551,38 +467,31 @@ await okAsync('代码里没有硬编码的桶名 / 账号 / 分发 ID', async ()
   }
 });
 
-await okAsync('前端调用的原生桥方法都在 AlbumBridge 里注解过', async () => {
+await okAsync('前端只调用约定好的原生桥方法', async () => {
   const nativeSrc = await readFile(path.join(ROOT, 'src/web/js/native.js'), 'utf8');
-  const bridgeSrc = await readFile(
-    path.join(ROOT, 'android/app/src/main/java/top/chenyouyi/album/AlbumBridge.kt'),
-    'utf8',
-  );
-  // native.js 里形如 `window.AlbumNative.setKeepScreenOn(` 的调用
+  // 白名单与 album-android 仓库 scripts/check.mjs 的 BRIDGE 一致。跨仓库的
+  // 另一半在那边断言（Kotlin 侧必须都带 @JavascriptInterface）；两边都过，
+  // 桥才算对得上。这里只能钉住「网页没有悄悄多调一个不存在的方法」。
+  const BRIDGE = ['setKeepScreenOn', 'reloadSite', 'appVersion'];
   const called = new Set(
     [...nativeSrc.matchAll(/AlbumNative\.(\w+)\s*\(/g)].map((m) => m[1]),
   );
-  // Kotlin 侧只认带 @JavascriptInterface 注解的方法；少一个注解，那方法在
-  // 网页里就是 undefined，而且浏览器里跑测试永远发现不了
-  const exposed = new Set(
-    [...bridgeSrc.matchAll(/@JavascriptInterface\s+fun\s+(\w+)\s*\(/g)].map((m) => m[1]),
-  );
   assert.ok(called.size > 0, 'native.js 应当调用至少一个桥方法');
   for (const name of called) {
-    assert.ok(exposed.has(name), `AlbumBridge 缺少 @JavascriptInterface 方法 ${name}`);
+    assert.ok(BRIDGE.includes(name), `native.js 调了 AlbumBridge 里没有的方法 ${name}`);
   }
   assert.ok(nativeSrc.includes('window.AlbumNative'), 'native.js 应检测 window.AlbumNative');
+  // appVersion 只给排查用（原生侧把它印在日志/离线页上），网页不必调用，
+  // 因此只在白名单里出现，不要求 native.js 引用它。
 });
 
-await okAsync('返回键契约的两端都存在', async () => {
+await okAsync('返回键的两段式契约在网页这一侧成立', async () => {
   const nativeSrc = await readFile(path.join(ROOT, 'src/web/js/native.js'), 'utf8');
   const mainSrc = await readFile(path.join(ROOT, 'src/web/js/main.js'), 'utf8');
-  const activity = await readFile(
-    path.join(ROOT, 'android/app/src/main/java/top/chenyouyi/album/MainActivity.kt'),
-    'utf8',
-  );
+  // 查询与执行必须分开：合成一个「既查又退」的函数，调用方永远分不清
+  // 「退了一层」和「已经到底了」。原生侧按返回值决定要不要 finish()。
   for (const fn of ['__canGoBack', '__goBack']) {
     assert.ok(nativeSrc.includes(`window.${fn}`), `native.js 应挂上 ${fn}`);
-    assert.ok(activity.includes(fn), `MainActivity 应调用 ${fn}`);
   }
   assert.ok(
     /installBackBridge\(\{[^}]*canGoBack[^}]*goBack/.test(mainSrc),
@@ -590,18 +499,6 @@ await okAsync('返回键契约的两端都存在', async () => {
   );
 });
 
-await okAsync('安卓版本号只有一个来源', async () => {
-  const gradle = await readFile(path.join(ROOT, 'android/app/build.gradle.kts'), 'utf8');
-  const props = await readFile(path.join(ROOT, 'android/app/version.properties'), 'utf8');
-  assert.ok(gradle.includes('version.properties'), 'build.gradle.kts 应从 version.properties 读版本');
-  assert.ok(/versionCode\s*=\s*appVersionCode/.test(gradle), 'versionCode 应取自文件');
-  assert.ok(/versionName\s*=\s*appVersionName/.test(gradle), 'versionName 应取自文件');
-  assert.ok(/^versionCode=\d+$/m.test(props), 'version.properties 缺少合法的 versionCode');
-  assert.ok(/^versionName=\S+$/m.test(props), 'version.properties 缺少 versionName');
-
-  const publish = await readFile(path.join(ROOT, 'scripts/publish-apk.mjs'), 'utf8');
-  assert.ok(publish.includes('version.properties'), '发布脚本必须读同一个文件');
-});
 
 await okAsync('前端发布流水线不碰 photos/ 与 data/', async () => {
   const wf = await readFile(path.join(ROOT, '.github/workflows/deploy-web.yml'), 'utf8');
@@ -625,12 +522,6 @@ await okAsync('镜像构建关掉了 provenance（否则 Lambda 拒绝 index 清
   assert.ok(/platforms:\s*linux\/amd64/.test(wf), 'Lambda 不接受 arm64 镜像');
 });
 
-await okAsync('签名材料与本地 SDK 路径被忽略', async () => {
-  const ignore = await readFile(path.join(ROOT, '.gitignore'), 'utf8');
-  for (const token of ['*.keystore', 'keystore.properties', 'local.properties']) {
-    assert.ok(ignore.includes(token), `.gitignore 应忽略 ${token}`);
-  }
-});
 
 await okAsync('预签名把 content-type 与 x-amz-meta-* 纳入签名', async () => {
   const src = await readFile(path.join(ROOT, 'src/server/auth/upload.mjs'), 'utf8');

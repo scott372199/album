@@ -1,9 +1,9 @@
 {
   "name": "personal-photo-album",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "private": true,
   "type": "module",
-  "description": "Static personal photo album: local photos and videos -> sanitized WebP/MP4 -> private S3 + CloudFront",
+  "description": "Personal photo album: web frontend + serverless backend (Lambda image + S3 + CloudFront), deployed by GitHub Actions",
   "scripts": {
     "samples": "node scripts/make-samples.mjs",
     "build": "node src/build/build.mjs",
@@ -14,15 +14,8 @@
     "test:server": "node --test \"src/server/test/*.test.mjs\"",
     "test:web": "node --test \"src/web/test/*.test.mjs\"",
     "hash-key": "node scripts/hash-key.mjs",
-    "publish:apk": "node scripts/publish-apk.mjs",
     "check:repo": "node scripts/check-repo.mjs",
-    "hook:install": "node scripts/install-hooks.mjs",
-    "deploy": "npm run build && node src/deploy/deploy.mjs",
-    "deploy:init": "node src/deploy/init.mjs",
-    "deploy:dry": "node src/deploy/deploy.mjs --dry-run",
-    "deploy:preview": "npm run build && node src/deploy/preview.mjs",
-    "deploy:preview:dry": "node src/deploy/preview.mjs --dry-run",
-    "deploy:preview:rollback": "node src/deploy/preview.mjs --rollback"
+    "hook:install": "node scripts/install-hooks.mjs"
   },
   "dependencies": {
     "exifr": "^7.1.3",

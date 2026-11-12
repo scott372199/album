@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 只有两处需要暴露给外部的路径：更新包与缓存。其余一律不给。 -->
-<paths>
-    <external-files-path name="apk" path="apk/" />
-    <cache-path name="cache" path="." />
-</paths>
