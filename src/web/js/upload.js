@@ -281,17 +281,21 @@ function makeRow(name) {
 
 /**
  * `xhr.onerror` / `ontimeout` 都只给 status 0——断网、连接被重置、跨域被拦，
- * 浏览器一律报同一个码，前端拿不到区别。所以这里的措辞只能说到「连接断了」，
- * 真正区分要靠重试：能过去的就是网络抖动，过不去再回头看 CORS 与权限。
+ * 浏览器一律报同一个码，前端拿不到区别。所以除了重试，还要自己记两样东西：
+ * **已经发出去多少字节**和**这次尝试花了多久**。这两样能分开两种完全不同的故障：
  *
- * status 0 from `onerror`/`ontimeout` is the browser's catch-all: offline, reset,
- * CORS-blocked all look identical. The wording stays vague on purpose; the retry
- * loop is what actually tells a flaky link from a misconfiguration.
+ * - 0% + 一两秒就断 → 请求根本没发出去（连接层、或本地读不到文件）
+ * - 90% + 几十秒才断 → 发到一半链路掉了（真·网络抖动）
+ *
+ * status 0 from `onerror`/`ontimeout` is the browser's catch-all. We therefore
+ * record bytes-sent and elapsed time ourselves: 0% in one second and 90% in a
+ * minute are two entirely different bugs.
  */
-function connectionError(message) {
+function connectionError(message, retries = RETRY_DELAYS.length) {
   const error = new Error(message);
   error.status = 0;
-  error.retryable = true;
+  error.retryable = retries > 0;
+  error.retries = retries;
   return error;
 }
 
@@ -305,27 +309,52 @@ function httpError(status) {
   const error = new Error(`上传失败 ${status}`);
   error.status = status;
   error.retryable = status >= 500 || status === 403 || status === 408 || status === 429;
+  error.retries = RETRY_DELAYS.length;
   return error;
+}
+
+const MIN_TIMEOUT = 60_000;
+const MAX_TIMEOUT = 480_000;
+
+/**
+ * 单次 PUT 的超时按体积给：60 秒起步，每 MB 再加 3 秒，封顶 8 分钟。
+ * 固定 180 秒对 100MB 以上的视频是必然不够的——那不是网络问题，是我们自己设的闹钟。
+ *
+ * A fixed 180 s timeout is simply too short for a 100 MB+ video; the budget now
+ * scales with size, capped at 8 minutes (the presigned URL lives 15).
+ */
+function timeoutFor(bytes) {
+  const mb = Math.ceil((Number(bytes) || 0) / (1024 * 1024));
+  return Math.min(MAX_TIMEOUT, MIN_TIMEOUT + mb * 3000);
 }
 
 function put(url, headers, blob, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    let sent = 0;
     xhr.open('PUT', url, true);
     for (const [name, value] of Object.entries(headers || {})) {
       xhr.setRequestHeader(name, value);
     }
-    xhr.timeout = 180_000;
+    xhr.timeout = timeoutFor(blob.size);
     xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(event.loaded / event.total);
+      if (!event.lengthComputable) return;
+      sent = event.loaded;
+      onProgress(event.loaded / event.total);
+    };
+    const fail = (error) => {
+      error.sent = sent;
+      error.total = blob.size;
+      reject(error);
     };
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(httpError(xhr.status));
+      else fail(httpError(xhr.status));
     };
-    xhr.onerror = () => reject(connectionError('连接中断'));
-    xhr.ontimeout = () => reject(connectionError('上传超时'));
-    xhr.onabort = () => reject(connectionError('上传被中断'));
+    xhr.onerror = () => fail(connectionError('连接中断'));
+    // 超时说明这条路已经堵了很久，再自动重试只是把等待翻倍；交给「重试失败项」。
+    xhr.ontimeout = () => fail(connectionError('上传超时', 0));
+    xhr.onabort = () => fail(connectionError('上传被中断'));
     xhr.send(blob);
   });
 }
@@ -373,21 +402,66 @@ async function requestUrls(album, entries) {
  */
 async function uploadOne(album, entry, first) {
   let item = first;
+  let remaining = RETRY_DELAYS.length;
 
   for (let attempt = 0; ; attempt += 1) {
-    const label = attempt === 0 ? '上传中' : `重试 ${attempt}/${RETRY_DELAYS.length}`;
     if (attempt > 0) {
-      entry.row.set(label, 0);
+      entry.row.set(`重试 ${attempt}`, 0);
       await sleep(RETRY_DELAYS[attempt - 1] + Math.random() * 400);
       [item] = await requestUrls(album, [entry]);
     }
+    const started = Date.now();
     try {
+      const label = attempt === 0 ? '上传中' : `重试 ${attempt}`;
       await put(item.url, item.headers, entry.blob, (ratio) => entry.row.set(label, ratio));
       return;
     } catch (err) {
-      if (!err.retryable || attempt >= RETRY_DELAYS.length) throw err;
+      err.ms = Date.now() - started;
+      err.tries = attempt + 1;
+      // 每次失败后取「剩余预算」与「这个错误自带的预算」中更小的那个：
+      // 超时自带 0，于是不会自动重试。
+      remaining = Math.min(remaining - 1, Number.isFinite(err.retries) ? err.retries : remaining - 1);
+      if (!err.retryable || remaining < 1) throw err;
     }
   }
+}
+
+function fmtBytes(value) {
+  const bytes = Number(value) || 0;
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)}KB`;
+  return `${bytes}B`;
+}
+
+/**
+ * 失败后量一次站点本身还能不能访问。同源 GET，几十毫秒，比任何猜测都直接：
+ * 「自检正常」= 手机有网、只有这条 PUT 不通；「自检也不通」= 手机此刻断网。
+ *
+ * One same-origin GET right after a failure: it separates "the phone is offline"
+ * from "only this PUT is broken" far more cheaply than any guess.
+ */
+async function selfCheck() {
+  const started = Date.now();
+  try {
+    const response = await fetch(`${location.origin}/data/version.json?probe=${started}`, { cache: 'no-store' });
+    return response.ok ? `自检正常 ${Date.now() - started}ms` : `自检失败 ${response.status}`;
+  } catch {
+    return '自检也不通';
+  }
+}
+
+async function failureText(err) {
+  if (!err.retryable) return err.message;
+  const total = Number(err.total) || 0;
+  const percent = total ? Math.round(((Number(err.sent) || 0) / total) * 100) : 0;
+  const elapsed = err.ms ? `${(err.ms / 1000).toFixed(1)}s` : '—';
+  const tries = `已重试 ${Math.max(0, (err.tries || 1) - 1)} 次`;
+  const probe = await selfCheck();
+  // 万一以后能接 adb，console 里这份比屏幕上那行更全
+  console.warn('upload.failed', {
+    status: err.status, sent: err.sent, total, tries: err.tries, ms: err.ms, probe,
+  });
+  return `${err.message}（${tries}）· 已发 ${percent}%（${fmtBytes(err.sent)}/${fmtBytes(total)}）· ${elapsed} · ${probe}`;
 }
 
 async function run(album, entries) {
@@ -410,8 +484,7 @@ async function run(album, entries) {
         entry.row.done();
         state.ok += 1;
       } catch (err) {
-        const tried = err.retryable ? `（已重试 ${RETRY_DELAYS.length} 次）` : '';
-        entry.row.fail(`${err.message}${tried}`);
+        entry.row.fail(await failureText(err));
         state.failed.push(entry);
       }
     }

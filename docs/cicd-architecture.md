@@ -180,7 +180,67 @@ statement {
 *`StringEquals` vs `StringLike`: the moment you use a wildcard, you need `StringLike`. Using
 `StringEquals` silently never matches.*
 
-### 3.3 为什么 apply 是手动触发
+### 3.3 陌生人能不能自己签一个这样的 JWT？
+
+这是这套机制最容易被误解的地方，值得单独讲清楚。答案是**不能**，原因不是「他不知道密钥」，
+而是因为 JWT 里的每一个字段都在签名覆盖范围内。
+
+一个 JWT 是 `base64(header).base64(payload).signature`。`signature = RSA-SHA256(header + "." + payload, GitHub 的私钥)`。
+GitHub 的私钥只在 GitHub 手里，公钥挂在 `https://token.actions.githubusercontent.com/.well-known/jwks` 上公开可下载。
+
+于是：
+
+- **陌生人可以拿到 JWT，但只能拿到「自己仓库」的那一张。** 他去自己的仓库跑一个带
+  `id-token: write` 的 workflow，GitHub 给他签一张，`sub` 是 `repo:他的用户名/他的仓库:...`。
+- **他不能改 payload。** 想把 `sub` 改成 `repo:scott372199/album-infra:ref:refs/heads/main`，
+  改完签名就对不上，AWS 验签直接失败（`InvalidIdentityToken`）。
+- **他不能用别人的 JWT。** 就算他从日志里偷到一张真的、`sub` 正确的 JWT，那也只是一张
+  已经过期（**5 分钟**）的一次性票据，且换出来的 STS 凭证最长 1 小时。
+
+AWS 那边是**两步**，缺一不可：
+
+1. 验签 ——「这张票确实是 GitHub 签的」（信任 `token.actions.githubusercontent.com` 这个
+   OIDC provider，用 JWKS 里的公钥验）。
+2. 比对 `sub` 字符串 ——「签给谁的」。陌生人那张票 `sub` 不匹配信任策略里的四种写法，
+   返回 `AccessDenied`。
+
+**所以公开仓库泄露了什么？** 泄露的是「地址」而不是「钥匙」：角色 ARN、账号 ID、桶名。
+知道门牌号不能进门。这份文档里我连角色 ARN 都用 `<ACCOUNT_ID>` 占位，是为了让文档能公开，
+不是因为不写就危险。
+
+*Can a stranger mint this JWT? No — and the reason is that every claim sits inside the
+signature. They can obtain a token, but only one for their own repository. Editing the
+payload breaks the signature; a stolen token expires in five minutes. AWS verifies the
+signature first, then compares `sub` as a string. Public repos leak addresses, not keys.*
+
+**真正危险的是把 `sub` 写宽了**，这才是这类事故的真实成因：
+
+| 写法 | 后果 |
+| --- | --- |
+| 只有 `aud`，没有 `sub` 条件 | **任何人的任何仓库**都能 assume —— 等于把角色公开 |
+| `repo:scott372199/*` | 我名下任何仓库（包括以后随手建的测试仓库）都能 assume |
+| `repo:scott372199/album*` | `album-evil`、`album-test` 也会匹配 —— `*` 会吃掉 `/` 后面的字符 |
+| 加上了 `repo:...:pull_request` | PR 触发的工作流也能拿角色；一旦配合 `pull_request_target` 就是灾难 |
+| `StringLike` 配 `environment:*` | 任何环境名都行 |
+
+本项目的四个 `sub` 都是**精确到分支或环境名**的（见 3.2），没有一个能靠「猜一个 ref 名」命中。
+
+还有两条 GitHub 侧的硬约束值得知道：
+
+- **fork 来的 PR 拿不到 OIDC token。** 即使 workflow 里写了 `id-token: write`，GitHub 也会
+  拒绝签发 —— 否则任何人对公开仓库开个 PR 就能以上游仓库的身份去换云凭证。代价是
+  「PR 里跑 terraform plan」这件事在我们这种私有仓库外就做不了。
+  *The escape hatch 是 `pull_request_target`，它在上游上下文里跑、可以拿 token，但同时也
+  拿到 secrets —— 本项目不使用它。*
+- **能触发 workflow 的人才可能拿到 token。** 陌生人最多 fork 之后开 PR，跑的是他自己
+  fork 里的 workflow，签出来的 `sub` 是他自己的仓库名。
+
+*The real footgun is a wide `sub`, not a leaked JWT. Fork PRs cannot obtain OIDC tokens at
+all, and only someone who can trigger a workflow can request one.*
+
+---
+
+### 3.4 为什么 apply 是手动触发
 
 GitHub 的 **required reviewers**（合并后停在审批门）只对**公开仓库**开放，Free/Pro/Team
 套餐下私有仓库需要 Enterprise。`album-infra` 必须私有（里面有账号结构），所以换了一个更硬的
