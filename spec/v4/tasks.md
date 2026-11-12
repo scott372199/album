@@ -307,6 +307,9 @@ P7 收尾  T-29 → T-30 → T-31
 - **内容 / Work**：荣耀 / 小米 / 三星中至少两台实测 §9-A1~A6 与 B7~B13
 - **验收 / Done when**：检查表逐项勾选，异常项记录
 - **检查点 / Checkpoint**：**CP-5**
+- **状态 / Status**：◐ 部分通过（2026-11-12）。三星上 A 类功能（浏览、灯箱、故事、照片墙、
+  更新检查）均正常；**B 类上传一开始只有 1/3 成功**，见 §7 的排查与修复。修复后用户连续上传
+  多次全部成功。仍待人工确认：荣耀 / 小米各一台，以及 iPad 上的照片墙 + Wake Lock 常亮。
 
 ### P7 · 收尾 / Wrap-up
 
@@ -328,8 +331,8 @@ P7 收尾  T-29 → T-30 → T-31
 - **追溯 / Traces to**：FR-24.8.1/24.8.2、spec §9-C20
 - **状态 / Status**：✅ 完成（2026-11-12）。`src/deploy/` 十个文件、`scripts/publish-apk.mjs`、
   `.deploy-state.json`、`.rollback-v1/`、`apk-out/` 全部删除；`verify.mjs` 少 10 项、
-  多 1 项跨仓库契约断言（36 项）；`package.json` 去掉 6 条 deploy 脚本。README 重写为
-  「三仓库 + 四层 + 两条发布路径 + 一条上传链路」，并新增 `docs/cicd-architecture.md`
+  多 1 项跨仓库契约断言（现 38 项：36 + dom id 对齐 + 分片两端约定）；`package.json` 去掉 6 条 deploy 脚本。
+  README 重写为「三仓库 + 四层 + 两条发布路径 + 一条上传链路」，并新增 `docs/cicd-architecture.md`
   （OIDC / IAM / Terraform state / Secrets vs Variables / 三条流水线逐段拆解 / 排错表）。
 - **验收证据 / Evidence**：`grep -r "create-distribution\|put-bucket-policy" src/` 无结果。
 
@@ -423,9 +426,10 @@ P7 收尾  T-29 → T-30 → T-31
 | T-19、T-20 前端改造 / Web rework | ✅ 完成 / Done | 编辑式栅格 + 视频 |
 | T-21 ~ T-23 上传与发布 / Upload & deploy | ✅ 完成 / Done | 36 项断言；上传 UI 只在原生壳里出现；`deploy-web` 已真实跑通 |
 | T-24 ~ T-27 安卓客户端 / Android shell | ✅ 已迁出 / Moved | 代码与历史迁到独立仓库 `album-android`，那边 8 项自检；真机待 T-28 |
-| T-28 真机验收 / Device acceptance | ⏳ 未开始 / Not started | **CP-5**，需要你手持设备 |
-| T-29 断言扩充 / Extend verify | ✅ 完成 / Done | 36 项断言（安卓那 10 项随代码迁到新仓库） |
+| T-28 真机验收 / Device acceptance | ◐ 部分通过 / Partial | **CP-5**：三星 A 类全过；上传问题修复后连续多轮全部成功（见 §7）。荣耀 / 小米与 iPad 照片墙待人工确认 |
+| T-29 断言扩充 / Extend verify | ✅ 完成 / Done | 38 项断言（安卓那 10 项随代码迁到新仓库）；单测 64 项 |
 | T-30 ~ T-31 收尾 / Wrap-up | ✅ 完成 / Done | 旧脚本已删、README 重写、CI/CD 教程成文、成本实测 |
+| §7 验收后修复 / Post-acceptance fix | ✅ 完成 / Done | 大视频改 8MB 分片，连续多轮上传全部成功 |
 
 ### 6.1 关键数字 / Key numbers（2026-11-12 实测）
 
