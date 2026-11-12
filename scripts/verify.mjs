@@ -632,4 +632,20 @@ await okAsync('签名材料与本地 SDK 路径被忽略', async () => {
   }
 });
 
+await okAsync('预签名把 content-type 与 x-amz-meta-* 纳入签名', async () => {
+  const src = await readFile(path.join(ROOT, 'src/server/auth/upload.mjs'), 'utf8');
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  // 只写 Metadata 不写 signableHeaders 时，客户端带上来的 x-amz-meta-* 会被
+  // S3 判成「未签名头」直接 403 —— 这条断言就是钉住那个修复。
+  assert.ok(
+    /signableHeaders:\s*new Set\(/.test(code),
+    'getSignedUrl 必须显式传 signableHeaders，否则直传 403 headers not signed',
+  );
+  assert.ok(/signableHeaderNames\(/.test(code), '签名头清单应来自 rules.mjs 的纯函数');
+
+  const rules = await readFile(path.join(ROOT, 'src/server/auth/rules.mjs'), 'utf8');
+  assert.ok(/export function signableHeaderNames/.test(rules), 'rules.mjs 应导出 signableHeaderNames');
+  assert.ok(rules.includes('x-amz-meta-'), '应拼出 x-amz-meta-<name> 形式的头名');
+});
+
 console.log(`--- 全部通过：${checks} 项断言 ---`);

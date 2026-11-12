@@ -45,6 +45,34 @@ function normalizeTakenAt(value) {
 }
 
 /**
+ * 需要强制进签名的请求头清单。
+ *
+ * 预签名默认只签「必须签」的那几个头，content-type 与 x-amz-meta-* 会被留在
+ * 签名范围之外。客户端真发上来时它们就成了「未签名头」，S3 直接 403：
+ *   There were headers present in the request which were not signed
+ * 所以这里显式列出来，交给 getSignedUrl 的 signableHeaders。
+ *
+ * 放在 rules.mjs 而不是 upload.mjs：这里不 import 任何 AWS SDK，因此能在只有
+ * sharp/exifr 的环境里直接单测。
+ *
+ * Headers that must be force-signed. A presigned PUT normally signs only the
+ * required headers, leaving content-type and x-amz-meta-* outside the signature;
+ * sending them then trips S3 with `headers not signed` → 403. Listed explicitly
+ * and passed to getSignedUrl via signableHeaders. Kept here (not in upload.mjs)
+ * so the function imports no AWS SDK and stays unit-testable.
+ */
+export function signableHeaderNames(contentType, metadata) {
+  const names = new Set();
+  if (contentType) names.add('content-type');
+  for (const name of Object.keys(metadata || {})) {
+    const lower = name.toLowerCase();
+    // 名字必须与真正发出去的头完全一致，否则 S3 回 SignatureDoesNotMatch
+    names.add(lower.startsWith('x-amz-meta-') ? lower : `x-amz-meta-${lower}`);
+  }
+  return [...names];
+}
+
+/**
  * 校验整批文件并给出每个对象的 key 与元数据。
  *
  * 只要有一个文件不合规就整批拒绝：半个批次成功会让客户端的分批重试变得
