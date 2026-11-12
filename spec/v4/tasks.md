@@ -248,6 +248,13 @@ P7 收尾  T-29 → T-30 → T-31
 
 ### P6 · 安卓客户端
 
+> **2026-11-12：整个 P6 已迁到独立仓库 `album-android`。** 应用仓库原本同时装着 web、
+> 服务端与 Kotlin，三套工具链混在一个 CI 里；加上签名私钥不该出现在公开仓库的构建机上，
+> 拆开后职责才和三条流水线对得上。下面 T-24~T-27 的记录保留为历史，代码在新仓库，
+> 那边有 8 项自检（`scripts/check.mjs`）接手本仓库原先的安卓断言。
+>
+> *The whole P6 section moved to `album-android` on 2026-11-12. History kept below.*
+
 #### T-24 Gradle 工程与 WebView 骨架 / Gradle project & WebView shell
 - **依赖 / Deps**：T-23
 - **内容 / Work**：`android/` 工程，minSdk 26 / targetSdk 35；单 Activity；WebView 设置（JS、DOM Storage、禁混合内容）；沉浸式全屏；加载线上站点
@@ -319,12 +326,21 @@ P7 收尾  T-29 → T-30 → T-31
 - **内容 / Work**：删除 `src/deploy/` 资源管理脚本（保留最小内容同步）；删除 `.deploy-state.json`；README 更新为「两仓库 + 四层 + 两条发布路径」
 - **验收 / Done when**：`grep -r "create-distribution\|put-bucket-policy" src/` 无结果；README 能让人不读代码说清架构
 - **追溯 / Traces to**：FR-24.8.1/24.8.2、spec §9-C20
+- **状态 / Status**：✅ 完成（2026-11-12）。`src/deploy/` 十个文件、`scripts/publish-apk.mjs`、
+  `.deploy-state.json`、`.rollback-v1/`、`apk-out/` 全部删除；`verify.mjs` 少 10 项、
+  多 1 项跨仓库契约断言（36 项）；`package.json` 去掉 6 条 deploy 脚本。README 重写为
+  「三仓库 + 四层 + 两条发布路径 + 一条上传链路」，并新增 `docs/cicd-architecture.md`
+  （OIDC / IAM / Terraform state / Secrets vs Variables / 三条流水线逐段拆解 / 排错表）。
+- **验收证据 / Evidence**：`grep -r "create-distribution\|put-bucket-policy" src/` 无结果。
 
 #### T-31 全量验收 / Full acceptance
 - **依赖 / Deps**：T-29、T-30
 - **内容 / Work**：逐条核对 spec §9 全部 30 项；记录成本实测
 - **验收 / Done when**：30 项全过或逐项说明偏差
 - **追溯 / Traces to**：spec §9 全部
+- **状态 / Status**：◐ 除 CP-5 的 8 项真机项外全部通过；数字见 §6.1 / §6.2。
+  A1~A6、B7~B13 里凡涉及真机的条目仍待 T-28，其余已由实机之外的证据覆盖
+  （接口实测、CDN 抓取、EXIF 检查、`list-object-versions`、DLQ）。
 
 ---
 
@@ -405,19 +421,46 @@ P7 收尾  T-29 → T-30 → T-31
 | T-16、T-17 第二段 / Compute wiring | ✅ 完成 / Done | 22 项资源已建；未用预留并发（账号并发仅 50） |
 | T-18 联调 / Integration | ✅ 完成 / Done | **CP-4 通过**：直传 200 → 22 秒后上线 → 源对象无历史版本 → 损坏文件两次重试后进 DLQ |
 | T-19、T-20 前端改造 / Web rework | ✅ 完成 / Done | 编辑式栅格 + 视频 |
-| T-21 ~ T-23 上传与发布 / Upload & deploy | ✅ 完成 / Done | 46 项断言；上传 UI 只在原生壳里出现；`deploy-web` 已真实跑通一次 |
-| T-24 ~ T-26 安卓客户端 / Android shell | ✅ 代码完成 / Coded | `assembleDebug` / `assembleRelease` 均通过，真机待 T-28 |
-| T-27 签名与发布 / Signing | ✅ 完成 / Done | 签名包已发 downloads 桶，三处 sha256 一致 |
+| T-21 ~ T-23 上传与发布 / Upload & deploy | ✅ 完成 / Done | 36 项断言；上传 UI 只在原生壳里出现；`deploy-web` 已真实跑通 |
+| T-24 ~ T-27 安卓客户端 / Android shell | ✅ 已迁出 / Moved | 代码与历史迁到独立仓库 `album-android`，那边 8 项自检；真机待 T-28 |
 | T-28 真机验收 / Device acceptance | ⏳ 未开始 / Not started | **CP-5**，需要你手持设备 |
-| T-29 断言扩充 / Extend verify | ✅ 完成 / Done | 46 项断言 |
-| T-30 ~ T-31 收尾 / Wrap-up | ⏳ 未开始 / Not started | 清理旧部署脚本、全量验收 |
+| T-29 断言扩充 / Extend verify | ✅ 完成 / Done | 36 项断言（安卓那 10 项随代码迁到新仓库） |
+| T-30 ~ T-31 收尾 / Wrap-up | ✅ 完成 / Done | 旧脚本已删、README 重写、CI/CD 教程成文、成本实测 |
 
-### 6.1 关键数字 / Key numbers（待填）
+### 6.1 关键数字 / Key numbers（2026-11-12 实测）
 
 | 项 / Item | 值 / Value |
 | --- | --- |
-| 镜像体积 / Image size | — |
-| 单层 plan 耗时 / Plan duration per layer | — |
-| 照片端到端耗时 / Photo end-to-end latency | 约 22 秒（59548 B / 1600×1200 直传完成后到 CDN 可见） |
-| 视频端到端耗时 / Video end-to-end latency | — |
-| 月成本实测 / Measured monthly cost | — |
+| 镜像体积 / Image size | 262 MB（ECR 里 2 份：当前 + 一份回滚） |
+| 单层 plan 耗时 / Plan duration per layer | 10~12 秒 × 4 层（本机，四层均 0 差异） |
+| 照片端到端耗时 / Photo end-to-end latency | 约 22 秒（59548 B / 1600×1200，直传完成到 CDN 可见） |
+| 视频端到端耗时 / Video end-to-end latency | 约 28 秒（137 KB / 6 秒 720p；函数本身 26.3 秒） |
+| 月成本实测 / Measured monthly cost | **$0.0031**（2026-11-01~11-12，约 ¥0.02）；其余全在免费额度内 |
+
+### 6.2 成本结构与外推 / Cost structure and projection
+
+实测只覆盖「几乎没人用」的状态，所以还要给出结构性外推。单价取 ap-southeast-1 公开价。
+
+| 项 / Item | 当前用量 / Now | 免费额度 / Free tier | 外推用量（一年后）/ Projected | 月成本 / Monthly |
+| --- | --- | --- | --- | --- |
+| S3 标准存储 | 22 MB / 76 对象 | 5 GB（12 个月） | 3 GB | $0.075 |
+| S3 请求 | 约 2 200 次/半月 | 20 000 GET / 2 000 PUT | 5 000/月 | ≈ $0.002 |
+| CloudFront 流量 | 0.07 GB | **1 TB/月（永久）** | 20 GB | $0 |
+| CloudFront 请求 | 约 3 000 次/半月 | 10 000 000/月 | 50 000/月 | $0 |
+| Lambda 调用 | 4 次/周 | 1 000 000/月 | 200 次/月 | $0 |
+| Lambda 计算 | 1.5 GB-s/次 | 400 000 GB-s/月 | 200×3 GB-s | $0 |
+| API Gateway | 约 400 次/半月 | 1 000 000/月（12 个月） | 1 000/月 | $0.004 |
+| ECR 存储 | 524 MB | 500 MB | 524 MB | ≈ $0.003 |
+| DynamoDB 限流表 | 数十次写 | 25 GB + 25 WCU | 可忽略 | $0 |
+| SSM 参数 | 3 个标准参数 | 10 000 个（标准） | 3 个 | $0 |
+| CloudWatch 日志 | < 100 MB | 5 GB ingest | 200 MB | $0 |
+| **合计** | **$0.0031** | | | **≈ $0.09 ≈ ¥0.65/月** |
+
+结论：**¥15/月 的目标有 20 倍以上余量**，唯一的线性增长项是 S3 存储，而照片以每年约
+3 GB 的速度增长。真正会咬人的是「把视频全留 4K 原片」那种用法——本项目在上传侧就把
+视频压到 1080p 并丢弃原片，所以不会发生。
+
+*Measured spend is $0.0031 for the first twelve days of November; a one-year projection with
+200 photos/month lands around $0.09 (¥0.65). The only line that grows linearly is S3 storage,
+and the processor discards originals, so 4K footage never accumulates.*
+

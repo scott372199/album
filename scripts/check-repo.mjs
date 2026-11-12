@@ -39,7 +39,7 @@ const SECRET_PATTERNS = [
 const ABSOLUTE_PATH = /\/Users\/[A-Za-z0-9._-]+\//;
 
 /** 文档里会「描述」密钥长相，属正常内容；只对代码与配置做密钥扫描。 */
-const DOC_PATH = /^(spec\/)|^README\.md$/;
+const DOC_PATH = /^(spec\/)|^README\.md$|^docs\//;
 
 async function gitFiles() {
   const { stdout } = await execFileAsync(
