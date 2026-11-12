@@ -165,12 +165,18 @@ P7 收尾  T-29 → T-30 → T-31
 - **内容 / Work**：`modules/lambda-container`、`modules/http-api`、`modules/bucket-notification`
 - **验收 / Done when**：`validate` 通过；接口参数无环境字面量
 - **追溯 / Traces to**：FR-24.2.1/24.2.4
+- **状态 / Status**：✅ 完成。三个模块已落地，四层 `validate` 全通过，`make check` 58 项离线断言。
 
 #### T-17 compute 层落地 / Compute layer
 - **依赖 / Deps**：T-13、T-14、T-15、T-16
 - **内容 / Work**：ECR + Lambda×2（同镜像两入口）+ API（3 路由、限流）+ DynamoDB（失败计数）+ SQS（DLQ）+ SSM×3 + IAM×2 + 日志组 + S3 事件通知（`incoming/`）
-- **验收 / Done when**：`plan` 只含新增；`GET /health` 返回 200；`reserved_concurrency=1` 生效；SSM 三个参数为 SecureString
+- **验收 / Done when**：`plan` 只含新增；`GET /health` 返回 200；SSM 三个参数为 SecureString
 - **追溯 / Traces to**：FR-22.7、FR-25.5、plan §3.4
+- **状态 / Status**：✅ 完成。`enable_functions = true` 后一次 apply 建起 22 项资源：3 个 SecureString 参数、`album-auth` 与 `album-processor` 两个函数、S3 事件通知、HTTP API 三路由 + `$default` stage。
+- **实施偏差 / Deviations**：
+  1. **不使用预留并发**（原验收写的是 `reserved_concurrency=1`）：该账号总并发只有 50，AWS 要求非预留不低于 50，任何预留值都会 400。串行化改到代码里——写清单指针带 `If-Match`，冲突后重读重合并。
+  2. **`image_tag` 写进 `prod.tfvars`**：infra 的 CI apply 只读 tfvars、不传 `-var image_tag`，留空会回退到不存在的 `latest`。每次换了镜像要手动改这一行。
+  3. **镜像必须关掉 buildx 的 provenance**：默认附带的证明清单会把产物变成 OCI index，Lambda 拒收，报错却不提 provenance。
 
 #### T-18 接口联调 / API integration
 - **依赖 / Deps**：T-17
@@ -287,6 +293,11 @@ P7 收尾  T-29 → T-30 → T-31
 - **内容 / Work**：`verify.mjs` 新增：清单装载方式、模块导入导出一致性、无硬编码桶名、产物无 `http://`、`build:web` 不引用 `photos/`
 - **验收 / Done when**：断言语义清晰、失败信息可定位；全员通过
 - **追溯 / Traces to**：spec §9-E29、plan §13
+- **状态 / Status**：✅ 完成，38 → 45 项。清单装载方式、模块导入导出、`http://`、`build:web` 不读 `photos/` 四项 v3 已有；本轮新增 7 项。
+- **实施偏差 / Deviations**：
+  1. **新增断言超出原清单**：`verify.mjs` 不是只校验产物的，它还是唯一能拦住「改一处、另一处静默失效」的地方，所以补了跨语言契约——原生桥方法名两端一致、返回键契约、版本号单一来源。
+  2. **「无硬编码桶名」要排除安卓包名**：`top/chenyouyi/album` 里天然含桶名那串字，用负向断言 `(?<!top/)` 排除。黑名单字面量本身在 `verify.mjs` 里拆开拼接，否则自己扫自己立刻失败。
+  3. **「流水线不碰 photos/」改成「不上传到 photos/」**：流水线里本来就有 `dist/photos` 的守卫（产物误含照片目录就拒绝发布），一刀切地禁掉这个词会把守卫也禁掉。
 
 #### T-30 清理与文档 / Cleanup & docs
 - **依赖 / Deps**：T-28
@@ -376,14 +387,15 @@ P7 收尾  T-29 → T-30 → T-31
 | --- | --- | --- |
 | T-01 ~ T-11 基础设施四层 / Infra layers | ✅ 完成 / Done | `album-infra` 已 apply 且四层 `plan` 归零 |
 | T-12 ~ T-15 服务端函数 / Server handlers | ✅ 完成 / Done | 一镜像两入口，40 项单测 |
-| T-16、T-17 第二段 / Compute wiring | ◐ 代码完成 / Coded | 待真实 `image_tag` 后 `enable_functions = true` |
+| T-16、T-17 第二段 / Compute wiring | ✅ 完成 / Done | 22 项资源已建；未用预留并发（账号并发仅 50） |
 | T-18 联调 / Integration | ⏳ 未开始 / Not started | 依赖 T-17 |
 | T-19、T-20 前端改造 / Web rework | ✅ 完成 / Done | 编辑式栅格 + 视频 |
 | T-21 ~ T-23 上传与发布 / Upload & deploy | ✅ 完成 / Done | 38 项断言；上传 UI 只在原生壳里出现 |
 | T-24 ~ T-26 安卓客户端 / Android shell | ✅ 代码完成 / Coded | `assembleDebug` / `assembleRelease` 均通过，真机待 T-28 |
 | T-27 签名与发布 / Signing | ✅ 完成 / Done | 签名包已发 downloads 桶，三处 sha256 一致 |
 | T-28 真机验收 / Device acceptance | ⏳ 未开始 / Not started | **CP-5**，需要你手持设备 |
-| T-29 ~ T-31 收尾 / Wrap-up | ⏳ 未开始 / Not started | — |
+| T-29 断言扩充 / Extend verify | ✅ 完成 / Done | 45 项断言 |
+| T-30 ~ T-31 收尾 / Wrap-up | ⏳ 未开始 / Not started | 清理旧部署脚本、全量验收 |
 
 ### 6.1 关键数字 / Key numbers（待填）
 
