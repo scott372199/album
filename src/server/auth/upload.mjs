@@ -1,7 +1,7 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env, envInt } from '../lib/config.mjs';
-import { planFiles, signableHeaderNames } from './rules.mjs';
+import { planFiles, metadataHeaderNames, signableHeaderNames } from './rules.mjs';
 
 /**
  * 签发预签名 PUT。
@@ -39,14 +39,17 @@ export async function presignUploads(body) {
       Object.entries(entry.metadata).filter(([, value]) => value !== ''),
     );
 
-    // ContentType 与 x-amz-meta-* 必须显式进签名：默认只有「必须签」的少数
-    // 几个头进签名范围，其余的头客户端一发上来就会被 S3 判为「未签名头」并
-    // 回 403。这样做同时挡住「把 HTML 伪装成图片直传」，也让相册与拍摄时间
-    // 随对象落到 S3，处理函数不必回查数据库。
-    // ContentType and every x-amz-meta-* must be force-signed: by default only a
-    // few required headers enter the signature, so anything else the client
-    // sends is rejected with 403 `headers not signed`. It also blocks uploading
-    // HTML disguised as an image and carries album/taken-at with the object.
+    // ContentType 与 x-amz-meta-* 必须显式进签名，**并且**禁止被提到查询串：
+    // SDK 默认把元数据搬进 query，签名头里只剩 content-type;host，客户端照常
+    // 用请求头发出去就被 S3 判成「未签名头」回 403。两边都传才既进签名又留在
+    // 请求头里。顺带挡住「把 HTML 伪装成图片直传」，并让相册与拍摄时间随对象
+    // 落到 S3，处理函数不必回查数据库。
+    // ContentType and every x-amz-meta-* must be signed AND kept out of the
+    // query string: by default the SDK hoists metadata into the query, leaving
+    // only content-type;host signed, so the client's real headers are rejected
+    // with 403. Passing both sets fixes it, blocks HTML-disguised-as-image, and
+    // carries album/taken-at with the object.
+    const metaHeaders = metadataHeaderNames(metadata);
     const url = await getSignedUrl(
       s3(),
       new PutObjectCommand({
@@ -58,6 +61,7 @@ export async function presignUploads(body) {
       {
         expiresIn,
         signableHeaders: new Set(signableHeaderNames(entry.contentType, metadata)),
+        unhoistableHeaders: new Set(metaHeaders),
       },
     );
 

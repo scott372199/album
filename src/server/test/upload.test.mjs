@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { planFiles, signableHeaderNames } from '../auth/rules.mjs';
+import { planFiles, metadataHeaderNames, signableHeaderNames } from '../auth/rules.mjs';
 
 test('签名头包含 content-type 与全部 x-amz-meta-*', () => {
   const names = signableHeaderNames('image/jpeg', {
@@ -18,6 +18,7 @@ test('签名头包含 content-type 与全部 x-amz-meta-*', () => {
 
 test('元数据为空时只签 content-type', () => {
   assert.deepEqual(signableHeaderNames('video/mp4', {}), ['content-type']);
+  assert.deepEqual(metadataHeaderNames({}), []);
 });
 
 test('已经带 x-amz-meta- 前缀的名字不会被重复加前缀', () => {
@@ -29,6 +30,16 @@ test('已经带 x-amz-meta- 前缀的名字不会被重复加前缀', () => {
 
 test('缺 content-type 时不写进签名，避免出现空值头', () => {
   assert.deepEqual(signableHeaderNames('', { album: 'YQ==' }), ['x-amz-meta-album']);
+});
+
+test('元数据头既要进签名，也要禁止被提到查询串', () => {
+  // 只给 signableHeaders 时，SDK 仍然会把 x-amz-meta-* 提到 query，
+  // 签名头只剩 content-type;host —— 实测 403 headers not signed。
+  const metas = metadataHeaderNames({ album: 'YQ==', sha256: 'b'.repeat(64) });
+  assert.deepEqual(metas, ['x-amz-meta-album', 'x-amz-meta-sha256']);
+  // 同一批名字必须同时出现在 signableHeaders 给的那份清单里
+  const signable = signableHeaderNames('image/jpeg', { album: 'YQ==', sha256: 'b'.repeat(64) });
+  for (const name of metas) assert.ok(signable.includes(name), `${name} 也应在签名范围内`);
 });
 
 test('planFiles 给出的元数据键与签名头一一对应', () => {

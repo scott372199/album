@@ -45,31 +45,42 @@ function normalizeTakenAt(value) {
 }
 
 /**
- * 需要强制进签名的请求头清单。
+ * 元数据对应的 x-amz-meta-* 头名。
  *
- * 预签名默认只签「必须签」的那几个头，content-type 与 x-amz-meta-* 会被留在
- * 签名范围之外。客户端真发上来时它们就成了「未签名头」，S3 直接 403：
- *   There were headers present in the request which were not signed
- * 所以这里显式列出来，交给 getSignedUrl 的 signableHeaders。
+ * Metadata 在预签名里有一个反直觉行为：SDK 默认把 x-amz-meta-* **提到查询串**
+ * 里（hoist），于是 URL 上出现 x-amz-meta-album=... 的 query，而签名头里只剩
+ * content-type;host。客户端如果照常把这些值放在请求头里发出，S3 就看到一批
+ * 「没进签名的头」并回 403。
  *
- * 放在 rules.mjs 而不是 upload.mjs：这里不 import 任何 AWS SDK，因此能在只有
- * sharp/exifr 的环境里直接单测。
+ * 所以这些头必须同时进两个集合：
+ *   signableHeaders   —— 让它们进签名范围
+ *   unhoistableHeaders —— 把它们留在请求头里，别挪到查询串
+ * 只给 signableHeaders 是不够的（实测 SignedHeaders 仍是 content-type;host）。
  *
- * Headers that must be force-signed. A presigned PUT normally signs only the
- * required headers, leaving content-type and x-amz-meta-* outside the signature;
- * sending them then trips S3 with `headers not signed` → 403. Listed explicitly
- * and passed to getSignedUrl via signableHeaders. Kept here (not in upload.mjs)
- * so the function imports no AWS SDK and stays unit-testable.
+ * Metadata headers carry a counter-intuitive detail: the SDK hoists x-amz-meta-*
+ * into the query string by default, so the client's real headers end up
+ * unsigned and S3 answers 403. They must be listed in BOTH signableHeaders and
+ * unhoistableHeaders; signableHeaders alone is not enough.
  */
-export function signableHeaderNames(contentType, metadata) {
-  const names = new Set();
-  if (contentType) names.add('content-type');
-  for (const name of Object.keys(metadata || {})) {
+export function metadataHeaderNames(metadata) {
+  return Object.keys(metadata || {}).map((name) => {
     const lower = name.toLowerCase();
     // 名字必须与真正发出去的头完全一致，否则 S3 回 SignatureDoesNotMatch
-    names.add(lower.startsWith('x-amz-meta-') ? lower : `x-amz-meta-${lower}`);
+    return lower.startsWith('x-amz-meta-') ? lower : `x-amz-meta-${lower}`;
+  });
+}
+
+/**
+ * 需要强制进签名的请求头清单：content-type 加全部元数据头。
+ * Headers to force into the signature: content-type plus every metadata header.
+ */
+export function signableHeaderNames(contentType, metadata) {
+  const names = [];
+  if (contentType) names.push('content-type');
+  for (const name of metadataHeaderNames(metadata)) {
+    if (!names.includes(name)) names.push(name);
   }
-  return [...names];
+  return names;
 }
 
 /**

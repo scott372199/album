@@ -641,6 +641,12 @@ await okAsync('预签名把 content-type 与 x-amz-meta-* 纳入签名', async (
     /signableHeaders:\s*new Set\(/.test(code),
     'getSignedUrl 必须显式传 signableHeaders，否则直传 403 headers not signed',
   );
+  // 只传 signableHeaders 不够：SDK 仍会把 x-amz-meta-* 提到查询串，
+  // SignedHeaders 只剩 content-type;host，客户端带的头照样被判未签名。
+  assert.ok(
+    /unhoistableHeaders:\s*new Set\(/.test(code),
+    '必须传 unhoistableHeaders：否则 x-amz-meta-* 会被搬进查询串而不进签名',
+  );
   assert.ok(/signableHeaderNames\(/.test(code), '签名头清单应来自 rules.mjs 的纯函数');
 
   const rules = await readFile(path.join(ROOT, 'src/server/auth/rules.mjs'), 'utf8');
