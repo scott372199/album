@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { planFiles, sanitizeAlbum, extensionOf, DEFAULT_ALBUM } from '../auth/rules.mjs';
+import {
+  multipartPlan, parseComplete, MIN_PART_SIZE, MAX_PARTS,
+} from '../auth/rules.mjs';
 
 const LIMITS = {
   maxFiles: 3,
@@ -86,4 +89,63 @@ test('takenAt 归一成 ISO；非法值不写进元数据', () => {
 
   const bad = planFiles([file({ takenAt: '昨天' })], LIMITS);
   assert.equal(bad.items[0].metadata['taken-at'], '');
+});
+
+/* ---------------- 分片 ---------------- */
+
+test('小文件不分片，超过阈值才分片', () => {
+  const opts = { threshold: 16 * 1024 * 1024, partSize: 8 * 1024 * 1024 };
+  assert.equal(multipartPlan(8 * 1024 * 1024, opts), null);
+  assert.equal(multipartPlan(16 * 1024 * 1024, opts), null, '等于阈值仍走单次 PUT');
+  assert.deepEqual(multipartPlan(16 * 1024 * 1024 + 1, opts), { parts: 3, partSize: 8 * 1024 * 1024 });
+});
+
+test('分片数按体积向上取整：200MB 刚好 25 片', () => {
+  const plan = multipartPlan(200 * 1024 * 1024, { threshold: 1, partSize: 8 * 1024 * 1024 });
+  assert.equal(plan.parts, 25);
+});
+
+test('片小于 5MB 直接拒绝——S3 的硬规矩，不是我们的偏好', () => {
+  assert.deepEqual(
+    multipartPlan(50 * 1024 * 1024, { threshold: 1, partSize: 1024 * 1024 }),
+    { error: 'part_too_small' },
+  );
+  assert.equal(MIN_PART_SIZE, 5 * 1024 * 1024);
+});
+
+test('片数超过 10000 拒绝', () => {
+  const plan = multipartPlan(MAX_PARTS * 8 * 1024 * 1024 + 1, {
+    threshold: 1, partSize: 8 * 1024 * 1024,
+  });
+  assert.equal(plan.error, 'too_many_parts');
+});
+
+test('合并请求：key 必须落在 incoming/ 且形状与签发时一致', () => {
+  const ok = { key: 'incoming/0123456789abcdef.mp4', uploadId: 'u1', parts: [{ partNumber: 1, etag: 'a'.repeat(32) }] };
+  assert.equal(parseComplete(ok).error, undefined);
+  assert.equal(parseComplete({ ...ok, key: 'photos/0123456789abcdef.mp4' }).error, 'invalid_key');
+  assert.equal(parseComplete({ ...ok, key: 'incoming/whatever.mp4' }).error, 'invalid_key');
+  assert.equal(parseComplete({ ...ok, key: '../incoming/0123456789abcdef.mp4' }).error, 'invalid_key');
+});
+
+test('合并请求：etag 必须是 S3 的形状（可带引号、可带 -N）', () => {
+  const base = { key: 'incoming/0123456789abcdef.mp4', uploadId: 'u1' };
+  assert.equal(parseComplete({ ...base, parts: [{ partNumber: 1, etag: `"${'b'.repeat(32)}"` }] }).error, undefined);
+  assert.equal(parseComplete({ ...base, parts: [{ partNumber: 1, etag: `${'b'.repeat(32)}-2` }] }).error, undefined);
+  assert.equal(parseComplete({ ...base, parts: [{ partNumber: 1, etag: 'nope' }] }).error, 'invalid_etag');
+  assert.equal(parseComplete({ ...base, parts: [] }).error, 'invalid_parts');
+  assert.equal(parseComplete({ ...base, parts: [{ partNumber: 0, etag: 'c'.repeat(32) }] }).error, 'invalid_part_number');
+});
+
+test('合并请求：片序号升序排序，乱序直接报 InvalidPartOrder', () => {
+  const parsed = parseComplete({
+    key: 'incoming/0123456789abcdef.mp4',
+    uploadId: 'u1',
+    parts: [
+      { partNumber: 3, etag: 'c'.repeat(32) },
+      { partNumber: 1, etag: 'a'.repeat(32) },
+      { partNumber: 2, etag: 'b'.repeat(32) },
+    ],
+  });
+  assert.deepEqual(parsed.parts.map((part) => part.PartNumber), [1, 2, 3]);
 });

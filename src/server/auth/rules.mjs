@@ -22,6 +22,27 @@ export const TYPES = {
 export const DEFAULT_ALBUM = '未分类';
 const MAX_ALBUM_LENGTH = 40;
 
+/** S3 硬规矩：除最后一片外，每片不得小于 5MB；总片数不得超过 10000 */
+export const MIN_PART_SIZE = 5 * 1024 * 1024;
+export const MAX_PARTS = 10000;
+
+/**
+ * 要不要走分片，以及切几片。
+ *
+ * 分片不是为了「快点」，是为了让一次失败只丢 8MB 而不是整个 150MB，
+ * 顺便把「把整段视频读进内存再发」这条脆弱路径彻底去掉。
+ *
+ * Multipart is not about speed: it makes a failure cost one 8 MB part instead of
+ * the whole video, and removes the fragile "read the entire file into memory" path.
+ */
+export function multipartPlan(size, { threshold, partSize }) {
+  if (!(size > threshold)) return null;
+  if (partSize < MIN_PART_SIZE) return { error: 'part_too_small' };
+  const parts = Math.ceil(size / partSize);
+  if (parts > MAX_PARTS) return { error: 'too_many_parts', max: MAX_PARTS };
+  return { parts, partSize };
+}
+
 export function extensionOf(name) {
   const match = /\.[a-z0-9]+$/i.exec(String(name || ''));
   return match ? match[0].toLowerCase() : '';
@@ -84,7 +105,47 @@ export function signableHeaderNames(contentType, metadata) {
 }
 
 /**
- * 校验整批文件并给出每个对象的 key 与元数据。
+ * 合并分片的入参校验。
+ *
+ * 这个接口拿着有效令牌就能调，所以 key 必须落在 `incoming/` 且形状和签发时一致，
+ * etag 必须是 S3 的十六进制（可带引号、可带 `-N` 后缀）。否则它会变成
+ * 「指定任意 key 去合并」的洞。
+ *
+ * Validates the merge request. A valid token can call this endpoint, so the key
+ * must look exactly like what we signed and the etags must be real S3 etags.
+ */
+const KEY_RE = /^[a-z0-9-]+\/[0-9a-f]{16}\.[a-z0-9]+$/;
+const ETAG_RE = /^"?[0-9a-f]{32}(-\d+)?"?$/i;
+
+export function parseComplete(body, prefix = 'incoming/') {
+  const key = String(body?.key || '');
+  const uploadId = String(body?.uploadId || '');
+  const list = Array.isArray(body?.parts) ? body.parts : [];
+
+  // 形状对还不够，还必须落在签发时用的前缀里：否则「合并」就成了
+  // 往 photos/ 或者别的任何地方写对象的口子。
+  if (!KEY_RE.test(key) || !key.startsWith(prefix)) return { error: 'invalid_key' };
+  if (!uploadId || uploadId.length > 1024) return { error: 'invalid_upload_id' };
+  if (!list.length || list.length > MAX_PARTS) return { error: 'invalid_parts' };
+
+  const parts = [];
+  for (const item of list) {
+    const partNumber = Number(item?.partNumber);
+    const etag = String(item?.etag || '');
+    if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > MAX_PARTS) {
+      return { error: 'invalid_part_number' };
+    }
+    if (!ETAG_RE.test(etag)) return { error: 'invalid_etag' };
+    parts.push({ PartNumber: partNumber, ETag: etag });
+  }
+  // S3 要求按序号升序，乱序会直接报 InvalidPartOrder
+  parts.sort((left, right) => left.PartNumber - right.PartNumber);
+
+  return { key, uploadId, parts };
+}
+
+/**
+ * 校验整批文件并给出每个对象的 key、体积与元数据。
  *
  * 只要有一个文件不合规就整批拒绝：半个批次成功会让客户端的分批重试变得
  * 难以推理，而重试的代价不过是再点一次。
@@ -125,6 +186,8 @@ export function planFiles(files, { maxFiles, maxImage, maxVideo, prefix, album }
 
     items.push({
       key,
+      // 体积决定「单次 PUT」还是「分片」，所以必须带出来
+      size,
       contentType: spec.contentType,
       metadata: {
         album: Buffer.from(sanitizeAlbum(album), 'utf8').toString('base64url'),

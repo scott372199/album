@@ -5,7 +5,7 @@ import { loadSecrets } from '../lib/params.mjs';
 import { verifySharedKey, DUMMY_HASH } from '../lib/scrypt.mjs';
 import { signToken, verifyToken, subjectFor } from '../lib/token.mjs';
 import { attemptKey, readAttempts, recordFailure, clearAttempts } from './attempts.mjs';
-import { presignUploads } from './upload.mjs';
+import { presignUploads, completeMultipart } from './upload.mjs';
 
 /**
  * 认证函数：一个函数三个路由。
@@ -127,12 +127,39 @@ async function uploadUrl(event) {
   return json(200, { items: result.items });
 }
 
+/**
+ * 合并分片。客户端传上来的是「第几片 + 它的 ETag」，合并本身由本函数完成。
+ * 单独一条路由而不是塞进 /upload-url，是因为它改状态（会在源桶里生成对象），
+ * 语义和「签发地址」不是一件事。
+ *
+ * A separate route from /upload-url because it mutates state: completing a merge
+ * creates the object in the source bucket, unlike merely signing URLs.
+ */
+async function uploadComplete(event) {
+  const claims = await authorize(event);
+  if (!claims) return json(401, { error: 'unauthorized' });
+
+  const body = readJson(event);
+  if (!body) return json(400, { error: 'invalid_request' });
+
+  const result = await completeMultipart(body);
+  if (result.error) {
+    log.warn('upload.complete_rejected', { reason: result.error });
+    return json(400, { error: result.error });
+  }
+
+  log.info('upload.completed', { key: result.key, parts: result.parts });
+  return json(200, { ok: true });
+}
+
 async function dispatch(event) {
   switch (routeKey(event)) {
     case 'POST /auth':
       return login(event);
     case 'POST /upload-url':
       return uploadUrl(event);
+    case 'POST /upload-complete':
+      return uploadComplete(event);
     case 'GET /health':
       return json(200, { ok: true, v: '4' });
     default:

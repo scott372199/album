@@ -328,9 +328,20 @@ function timeoutFor(bytes) {
   return Math.min(MAX_TIMEOUT, MIN_TIMEOUT + mb * 3000);
 }
 
+/**
+ * 一次 PUT。**只接受内存里的字节**（`Uint8Array`），不再把 `File` 直接交给网络栈：
+ * 真机上 `xhr.send(File)` 需要底层拿到 content:// URI 的文件描述符，拿不到就以
+ * 「0 字节 + 0.4 秒」失败；而 `blob.arrayBuffer()` 走的是另一条管道，一直好用。
+ * 单张图片最大 30MB、分片 8MB，内存代价完全可接受。
+ *
+ * Only in-memory bodies. Handing a `File` to the network stack requires a real file
+ * descriptor behind the content:// URI, which the WebView sometimes cannot get —
+ * the failure that showed up as "0 bytes in 0.4 s".
+ *
+ * 成功时 resolve 出 ETag（分片合并要用），失败时 reject 一个带 `sent`/`total` 的错。
+ */
 function put(url, headers, body, onProgress) {
-  // body 可能是 File/Blob（走文件流），也可能是 Uint8Array（走内存）
-  const size = body.size ?? body.byteLength ?? 0;
+  const size = body.byteLength ?? body.size ?? 0;
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     let sent = 0;
@@ -347,17 +358,18 @@ function put(url, headers, body, onProgress) {
     const fail = (error) => {
       error.sent = sent;
       error.total = size;
+      error.url = url;
       reject(error);
     };
     xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.getResponseHeader('etag') || '');
       else fail(httpError(xhr.status));
     };
     xhr.onerror = () => fail(connectionError('连接中断'));
     // 超时说明这条路已经堵了很久，再自动重试只是把等待翻倍；交给「重试失败项」。
     xhr.ontimeout = () => fail(connectionError('上传超时', 0));
     xhr.onabort = () => fail(connectionError('上传被中断'));
-    xhr.send(blob);
+    xhr.send(body);
   });
 }
 
@@ -395,60 +407,105 @@ async function requestUrls(album, entries) {
   });
 }
 
-/** 一个字节都没出去，就把文件读进内存再发；上限按 WebView 的堆给 */
-const MEMORY_FALLBACK_MAX = 180 * 1024 * 1024;
-
 /**
- * 单张上传：失败按 RETRY_DELAYS 退避重试，每次重试前重新取地址。
- * 重签而不是复用旧地址，是为了顺带修掉「403 预签名过期」这一种失败。
+ * 带退避重试地跑一段上传动作。`attempt > 1` 时先等一下再跑，
+ * 具体要重新取地址还是重发同一片，由动作自己决定。
  *
- * 还有一条只在真机上才见得到的路径：**文件明明读得出来，但网络栈发不出去。**
- * `xhr.send(File)` 要求底层能拿到这个 content:// URI 的文件描述符，而
- * `blob.arrayBuffer()` 走的是另一条管道（我们算 sha256 时已经成功读完整份文件）。
- * 所以「0 字节 + 0.4 秒 + 网络正常」这个组合基本只有一个解释：发给网络栈的那条
- * 路拿不到后备数据。这种时候换成内存里的字节再发一次，绕开文件描述符。
- *
- * One retry does something different on purpose: if not a single byte left the
- * device, the file-backed body is the suspect (`blob.arrayBuffer()` already proved
- * the bytes are readable), so the next attempt sends an in-memory copy instead.
+ * Runs one upload action with backoff. What a retry actually re-does (re-sign,
+ * or just resend the same part) is the action's business.
  */
-async function uploadOne(album, entry, first) {
+async function withRetry(entry, label, action) {
   const maxAttempts = 1 + RETRY_DELAYS.length;
-  let item = first;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     if (attempt > 1) {
-      entry.row.set(`重试 ${attempt - 1}`, 0);
+      entry.row.set(`${label} · 重试 ${attempt - 1}`, entry.progress || 0);
       await sleep(RETRY_DELAYS[attempt - 2] + Math.random() * 400);
-      [item] = await requestUrls(album, [entry]);
     }
     const started = Date.now();
     try {
-      const label = attempt === 1 ? '上传中' : `重试 ${attempt - 1}`;
-      const body = entry.bytes || entry.blob;
-      await put(item.url, item.headers, body, (ratio) => entry.row.set(label, ratio));
-      entry.bytes = null;
-      return;
+      return await action(attempt);
     } catch (err) {
       err.ms = Date.now() - started;
       err.tries = attempt;
-      err.url = item.url;
-      // 内存副本只在本次上传期间存在：两三段 150MB 的视频同时留在内存里
-      // 会把 WebView 的堆吃掉，而重读一遍只要一两秒。
-      entry.bytes = null;
       if (!err.retryable) throw err;
       // 超时自带 retries=0，于是不会自动重试
       const allowed = Number.isFinite(err.retries) ? Math.min(maxAttempts, 1 + err.retries) : maxAttempts;
       if (attempt >= allowed) throw err;
-      if (err.sent === 0 && entry.blob.size <= MEMORY_FALLBACK_MAX) {
-        try {
-          entry.bytes = new Uint8Array(await entry.blob.arrayBuffer());
-        } catch {
-          // 读不出来就算了，继续按原来的路径重试
-        }
-      }
     }
   }
+  return undefined;
+}
+
+/** 读一段文件到内存。分片和整发都走这条路——见 put() 的注释。 */
+async function readSlice(blob, start, end) {
+  return new Uint8Array(await blob.slice(start, end).arrayBuffer());
+}
+
+/** 小文件：一次 PUT 发完。 */
+async function uploadWhole(album, entry, first) {
+  let signed = first;
+  await withRetry(entry, '上传', async (attempt) => {
+    if (attempt > 1) [signed] = await requestUrls(album, [entry]);
+    const bytes = await readSlice(entry.blob, 0, entry.blob.size);
+    await put(signed.url, signed.headers, bytes, (ratio) => {
+      entry.progress = ratio;
+      entry.row.set('上传中', ratio);
+    });
+  });
+}
+
+/**
+ * 大文件：逐片上传，最后让服务端合并。
+ *
+ * 每片单独重试，所以一次抖动只损失 8MB，不用把整段视频从头再传一遍；
+ * 内存里同时只有一片（8MB），150MB 的视频也不会撑爆 WebView 的堆。
+ *
+ * Part-by-part with per-part retry: a blip costs 8 MB instead of the whole video,
+ * and only one part is ever in memory.
+ */
+async function uploadParts(entry, signed) {
+  const { key, uploadId, partSize, parts } = signed;
+  const total = entry.blob.size;
+  const etags = [];
+  let uploaded = 0;
+
+  for (const part of parts) {
+    const start = (part.partNumber - 1) * partSize;
+    const end = Math.min(start + partSize, total);
+    const size = end - start;
+
+    await withRetry(entry, `第 ${part.partNumber}/${parts.length} 片`, async () => {
+      const bytes = await readSlice(entry.blob, start, end);
+      const etag = await put(part.url, {}, bytes, (ratio) => {
+        entry.progress = (uploaded + ratio * size) / total;
+        entry.row.set(`上传中 ${part.partNumber}/${parts.length}`, entry.progress);
+      });
+      if (!etag) throw new Error('分片没有返回 ETag');
+      etags.push({ partNumber: part.partNumber, etag });
+    }).catch((err) => {
+      // 让失败文案能说清「挂在哪一片」，而不是只报一个 8MB 的数字
+      err.part = part.partNumber;
+      err.partCount = parts.length;
+      throw err;
+    });
+
+    uploaded += size;
+    entry.progress = uploaded / total;
+    entry.row.set(`上传中 ${part.partNumber}/${parts.length}`, entry.progress);
+  }
+
+  const response = await call('/upload-complete', { key, uploadId, parts: etags });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    // 合并失败不该当成网络错误重试：片已经在 S3 上了，问题出在服务端这一步
+    throw new Error(`${detail.error || '合并分片失败'}（${etags.length}/${parts.length} 片已传完）`);
+  }
+}
+
+async function uploadOne(album, entry, signed) {
+  if (signed.multipart) await uploadParts(entry, signed);
+  else await uploadWhole(album, entry, signed);
 }
 
 function fmtBytes(value) {
@@ -502,12 +559,13 @@ async function failureText(err) {
   const percent = total ? Math.round(((Number(err.sent) || 0) / total) * 100) : 0;
   const elapsed = err.ms ? `${(err.ms / 1000).toFixed(1)}s` : '—';
   const tries = `已重试 ${Math.max(0, (err.tries || 1) - 1)} 次`;
+  const where = err.part ? `第 ${err.part}/${err.partCount} 片 · ` : '';
   const probe = await selfCheck(err.url);
   // 万一以后能接 adb，console 里这份比屏幕上那行更全
   console.warn('upload.failed', {
-    status: err.status, sent: err.sent, total, tries: err.tries, ms: err.ms, probe,
+    status: err.status, sent: err.sent, total, tries: err.tries, ms: err.ms, part: err.part, probe,
   });
-  return `${err.message}（${tries}）· 已发 ${percent}%（${fmtBytes(err.sent)}/${fmtBytes(total)}）· ${elapsed} · ${probe}`;
+  return `${err.message}（${tries}）· ${where}已发 ${percent}%（${fmtBytes(err.sent)}/${fmtBytes(total)}）· ${elapsed} · ${probe}`;
 }
 
 async function run(album, entries) {

@@ -562,4 +562,22 @@ await okAsync('前端引用的元素 id 都存在于模板里', async () => {
   assert.deepEqual([...missing], [], `模板里找不到这些 id：${[...missing].join(', ')}`);
 });
 
+await okAsync('分片上传的两端约定一致', async () => {
+  const client = await readFile(path.join(ROOT, 'src/web/js/upload.js'), 'utf8');
+  const handler = await readFile(path.join(ROOT, 'src/server/auth/handler.mjs'), 'utf8');
+  const upload = await readFile(path.join(ROOT, 'src/server/auth/upload.mjs'), 'utf8');
+  // 客户端拼的路径与服务端 routeKey 必须逐字一致，否则分片传完合并不了，
+  // 而合成失败发生在「片都传上去了」之后，最难查。
+  assert.ok(client.includes("'/upload-complete'"), '客户端应调用 /upload-complete');
+  assert.ok(handler.includes("case 'POST /upload-complete'"), 'handler 应有 POST /upload-complete 路由');
+  // 服务端返回的分片描述字段，客户端必须都用到
+  for (const field of ['multipart', 'uploadId', 'partSize', 'parts']) {
+    assert.ok(upload.includes(field), `服务端应返回 ${field}`);
+    assert.ok(client.includes(field), `客户端应使用 ${field}`);
+  }
+  // 客户端必须把 ETag 带回去合并，否则 CompleteMultipartUpload 会报 InvalidPart
+  assert.ok(client.includes("getResponseHeader('etag')"), '必须读取响应头里的 ETag');
+  assert.ok(client.includes('partNumber'), '合并请求需要 partNumber');
+});
+
 console.log(`--- 全部通过：${checks} 项断言 ---`);
