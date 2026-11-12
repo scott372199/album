@@ -411,13 +411,14 @@ job 结束销毁，上面装过的东西、拉过的镜像层、留下的容器�
 2. **buildx 不需要特权、不需要嵌套虚拟化**：`docker-container` 驱动是在 Docker daemon 里
    再起一个 BuildKit 容器。真正要 KVM 的是「跑 Android 模拟器」，不是编译。
 3. **`ubuntu-latest` 是个会移动的标签**：它正在从 24.04 迁到 26.04（2026-10-19 起，
-   11-19 完成），默认 Java 17→25、Docker 28→29、Node 22→24。要可复现就钉成
-   `ubuntu-24.04`，别用 `-latest`。
+   11-19 完成），默认 Java 17→25、Docker 28→29、Node 22→24。**本项目的决定是保留
+   `-latest`**：单人项目，跟着 GitHub 走省去手动跟进；真因此变红时，改 `runs-on` 一行钉回
+   `ubuntu-24.04` 即可。别把「可变」当成缺陷，要把它当成「需要时能一键冻结」。
 
 *`runs-on` is an ephemeral GitHub-hosted VM, fresh per job and destroyed after. Public repos get
 4 vCPU / 16 GB for free with no minute cap. The image must be built there because a local
-Apple Silicon build is arm64. And `ubuntu-latest` is a moving label — pin `ubuntu-24.04` if you
-want reproducibility.*
+Apple Silicon build is arm64. And `ubuntu-latest` is a moving label — we deliberately keep it
+and will pin `ubuntu-24.04` only if a migration ever breaks a run.*
 
 ### 5.1 用到了哪些能力 / Capabilities
 

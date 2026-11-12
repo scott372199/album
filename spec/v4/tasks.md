@@ -559,3 +559,23 @@ The same mechanism explains why only one of three picked videos ever reached the
 
 `npm run check:repo` 84 个文件通过（新增 4 份文档、删除 1 份）；`npm run verify` 38 项、
 `npm test` 64 项不受影响（断言只读 `src/` 与 `.github/`）。
+
+---
+
+## 9. 关闭 / Closed
+
+**v4 于 2026-11-12 关闭**，标签 **`v4.1`**（`43a6366`，推送后随 `main` 一起上线）。
+
+关闭依据：
+
+| 项 / Item | 状态 / State |
+| --- | --- |
+| spec §9 的 30 项验收 | ✅ 全部有证据（详见 §6.2 覆盖映射） |
+| CP-5 真机验收 | ✅ 三星 / 荣耀 / 小米三台安卓机 + iPad 全部通过 |
+| 断言与测试 | ✅ `verify` 38 项、`npm test` 64 项、`check:repo` 84 文件、infra `make check` 58 项 |
+| 已知遗留 | 无阻塞项。非阻塞的三个决定：① 保持 `ubuntu-latest`（不钉版本，出问题再钉）；② APK 不进 CI（签名私钥只在本机）；③ 安卓「选多个文件只进来一个」的根因修复未做（分片上传已绕开上传侧） |
+
+*v4 closed on 2026-11-12, tagged `v4.1`. All 30 acceptance items have evidence, CP-5 passed on
+three Android devices plus iPad, and no blocking issue remains. Three accepted non-blocking
+decisions: keep `ubuntu-latest`, keep the APK out of CI, and leave the multi-file picker bug
+unfixed since slicing already routes around it.*
