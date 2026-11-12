@@ -252,7 +252,18 @@ async function main() {
   await rm(path.join(DIST, 'data'), { recursive: true, force: true });
   await mkdir(path.join(DIST, 'assets'), { recursive: true });
   await mkdir(path.join(DIST, 'data'), { recursive: true });
-  await mkdir(path.join(DIST, 'photos'), { recursive: true });
+
+  // web 目标**不**产出照片目录：产物里只要出现 photos/，发布流水线就会判定
+  // 「这是全量构建」并拒绝发布（见 deploy-web.yml 的守卫）。空目录同样会触发，
+  // 所以这里顺手把上一轮 all 构建留下的目录也清掉。
+  // The web target must not produce a photos/ directory: the deploy workflow
+  // refuses to publish when one exists, assuming a full build. An empty dir
+  // trips it too, so clear whatever a previous all-build left behind.
+  if (TARGET === 'all') {
+    await mkdir(path.join(DIST, 'photos'), { recursive: true });
+  } else {
+    await rm(path.join(DIST, 'photos'), { recursive: true, force: true });
+  }
 
   const entries = [];
   const report = {

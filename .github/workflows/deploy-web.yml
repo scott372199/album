@@ -76,13 +76,20 @@ jobs:
       - name: 确认是「只发代码」的产物 / Assert web-only output
         run: |
           set -euo pipefail
-          test -f dist/index.html
-          test -d dist/assets
-          # 产物里不应出现照片目录；出现了说明误用了 build（--target=all）
-          if [ -d dist/photos ]; then
-            echo "::error::dist/photos 存在，说明跑的是全量构建，拒绝发布"
+          test -f dist/index.html || { echo "::error::dist/index.html 缺失，构建没跑成功"; exit 1; }
+          test -d dist/assets   || { echo "::error::dist/assets 缺失，构建没跑成功"; exit 1; }
+          # 产物里出现照片文件说明跑的是全量构建（--target=all），拒绝发布。
+          # 只判「目录非空」而不是「目录存在」：web 目标本来就不建这个目录，
+          # 万一某个工具留了个空目录，也不该因此挡住发布。
+          # A non-empty photos/ means a full build (--target=all) was run: refuse.
+          # We check for files, not the directory itself — an empty leftover dir
+          # is harmless and must not block a legitimate deploy.
+          if [ -n "$(ls -A dist/photos 2>/dev/null || true)" ]; then
+            echo "::error::dist/photos 里有文件，说明跑的是全量构建，拒绝发布"
+            ls -A dist/photos | head -20
             exit 1
           fi
+          echo "产物：index.html + assets/（$(ls dist/assets | wc -l | tr -d ' ') 项），无照片目录"
 
       # 配置缺失要在这一步就说清楚。否则后面 aws 命令会报一个
       # 「s3:///assets/ 不是合法路径」之类的错，看日志的人得猜半天。
