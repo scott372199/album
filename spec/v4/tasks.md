@@ -184,6 +184,20 @@ P7 收尾  T-29 → T-30 → T-31
 - **验收 / Done when**：端到端一张照片上线且无 EXIF；**源桶中该对象已被删除**（`list-object-versions` 无历史版本）；失败路径进 DLQ
 - **追溯 / Traces to**：spec §9-B7/B10/B13、plan §7.3
 - **检查点 / Checkpoint**：**CP-4**
+- **状态 / Status**：✅ 完成。实测记录（2026-11-12）：
+  1. `/auth` 正确手机号 + 正确共享密钥 → 200，签发 token/refresh（同时反证 scrypt 哈希正确）。
+  2. `/upload-url` → 200，key `incoming/fba962909b54.jpg`，返回 heads 含 `content-type` 与三个 `x-amz-meta-*`。
+  3. 直传 `PUT` → **200**；59548 B / 1600×1200。
+  4. 处理函数 22 秒内完成：`photos/fba962909b54/{thumb,grid,view}.webp` + 清单新增该条 + 指针换到 `rev f9b170920546`。
+  5. 线上 `data/version.json` 与页面都变成新版本（21 张 → 22 张）。
+  6. 落地图 `view.webp` 里 `exif / icc / xmp / iptc` 全为 false（原图有 Make/Model）。
+  7. `list-object-versions` 对源 key 只返回裸前缀，**没有任何版本**——原图确实删了。
+  8. 失败路径：直接传一个 4100 B 的假 jpg → 日志 `VipsJpeg: premature end of JPEG image` → 两次重试后 DLQ 收到 1 条（`MaximumRetryAttempts=2`）。
+  9. 联调结束后已把测试照与坏文件清掉，指针退回 `rev 3029e93a`，线上回到 21 张。
+- **实施偏差 / Deviations**：
+  1. **预签名必须同时传 `signableHeaders` 与 `unhoistableHeaders`**（本任务最大的坑）。只写 `Metadata` 时 SDK 会把这些头 hoist 到查询串，`X-Amz-SignedHeaders` 只剩 `host`；只加 `signableHeaders` 也只到 `content-type;host`——客户端照常把元数据放在请求头里发出去，S3 就回 `403 headers not signed`。两者都传才是 `content-type;host;x-amz-meta-album;x-amz-meta-sha256;x-amz-meta-taken-at`。
+  2. **签名规则放进 `rules.mjs`**（`signableHeaderNames` / `metadataHeaderNames`）而不是 `upload.mjs`：那里不 import AWS SDK，才能在只有 sharp/exifr 的开发环境里单测。
+  3. **串行化靠清单指针的条件写**，不是预留并发（见 T-16 偏差 1）。
 
 ### P5 · 前端
 
@@ -225,11 +239,12 @@ P7 收尾  T-29 → T-30 → T-31
 - **验收 / Done when**：改一行样式合并后 5 分钟内线上生效；故意破坏构建则流水线失败且线上仍是旧版
 - **追溯 / Traces to**：FR-24.9.1/24.9.3、spec §9-D22
 - **坑 / Pitfall**：`--exclude` 会影响 `--delete` 判定，两段式顺序不能颠倒（v3 已踩）
-- **状态 / Status**：✅ 代码完成（`.github/workflows/deploy-web.yml`）。
+- **状态 / Status**：✅ 完成，**已真实跑通一次**（2026-11-12 `e3b7e7d`：assets 与 index.html 双前缀同步 + 失效成功，线上 `index.html` 由 11-10 的旧版换成本次构建）。
 - **实施偏差 / Deviations**：
   1. **绝不碰桶根**：只 sync `dist/assets/`（可 `--delete`）+ 单传 `index.html`；`photos/` 与 `data/` 完全不碰。v3 的根级 `sync --delete` 在 v4 会删光线上照片。
   2. **只失效 `/index.html`**：前端发布没改 `data/version.json`，它归处理函数管。
   3. **`verify` 挪到构建之后**：`verify.mjs` 校验的是 `dist/` 产物，没有产物先跑就是空转失败（本次顺带修掉 `verify.mjs` 只认全量构建清单名的缺陷）。
+  4. **产物守卫改判「目录非空」**：`build.mjs` 原先无条件 `mkdir dist/photos`，`--target=web` 也会留个空目录，守卫据此判成「全量构建」并拒绝发布——流水线连续失败两次，线上入口页一直停在 11-10。现在 web 目标不建该目录（还会清掉上一轮残留），守卫也只拦「目录里有文件」。
 
 ### P6 · 安卓客户端
 
@@ -388,13 +403,13 @@ P7 收尾  T-29 → T-30 → T-31
 | T-01 ~ T-11 基础设施四层 / Infra layers | ✅ 完成 / Done | `album-infra` 已 apply 且四层 `plan` 归零 |
 | T-12 ~ T-15 服务端函数 / Server handlers | ✅ 完成 / Done | 一镜像两入口，40 项单测 |
 | T-16、T-17 第二段 / Compute wiring | ✅ 完成 / Done | 22 项资源已建；未用预留并发（账号并发仅 50） |
-| T-18 联调 / Integration | ⏳ 未开始 / Not started | 依赖 T-17 |
+| T-18 联调 / Integration | ✅ 完成 / Done | **CP-4 通过**：直传 200 → 22 秒后上线 → 源对象无历史版本 → 损坏文件两次重试后进 DLQ |
 | T-19、T-20 前端改造 / Web rework | ✅ 完成 / Done | 编辑式栅格 + 视频 |
-| T-21 ~ T-23 上传与发布 / Upload & deploy | ✅ 完成 / Done | 38 项断言；上传 UI 只在原生壳里出现 |
+| T-21 ~ T-23 上传与发布 / Upload & deploy | ✅ 完成 / Done | 46 项断言；上传 UI 只在原生壳里出现；`deploy-web` 已真实跑通一次 |
 | T-24 ~ T-26 安卓客户端 / Android shell | ✅ 代码完成 / Coded | `assembleDebug` / `assembleRelease` 均通过，真机待 T-28 |
 | T-27 签名与发布 / Signing | ✅ 完成 / Done | 签名包已发 downloads 桶，三处 sha256 一致 |
 | T-28 真机验收 / Device acceptance | ⏳ 未开始 / Not started | **CP-5**，需要你手持设备 |
-| T-29 断言扩充 / Extend verify | ✅ 完成 / Done | 45 项断言 |
+| T-29 断言扩充 / Extend verify | ✅ 完成 / Done | 46 项断言 |
 | T-30 ~ T-31 收尾 / Wrap-up | ⏳ 未开始 / Not started | 清理旧部署脚本、全量验收 |
 
 ### 6.1 关键数字 / Key numbers（待填）
@@ -403,6 +418,6 @@ P7 收尾  T-29 → T-30 → T-31
 | --- | --- |
 | 镜像体积 / Image size | — |
 | 单层 plan 耗时 / Plan duration per layer | — |
-| 照片端到端耗时 / Photo end-to-end latency | — |
+| 照片端到端耗时 / Photo end-to-end latency | 约 22 秒（59548 B / 1600×1200 直传完成后到 CDN 可见） |
 | 视频端到端耗时 / Video end-to-end latency | — |
 | 月成本实测 / Measured monthly cost | — |
