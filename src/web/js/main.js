@@ -7,7 +7,9 @@ import { initWall, enterWall, exitWall, isWallOpen } from './wall.js';
 import { initMotion, photoTransition } from './motion.js';
 import { installBackBridge } from './native.js';
 import { initUpload } from './upload.js';
-import { el, toast, formatSpan, photoAlt } from './ui.js';
+import {
+  el, toast, formatSpan, photoAlt, srcsetFor, sizesFor, reducedMotion,
+} from './ui.js';
 
 const DEFAULT_SUBTITLE = '按时间、相册与标签，重新翻阅这些瞬间。';
 
@@ -18,6 +20,8 @@ const ctx = {
   lastHash: null,
   rev: '',
   scrollBeforeMode: 0,
+  heroIndex: 0,
+  heroTimer: null,
 };
 
 function manifestRev(url) {
@@ -29,15 +33,24 @@ function manifestRev(url) {
 
 function renderHero() {
   const { photos, hero } = ctx.index;
-  const photo = photos.find((item) => item.id === hero) || photos[0];
+  const sections = ctx.index.heroSections.length
+    ? ctx.index.heroSections
+    : [{ photo: hero, eyebrow: `PHOTO ARCHIVE · ${photos.length} 个瞬间` }];
+  const section = sections[ctx.heroIndex % sections.length];
+  const photo = photos.find((item) => item.id === section.photo) || photos[0];
   const media = el('hero-media');
   const title = el('site-title');
   const subtitle = el('site-subtitle');
   const eyebrow = el('hero-eyebrow');
+  const cta = el('hero-cta');
 
-  title.textContent = state.data?.site?.title || '个人相册';
-  const sub = state.data?.site?.subtitle || '';
+  title.textContent = section.title || state.data?.site?.title || 'PHOTO ARCHIVE';
+  const sub = section.subtitle || state.data?.site?.subtitle || '';
   subtitle.textContent = sub || DEFAULT_SUBTITLE;
+  eyebrow.textContent = section.eyebrow || 'PHOTO ARCHIVE';
+  cta.hidden = !section.cta;
+  cta.textContent = section.cta || '';
+  cta.href = section.target || '#catalog';
 
   if (!photo) {
     media.removeAttribute('src');
@@ -45,13 +58,52 @@ function renderHero() {
     document.body.classList.add('is-empty');
     return;
   }
+  media.classList.toggle('is-switching', !reducedMotion.matches);
+  media.srcset = srcsetFor(photo, 'feature');
+  media.sizes = sizesFor('feature');
+  const revealHero = () => media.classList.remove('is-switching');
+  media.addEventListener('load', revealHero, { once: true });
   media.src = photo.view || photo.grid || photo.poster;
   media.alt = photoAlt(photo);
-  eyebrow.textContent = `PHOTO ARCHIVE · ${photos.length} 个瞬间`;
+  if (media.complete && media.naturalWidth > 0) revealHero();
+  preloadHeroSections(sections, ctx.heroIndex);
 
   // 舞台高度跟着照片比例走（D-01：满幅宽度 + 按比例算高度，不裁切）
   const ratio = Number(photo.ratio);
   document.querySelector('.hero')?.style.setProperty('--hero-ratio', String(Number.isFinite(ratio) && ratio > 0 ? ratio : 1.5));
+}
+
+function preloadHeroSections(sections, index) {
+  for (const offset of [0, 1]) {
+    const section = sections[(index + offset) % sections.length];
+    const photo = ctx.index.photos.find((item) => item.id === section.photo);
+    if (!photo) continue;
+    const image = new Image();
+    image.srcset = srcsetFor(photo, 'feature');
+    image.sizes = sizesFor('feature');
+    image.src = photo.view || photo.grid || photo.poster;
+  }
+}
+
+function shouldRotateHero() {
+  return !reducedMotion.matches
+    && !navigator.connection?.saveData
+    && !(Number(navigator.hardwareConcurrency) > 0 && navigator.hardwareConcurrency <= 2);
+}
+
+function startHeroRotation() {
+  clearTimeout(ctx.heroTimer);
+  const sections = ctx.index?.heroSections || [];
+  if (sections.length < 2 || !shouldRotateHero()) return;
+  const nextDuration = () => Math.max(3000, Number(sections[ctx.heroIndex]?.duration) || 6500);
+  const schedule = () => {
+    ctx.heroTimer = setTimeout(() => {
+      ctx.heroIndex = (ctx.heroIndex + 1) % sections.length;
+      renderHero();
+      schedule();
+    }, nextDuration());
+  };
+  schedule();
 }
 
 function renderStats() {
@@ -73,7 +125,9 @@ function featuredPhotos() {
 }
 
 function renderSite() {
+  ctx.heroIndex = 0;
   renderHero();
+  startHeroRotation();
   renderStats();
 
   const featured = featuredPhotos();
@@ -115,6 +169,59 @@ function syncControlValues() {
   el('clear').hidden = !hasFilter;
 }
 
+function renderSearchTools() {
+  const suggestions = [...new Set([
+    ...ctx.index.tags,
+    ...ctx.index.photos.map((photo) => photo.title).filter(Boolean),
+  ])].slice(0, 8);
+  const renderChips = (host, values, onSelect, formatter = (value) => value) => {
+    host.replaceChildren();
+    for (const value of values) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'search-chip';
+      button.textContent = formatter(value);
+      button.addEventListener('click', () => onSelect(value));
+      host.appendChild(button);
+    }
+  };
+  renderChips(el('search-suggestions'), suggestions, (value) => {
+    state.q = value;
+    refresh();
+    syncUrl(true);
+    el('q').focus();
+  });
+  renderChips(el('search-years'), ctx.index.years.slice(0, 5), (value) => {
+    state.q = '';
+    state.year = String(value);
+    refresh();
+    syncUrl(true);
+  }, (value) => `${value} 年`);
+}
+
+function renderSearchStatus() {
+  const node = el('search-status');
+  const query = state.q.trim();
+  const hasFilter = Boolean(query || state.tag || state.year || state.month);
+  if (!hasFilter) {
+    node.textContent = '支持照片标题、标签、相册和年份；搜索服务不可用时仍可使用基础筛选。';
+    node.classList.remove('is-empty', 'is-error');
+    return;
+  }
+  const count = state.filtered.length;
+  if (!count) {
+    node.textContent = query
+      ? `没有找到“${query}”。可以尝试标签、相册名或年份。`
+      : '没有符合条件的照片，请调整筛选条件。';
+    node.classList.add('is-empty');
+    node.classList.remove('is-error');
+    return;
+  }
+  const source = query ? '本地基础筛选' : '基础筛选';
+  node.textContent = `找到 ${count} 张照片 · ${source}`;
+  node.classList.remove('is-empty', 'is-error');
+}
+
 /* ---------- 渲染 ---------- */
 
 function applyView() {
@@ -146,6 +253,7 @@ function refresh() {
 
   applyView();
   syncControlValues();
+  renderSearchStatus();
 
   if (state.view === 'album' && !state.album) return;
   ctx.catalog.update(state.filtered, { reset: true });
@@ -379,12 +487,15 @@ function goBack() {
 /* ---------- 启动 ---------- */
 
 async function boot() {
+  el('search-status').textContent = '正在载入照片清单…';
   // 先取 version.json 再取清单：前端产物不再包含任何清单地址
   // Fetch version.json first; the shell no longer embeds a manifest URL
   let source;
   try {
     source = await resolveManifest();
   } catch (err) {
+    el('search-status').textContent = '照片清单载入失败，基础筛选暂不可用，请刷新重试。';
+    el('search-status').classList.add('is-error');
     toast('照片清单载入失败，请刷新重试');
     console.error(err);
     return;
@@ -397,6 +508,8 @@ async function boot() {
   try {
     manifest = await loadManifest(url);
   } catch (err) {
+    el('search-status').textContent = '照片清单载入失败，基础筛选暂不可用，请刷新重试。';
+    el('search-status').classList.add('is-error');
     toast('照片清单载入失败，请刷新重试');
     console.error(err);
     return;
@@ -423,6 +536,7 @@ async function boot() {
   initMotion();
 
   fillFilters();
+  renderSearchTools();
   renderSite();
   wire();
   // 安卓壳通过它决定返回键是关内层还是退出 Activity

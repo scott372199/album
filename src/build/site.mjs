@@ -2,9 +2,10 @@ import { readFile } from 'node:fs/promises';
 
 /** site.json 的缺省值：不配置也能构建出一个合理的站点 */
 export const DEFAULT_SITE = {
-  title: '个人相册',
+  title: 'PHOTO ARCHIVE',
   subtitle: '',
   hero: 'latest-landscape',
+  heroSections: [],
   featured: [],
   wall: { interval: 10, clock: true, night: { from: '22:00', to: '07:00' } },
   story: { pace: 'normal' },
@@ -23,6 +24,23 @@ function asString(value, fallback) {
 
 function asBoolean(value, fallback) {
   return typeof value === 'boolean' ? value : fallback;
+}
+
+function heroSection(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const photo = asString(value.photo, '');
+  if (!photo) return null;
+  return {
+    photo,
+    eyebrow: asString(value.eyebrow, 'PHOTO ARCHIVE'),
+    title: asString(value.title, ''),
+    subtitle: typeof value.subtitle === 'string' ? value.subtitle.slice(0, 240) : '',
+    cta: asString(value.cta, ''),
+    target: asString(value.target, '#catalog'),
+    duration: Number.isFinite(Number(value.duration))
+      ? Math.min(15000, Math.max(3000, Number(value.duration)))
+      : 6500,
+  };
 }
 
 /**
@@ -53,6 +71,9 @@ export async function loadSite(file, warn = console.warn) {
     title: asString(raw.title, DEFAULT_SITE.title),
     subtitle: typeof raw.subtitle === 'string' ? raw.subtitle : '',
     hero: asString(raw.hero, DEFAULT_SITE.hero),
+    heroSections: Array.isArray(raw.heroSections)
+      ? raw.heroSections.map(heroSection).filter(Boolean).slice(0, 8)
+      : [...DEFAULT_SITE.heroSections],
     featured: Array.isArray(raw.featured)
       ? raw.featured.filter((item) => typeof item === 'string' && item.trim()).map((s) => s.trim())
       : [...DEFAULT_SITE.featured],
@@ -84,6 +105,46 @@ export function resolveHero(site, photos) {
   }
   const landscape = photos.find((p) => p.ratio >= 1.2);
   return (landscape || photos[0]).id;
+}
+
+function resolveHeroPhoto(token, photos, fallback) {
+  if (token && token !== 'latest-landscape') {
+    const exact = photos.find((photo) => photo.id === token);
+    if (exact) return exact;
+  }
+  return fallback || photos.find((photo) => photo.ratio >= 1.2) || photos[0];
+}
+
+/**
+ * 解析首页动态大图区块。没有显式配置时，从最新横图生成最多三个区块，
+ * 让旧 site.json 自动获得轮播，同时保持旧 manifest 可回退。
+ */
+export function resolveHeroSections(site, photos, { hero = '' } = {}) {
+  if (!photos.length) return [];
+  const fallback = photos.find((photo) => photo.id === hero) || photos[0];
+  const configured = (site.heroSections || [])
+    .map((section) => {
+      const photo = resolveHeroPhoto(section.photo, photos, fallback);
+      if (!photo) return null;
+      return { ...section, photo: photo.id };
+    })
+    .filter(Boolean);
+  if (configured.length) return configured;
+
+  return photos
+    .filter((photo) => photo.ratio >= 1.2)
+    .slice(0, 3)
+    .concat(photos.filter((photo) => photo.ratio < 1.2).slice(0, 3))
+    .slice(0, 3)
+    .map((photo, index) => ({
+      photo: photo.id,
+      eyebrow: `PHOTO ARCHIVE · ${index + 1}`,
+      title: site.title,
+      subtitle: site.subtitle || '',
+      cta: '',
+      target: '#catalog',
+      duration: 6500,
+    }));
 }
 
 /**
