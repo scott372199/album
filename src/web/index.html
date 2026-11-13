@@ -17,7 +17,7 @@
 
   <nav class="site-nav" aria-label="主导航">
     <div class="nav-inner">
-      <a class="brand" href="#top">__TITLE__</a>
+      <a class="brand" href="#top">PHOTO ARCHIVE</a>
       <div class="tabs" role="tablist" aria-label="视图">
         <button type="button" class="tab is-active" data-view="timeline" role="tab" aria-selected="true">时间轴</button>
         <button type="button" class="tab" data-view="album" role="tab" aria-selected="false">相册</button>
@@ -28,7 +28,7 @@
         <button type="button" class="nav-action" id="open-upload" hidden>上传</button>
         <label class="nav-search">
           <span class="sr-only">搜索照片</span>
-          <input id="q" type="search" placeholder="搜索" autocomplete="off" aria-label="搜索照片">
+          <input id="q" type="search" placeholder="搜索照片、标签或年份" autocomplete="off" aria-label="搜索照片">
         </label>
       </div>
     </div>
@@ -42,6 +42,7 @@
         <p class="eyebrow" id="hero-eyebrow">PHOTO ARCHIVE</p>
         <h1 id="site-title">__TITLE__</h1>
         <p class="hero-subtitle" id="site-subtitle"></p>
+        <a class="hero-cta" id="hero-cta" href="#catalog" hidden></a>
       </div>
       <div class="hero-hint" aria-hidden="true">
         <span class="hero-hint-line"></span>
@@ -87,6 +88,13 @@
           <button type="button" id="clear" class="clear" hidden>清除筛选</button>
         </div>
       </div>
+      <div class="search-tools" aria-label="搜索建议">
+        <span class="search-tools-label">试试</span>
+        <div id="search-suggestions" class="search-chips"></div>
+        <span class="search-tools-label">时间</span>
+        <div id="search-years" class="search-chips"></div>
+      </div>
+      <p id="search-status" class="search-status" role="status" aria-live="polite"></p>
 
       <div id="content" class="content"></div>
       <div id="sentinel" class="sentinel" aria-hidden="true"></div>
