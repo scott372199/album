@@ -306,7 +306,12 @@ P7 Acceptance       T-30 → T-31 → T-32
   CODEOWNERS/环境保护。
 - **验收 / Done when**：无审批 PR 无法合并；规则不会意外授予 fork PR 云权限。
 - **追溯 / Traces to**：FR-06、Plan §7。
-- **状态 / Status**：⏳ 未开始 / Not started — 四个仓库均无分支保护与 required checks。 *No branch protection or required checks anywhere.*
+- **状态 / Status**：✅ 完成 / Done — 四个仓库已建 `main-governance-v5` ruleset（禁止删除/force push、
+  PR + 1 人工审批、required checks：album「单测 / unit tests」、album-infra「lint」、album-mgmt「image」）。
+  三个 v5 PR 当前均 BLOCKED 于 REVIEW_REQUIRED，即验收条件本身。合并（merge to main）仍由主人手动执行。
+  *Rulesets `main-governance-v5` created in all four repos (deletion/force-push blocked, PR + 1 human
+  approval, required checks per repo). All three v5 PRs are BLOCKED on review only — the acceptance
+  criterion itself. Actual merges remain a manual owner action.*
 
 #### T-28 GPT code review / 接入 GPT code review
 
@@ -315,7 +320,14 @@ P7 Acceptance       T-30 → T-31 → T-32
   timeout/failure 默认阻断，管理员 override 留审计。
 - **验收 / Done when**：真实测试 PR 有 review/check；secret、原图、state 不会进入 review context。
 - **追溯 / Traces to**：FR-06、Plan §7.2。
-- **状态 / Status**：⏳ 未开始 / Not started — 无 review workflow，也无 required check。 *No review workflow, no required check.*
+- **状态 / Status**：🔶 部分完成 / Partial — 尝试经 ruleset REST API 传
+  `automatic_copilot_code_review_enabled: true`，GitHub 返回时已静默剥离（当前 REST API 不接受）。
+  兜底：在 UI 上为各仓库 ruleset 勾选 Copilot code review，或 PR 页 Reviewers → Copilot 手动请求。
+  规则集其余部分（审批 + required checks）已生效并阻断合并。
+  *Attempted `automatic_copilot_code_review_enabled` via the ruleset API; GitHub silently stripped
+  the field (not accepted by REST today). Fallback: enable Copilot code review on each ruleset in the
+  UI, or request it per-PR under Reviewers → Copilot. The rest of the ruleset (approval + required
+  checks) is active and blocking.*
 
 #### T-29 Merge-to-main CI/CD / 验证合并后流水线
 
