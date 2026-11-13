@@ -112,7 +112,7 @@ function photoRecord(entry, extra, isFeatured) {
  * 生成 manifest。字段严格白名单：
  * 不含原始文件名、源路径、GPS、序列号、拍摄具体时刻、EXIF 原文。
  */
-export function buildManifest({ entries, site, overrides, hero, featured }) {
+export function buildManifest({ entries, site, overrides, hero, featured, heroSections }) {
   const photos = entries.map((entry) => {
     const extra = overrides.get(entry.id) || overrides.get(entry.rel) || {};
     return photoRecord(entry, extra, featured.has(entry.id));
@@ -141,6 +141,9 @@ export function buildManifest({ entries, site, overrides, hero, featured }) {
     wall: site.wall,
     story: site.story,
     hero: hero || '',
+    // V5：数据驱动的 hero 章节；缺省为空数组，运行时按需自动生成最多三个。
+    // V5: data-driven hero sections; empty by default, the runtime auto-builds up to three.
+    heroSections: Array.isArray(heroSections) ? heroSections : [],
     photos,
     albums: [...albumMap.values()],
   };

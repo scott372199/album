@@ -1706,3 +1706,223 @@ body.is-uploading { overflow: hidden; }
   color: var(--accent);
 }
 .upload-link--retry[hidden] { display: none; }
+
+/* ==========================================================================
+   V5 前端体验 / V5 frontend experience
+   Apple 式极简：强留白、清晰层级、大图叙事；只捕捉设计原则，不复制素材。
+   Apple-inspired minimalism: generous whitespace, clear hierarchy and large
+   image storytelling — principles only, no third-party assets or copy.
+   ========================================================================== */
+
+/* ---------- V5.1 导航与搜索面板 ---------- */
+
+.nav-inner { gap: clamp(20px, 3vw, 40px); }
+.brand { font-size: 17px; letter-spacing: -0.03em; }
+
+.nav-search-wrap { position: relative; }
+
+.search-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 80;
+  width: min(360px, 88vw);
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: var(--shadow-lift);
+}
+
+.search-panel-title {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.search-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.search-suggestion,
+.search-chip {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper-2);
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.24s var(--ease), border-color 0.24s var(--ease), transform 0.24s var(--ease);
+}
+.search-suggestion:hover,
+.search-chip:hover { background: #fff; border-color: var(--accent); transform: translateY(-1px); }
+.search-suggestion:focus-visible,
+.search-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.search-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.search-chip { background: transparent; color: var(--ink-2); }
+
+.search-status {
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.search-status[data-tone="warn"] { color: #9a5b00; }
+
+.search-explain { margin: 8px 0 0; font-size: 12px; color: var(--ink-3); }
+
+.search-retry {
+  margin-top: 14px;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+.search-retry:hover { background: #0058b0; }
+
+.search-empty {
+  max-width: 1600px;
+  margin: 0 auto 12px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: var(--paper-2);
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ---------- V5.2 Hero 章节与控件 ---------- */
+
+/* 图片加载前也不是一片空白：深色径向底 + contain 不裁切。
+   Not blank before the image loads: a dark radial stage, still contain-only. */
+.hero-stage {
+  background: radial-gradient(130% 90% at 50% 8%, #2b2b32 0%, var(--stage) 72%);
+}
+.hero-media--next { opacity: 0; pointer-events: none; }
+
+.hero-copy { padding-bottom: clamp(36px, 5vw, 88px); }
+.hero-copy h1 { letter-spacing: -0.055em; }
+
+.hero-cta {
+  display: inline-block;
+  margin-top: 26px;
+  padding: 12px 26px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: transform 0.24s var(--ease), background 0.24s var(--ease);
+}
+.hero-cta:hover { transform: translateY(-2px); background: #f2f2f4; }
+body.is-empty .hero-cta { display: none; }
+
+.hero-controls {
+  position: absolute;
+  right: clamp(20px, 3vw, 44px);
+  top: 50%;
+  z-index: 4;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.hero-arrow {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.24s var(--ease), transform 0.24s var(--ease);
+}
+.hero-arrow:hover { background: rgba(0, 0, 0, 0.55); transform: scale(1.06); }
+.hero-dots { display: flex; flex-direction: column; gap: 9px; }
+.hero-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  transition: background 0.24s var(--ease), transform 0.24s var(--ease);
+}
+.hero-dot.is-active { background: #fff; transform: scale(1.3); }
+
+/* View Transitions 可用时给大图一个克制的交叠；不支持时内容直接可见。
+   A restrained crossfade when View Transitions exist; otherwise static. */
+::view-transition-old(hero-media),
+::view-transition-new(hero-media) {
+  animation-duration: 0.5s;
+  animation-timing-function: var(--ease);
+}
+
+@media (max-width: 768px) {
+  .hero-controls {
+    top: auto;
+    bottom: 16px;
+    right: 16px;
+    flex-direction: row;
+    transform: none;
+    gap: 10px;
+  }
+  .hero-dots { flex-direction: row; }
+  .hero-hint { display: none; }
+  .search-panel { right: -8px; width: min(340px, 92vw); }
+}
+
+/* ---------- V5.3 上传五态图例 ---------- */
+
+.upload-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+.upload-badge {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.upload-badge.is-queued { border-color: var(--line); }
+.upload-badge.is-uploading { border-color: var(--accent); color: var(--accent); }
+.upload-badge.is-processing { border-color: #c98a2b; color: #9a5b00; }
+.upload-badge.is-published { border-color: #2f9e5f; color: #2f9e5f; }
+.upload-badge.is-failed { border-color: #c0392b; color: #c0392b; }
+
+.upload-row[data-state="queued"] .upload-row-status { color: var(--ink-3); }
+.upload-row[data-state="uploading"] .upload-row-status { color: var(--accent); }
+.upload-row[data-state="processing"] .upload-row-status { color: #9a5b00; }
+.upload-row[data-state="published"] .upload-row-status { color: #2f9e5f; }
+.upload-row[data-state="failed"] .upload-row-status { color: #c0392b; }
+
+/* ---------- V5.4 减少动效：hero 与搜索控件一并静态化 ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-media,
+  .hero-cta,
+  .hero-arrow,
+  .hero-dot,
+  .search-suggestion,
+  .search-chip { transition: none !important; animation: none !important; }
+  ::view-transition-old(hero-media),
+  ::view-transition-new(hero-media) { animation: none !important; }
+}

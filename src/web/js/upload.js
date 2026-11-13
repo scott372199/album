@@ -1,5 +1,6 @@
 import { el, toast } from './ui.js';
 import { hasNativeBridge } from './native.js';
+import { labelFor } from './upload-state.js';
 
 /**
  * 上传面板：登录 → 选图 → 直传 S3。
@@ -247,7 +248,7 @@ function makeRow(name) {
 
   const status = document.createElement('span');
   status.className = 'upload-row-status';
-  status.textContent = '准备中';
+  status.textContent = labelFor('queued');
 
   const bar = document.createElement('span');
   bar.className = 'upload-row-bar';
@@ -256,25 +257,38 @@ function makeRow(name) {
   bar.appendChild(fill);
 
   item.append(label, status, bar);
+  item.dataset.state = 'queued';
   el('upload-list').appendChild(item);
 
+  // 五态只影响展示与 data-state；下方所有上传 / 分片逻辑保持 v4 原样。
+  // The five states affect presentation only; every upload / multipart routine
+  // below is left byte-for-byte as accepted in v4.
   return {
     item,
-    set(text, ratio) {
+    set(text, ratio, state = null) {
       status.textContent = text;
+      item.dataset.state = state
+        || (String(text).startsWith(labelFor('uploading')) ? 'uploading' : item.dataset.state || 'queued');
       fill.style.width = `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
     },
     done() {
       item.classList.add('is-done');
-      this.set('已上传', 1);
+      item.dataset.state = 'published';
+      this.set(labelFor('published'), 1, 'published');
     },
     fail(reason) {
       item.classList.add('is-failed');
-      this.set(reason, 1);
+      item.dataset.state = 'failed';
+      this.set(reason, 1, 'failed');
     },
     reset() {
       item.classList.remove('is-done', 'is-failed');
-      this.set('准备中', 0);
+      item.dataset.state = 'queued';
+      this.set(labelFor('queued'), 0, 'queued');
+    },
+    processing() {
+      item.dataset.state = 'processing';
+      this.set(labelFor('processing'), 1, 'processing');
     },
   };
 }

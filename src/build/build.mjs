@@ -7,7 +7,7 @@ import { scanPhotos } from './scan.mjs';
 import { readTakenAt } from './exif.mjs';
 import { processEntry } from './media.mjs';
 import { buildManifest, loadTagOverrides } from './manifest.mjs';
-import { loadSite, resolveHero, resolveFeatured } from './site.mjs';
+import { loadSite, resolveHero, resolveFeatured, resolveHeroSections } from './site.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const PHOTOS = path.join(ROOT, 'photos');
@@ -288,7 +288,8 @@ async function main() {
 
   const hero = resolveHero(SITE, entries);
   const featured = resolveFeatured(SITE, entries, { hero });
-  const manifest = buildManifest({ entries, site: SITE, overrides, hero, featured });
+  const heroSections = resolveHeroSections(SITE.heroSections, entries);
+  const manifest = buildManifest({ entries, site: SITE, overrides, hero, featured, heroSections });
   const manifestJson = JSON.stringify(manifest);
 
   // all：内容哈希命名，可放心长缓存。
