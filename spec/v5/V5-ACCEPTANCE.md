@@ -7,8 +7,8 @@
 
 | Success criterion | Status | Evidence / blocker |
 | --- | --- | --- |
-| Apple-style responsive home, hero chapters, accessible motion | **Partial** | The photo site has the navigation, hero, story and photo-wall implementation. Browser acceptance on the real photo set is still required. |
-| Natural-language semantic image search | **Partial** | Query parsing and local tag fallback exist for `湖水`, `山峰`, `蓝天`, `汽车`, `摩托车`, and year filters. A production recognition/index pipeline is not connected to the public manifest, so this is not yet semantic-search acceptance. |
+| Apple-style responsive home, hero chapters, accessible motion | **Partial** | The photo site has the `PHOTO ARCHIVE` navigation brand, hero, story and photo-wall implementation. Browser acceptance on the real photo set is still required. |
+| Natural-language semantic image search | **Partial** | The UI now exposes `湖水`, `山峰`, `蓝天`, `汽车`, `摩托车`, and `红色衬衫` suggestions; query parsing and local tag fallback exist. A production recognition/index pipeline is not connected to the public manifest, so this is not yet semantic-search acceptance. |
 | Unified CI/CD, resources, logs, metrics, security and billing management | **Partial** | `cx.chenyouyi.top` is deployed and read-only. CI/CD/resources/security are fixture-backed; Logs, Metrics and Billing explicitly report unavailable until their adapters are connected. |
 | Structured evidence for upload, processing, publishing and infrastructure changes | **Partial** | Correlation IDs, CloudWatch logs, Terraform state and GitHub workflow artifacts provide infrastructure evidence. End-to-end upload → processing → publish → search evidence still needs a real-photo run. |
 | Layered, least-privilege, planable and rollbackable infrastructure | **Pass** | `30-compute` and `40-management-edge` are independent Terraform states; immutable image digest, IAM roles, HTTPS-only origin, SG boundary and plan/apply evidence are recorded. |
