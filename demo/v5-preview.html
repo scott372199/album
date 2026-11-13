@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>V5 成品预览 / V5 Product Preview</title>
+<style>
+  :root{
+    --ink:#1d1d1f; --ink2:#515154; --ink3:#86868b; --line:#e5e5e7;
+    --paper:#fff; --paper2:#f5f5f7; --accent:#0071e3; --ok:#1d9e75; --warn:#ba7517;
+    --radius:14px; --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Helvetica Neue",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased}
+  h1,h2,h3,p{margin:0}
+  a{color:inherit;text-decoration:none}
+  button{font-family:inherit;cursor:pointer}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);font-weight:500}
+  .en{font-style:italic;color:var(--ink3);font-size:12px;font-weight:400}
+
+  nav{position:sticky;top:0;z-index:50;height:52px;background:rgba(255,255,255,.82);backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line)}
+  nav .wrap{height:52px;display:flex;align-items:center;gap:28px}
+  .brand{font-size:14px;font-weight:600;letter-spacing:-.02em;white-space:nowrap}
+  .tabs{display:flex;gap:20px;font-size:12px;color:var(--ink2)}
+  .tabs a:hover{color:var(--ink)}
+  .nav-right{margin-left:auto;display:flex;gap:14px;font-size:12px;color:var(--ink2);align-items:center}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:5px}
+
+  .hero{position:relative;height:min(78vh,660px);min-height:440px;overflow:hidden;background:#0b0b0d;color:#fff}
+  .hero-slide{position:absolute;inset:0;opacity:0;transition:opacity .9s ease;display:flex;align-items:flex-end}
+  .hero-slide.is-active{opacity:1}
+  .hero-art{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .hero-scrim{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.62) 0%,rgba(0,0,0,.18) 62%,rgba(0,0,0,.05) 100%)}
+  .hero-copy{position:relative;z-index:2;padding:0 0 84px;max-width:1120px;margin:0 auto;width:100%}
+  .hero-copy .inner{padding:0 24px}
+  .hero-copy h1{font-size:clamp(38px,6.2vw,76px);font-weight:600;letter-spacing:-.045em;line-height:1.04;margin:12px 0 14px}
+  .hero-copy p.sub{font-size:clamp(15px,1.7vw,20px);color:rgba(255,255,255,.82);max-width:520px;line-height:1.5}
+  .cta{display:inline-flex;align-items:center;gap:8px;margin-top:26px;padding:11px 22px;border:1px solid rgba(255,255,255,.5);border-radius:999px;font-size:13px;background:transparent;color:#fff;transition:background .2s,color .2s}
+  .cta:hover{background:#fff;color:var(--ink)}
+  .hero-ctrl{position:absolute;right:24px;bottom:84px;z-index:3;display:flex;gap:8px}
+  .hero-ctrl button{width:9px;height:9px;border-radius:50%;border:1px solid rgba(255,255,255,.7);background:transparent;padding:0}
+  .hero-ctrl button.is-active{background:#fff}
+  .hero-hint{position:absolute;right:24px;bottom:36px;z-index:3;font-size:11px;color:rgba(255,255,255,.6);letter-spacing:.08em}
+
+  section{padding:88px 0;border-bottom:1px solid var(--line)}
+  .sec-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+  .sec-head h2{font-size:clamp(26px,3.6vw,40px);font-weight:600;letter-spacing:-.035em}
+  .sec-desc{color:var(--ink2);font-size:14px;line-height:1.65;max-width:760px;margin:12px 0 32px}
+
+  .searchbar{display:flex;gap:10px;align-items:center;border:1px solid var(--line);background:var(--paper2);border-radius:999px;padding:8px 8px 8px 20px;max-width:680px}
+  .searchbar input{flex:1;border:0;background:transparent;outline:none;font-size:15px;font-family:inherit;color:var(--ink)}
+  .searchbar button{border:0;background:var(--accent);color:#fff;border-radius:999px;padding:10px 22px;font-size:13px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0}
+  .chip{border:1px solid var(--line);background:var(--paper);color:var(--ink2);border-radius:999px;padding:7px 14px;font-size:12px}
+  .chip:hover,.chip.is-active{border-color:var(--ink);color:var(--ink)}
+  .explain{margin:20px 0 0;padding:12px 16px;border-radius:10px;background:var(--paper2);font-size:12px;color:var(--ink2);line-height:1.7;min-height:44px}
+  .explain b{color:var(--ink);font-weight:500}
+  .explain .tag{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 9px;margin-right:6px;background:#fff}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;margin-top:28px}
+  .card{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:#fff;transition:transform .2s,box-shadow .2s}
+  .card:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(0,0,0,.07)}
+  .card .art{height:168px;width:100%;display:block}
+  .card .meta{padding:14px 16px 16px}
+  .card .meta h3{font-size:14px;font-weight:500}
+  .card .meta p{font-size:12px;color:var(--ink3);margin-top:5px}
+  .card .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}
+  .card .tags span{font-size:10px;border:1px solid var(--line);border-radius:999px;padding:3px 8px;color:var(--ink2)}
+  .empty{padding:44px;text-align:center;color:var(--ink3);font-size:14px;border:1px dashed var(--line);border-radius:var(--radius);margin-top:28px}
+
+  .mgmt{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .mgmt-top{display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid var(--line);background:var(--paper2)}
+  .mgmt-top strong{font-size:14px;font-weight:600}
+  .badge{font-size:10px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--ink2);background:#fff}
+  .mtabs{display:flex;gap:2px;padding:12px 16px;border-bottom:1px solid var(--line);overflow-x:auto}
+  .mtabs button{border:0;background:transparent;padding:9px 15px;border-radius:8px;font-size:12px;color:var(--ink2);white-space:nowrap}
+  .mtabs button.is-active{background:var(--ink);color:#fff}
+  .mbody{padding:22px 20px 26px;min-height:210px}
+  .mbody h3{font-size:16px;font-weight:600;margin-bottom:4px}
+  .mbody .en{margin-bottom:18px;display:block}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;color:var(--ink3);font-weight:500;padding:9px 10px;border-bottom:1px solid var(--line)}
+  td{padding:11px 10px;border-bottom:1px solid #f0f0f2;color:var(--ink2)}
+  td:first-child{color:var(--ink);font-weight:500}
+  .pill{font-size:10px;border-radius:999px;padding:3px 9px;display:inline-block}
+  .pill.ok{background:#e1f5ee;color:#0f6e56}
+  .pill.warn{background:#faeede;color:#854f0b}
+  .pill.mute{background:#f1efe8;color:#5f5e5a}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .metric{border:1px solid var(--line);border-radius:10px;padding:16px}
+  .metric .v{font-size:24px;font-weight:600;letter-spacing:-.03em}
+  .metric .k{font-size:11px;color:var(--ink3);margin-top:6px}
+  .logs{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.9;background:#fafafa;border:1px solid var(--line);border-radius:10px;padding:14px 16px;color:var(--ink2);max-height:200px;overflow:auto}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-top:30px}
+  .stat{border:1px solid var(--line);border-radius:12px;padding:20px}
+  .stat .n{font-size:28px;font-weight:600;letter-spacing:-.04em}
+  .stat .l{font-size:12px;color:var(--ink3);margin-top:6px;line-height:1.5}
+  .stat.ok .n{color:var(--ok)}
+  .stat.todo .n{color:var(--warn)}
+  footer{padding:40px 0 70px;color:var(--ink3);font-size:12px;line-height:1.8}
+  @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+  @media (max-width:640px){nav .tabs{display:none}section{padding:60px 0}.hero-copy{padding-bottom:96px}.hero-ctrl{bottom:96px}.hero-hint{display:none}}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <span class="brand">PHOTO ARCHIVE</span>
+    <div class="tabs"><a href="#top">时间轴</a><a href="#top">相册</a></div>
+    <div class="nav-right"><a href="#search">搜索照片</a><a href="#mgmt">管理站</a><span><span class="dot"></span>只读</span></div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div id="slides"></div>
+  <div class="hero-ctrl" id="heroCtrl"></div>
+  <div class="hero-hint">SCROLL TO EXPLORE</div>
+</header>
+
+<section id="search">
+  <div class="wrap">
+    <div class="sec-head"><span class="eyebrow">语义搜索 / Semantic search</span></div>
+    <div class="sec-head"><h2>用一句话，找到那张照片。</h2></div>
+    <p class="sec-desc">自然语言被解析成可解释的检索条件；识别服务不可用时自动降级为清单本地筛选。
+      <span class="en">Natural language becomes explainable filters; a recognition outage degrades to manifest-only filtering.</span></p>
+    <div class="searchbar">
+      <input id="q" type="search" placeholder="试试：湖水、2025 年的蓝天和汽车" aria-label="搜索照片">
+      <button id="go">搜索</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="explain" id="explain"></div>
+    <div class="grid" id="results"></div>
+    <div class="empty" id="empty" hidden>没有匹配的照片。可以去掉一个条件，或改用年份筛选。</div>
+  </div>
+</section>
+
+<section id="mgmt">
+  <div class="wrap">
+    <div class="sec-head"><span class="eyebrow">管理平台 / Management platform</span></div>
+    <div class="sec-head"><h2>六个域，一个只读视图。</h2></div>
+    <p class="sec-desc">Java 21 + Spring Boot，按域鉴权与审计，provider-neutral DTO 不泄漏云厂商细节。
+      <span class="en">Java 21 + Spring Boot with per-domain RBAC and audit; provider-neutral DTOs hide vendor specifics.</span></p>
+    <div class="mgmt">
+      <div class="mgmt-top"><strong>cx.chenyouyi.top</strong><span class="badge">read-only</span><span class="badge" id="srcBadge">source: fixture</span></div>
+      <div class="mtabs" id="mtabs"></div>
+      <div class="mbody" id="mbody"></div>
+    </div>
+  </div>
+</section>
+
+<section id="ops">
+  <div class="wrap">
+    <div class="sec-head"><span class="eyebrow">可观测性 / Observability</span></div>
+    <div class="sec-head"><h2>一个 correlation ID 串起整条链路。</h2></div>
+    <p class="sec-desc">OpenTelemetry Collector → Prometheus / Loki / Tempo → Grafana。ECS Fargate 单 task 多容器，随管理站一起按需拉起与销毁。
+      <span class="en">A single Fargate task hosts the stack, started and destroyed together with the management site.</span></p>
+    <div class="metrics">
+      <div class="metric"><div class="v">99.4%</div><div class="k">上传成功率 / upload success</div></div>
+      <div class="metric"><div class="v">22s</div><div class="k">照片端到端 / photo E2E</div></div>
+      <div class="metric"><div class="v">1.8s</div><div class="k">识别延迟 / recognition p95</div></div>
+      <div class="metric"><div class="v">0</div><div class="k">DLQ 深度 / DLQ depth</div></div>
+    </div>
+    <div class="logs" style="margin-top:16px" id="logstream"></div>
+  </div>
+</section>
+
+<section id="status" style="border-bottom:0">
+  <div class="wrap">
+    <div class="sec-head"><span class="eyebrow">实现状态 / Build status</span></div>
+    <div class="sec-head"><h2>已经落地与仍在推进。</h2></div>
+    <p class="sec-desc">以下数字来自本机实际执行的验证命令，不是估算。
+      <span class="en">Numbers below come from verification commands actually run on this machine.</span></p>
+    <div class="stats">
+      <div class="stat ok"><div class="n">169</div><div class="l">album 单元测试 / unit tests pass</div></div>
+      <div class="stat ok"><div class="n">38</div><div class="l">album 结构断言 / verify assertions</div></div>
+      <div class="stat ok"><div class="n">28</div><div class="l">album-mgmt 测试（JWT/RBAC/审计/出站过滤）</div></div>
+      <div class="stat ok"><div class="n">91</div><div class="l">album-infra 离线断言（3 scope · 9 层）</div></div>
+      <div class="stat ok"><div class="n">117</div><div class="l">仓库安检文件 / files checked</div></div>
+      <div class="stat todo"><div class="n">1</div><div class="l">待办：PR 治理（推送远端前确认）</div></div>
+    </div>
+    <p class="sec-desc">本地一键演示：<code>./demo/run-demo.sh</code> 拉起相册站点（8091）+ 管理站 API（8095）+ 管理站前端（5173），全部 fixture 数据、零云依赖。
+      <span class="en">One-command local demo: <code>./demo/run-demo.sh</code> starts the album site (8091), the management API (8095) and the management web (5173) — fixture data only, zero cloud dependencies.</span></p>
+  </div>
+</section>
+
+<footer><div class="wrap">
+  演示素材为程序生成的抽象图形，仅用于呈现交互与版式，不含任何真实照片与元数据。
+  <span class="en">Demo artwork is generated abstract graphics; no real photos or metadata are used.</span><br>
+  V5 重建分支 <code>feat/v5-rebuild</code> · 基线 <code>32cbc3d</code> · 前端与搜索内核 <code>abfb8fb</code>
+</div></footer>
+
+<script>
+const ART = {
+  lake:  {c1:'#7fb2d9',c2:'#2e5f8a',shape:'hills'},
+  peak:  {c1:'#b8c6d1',c2:'#4a5a6b',shape:'peaks'},
+  sky:   {c1:'#8fc4f0',c2:'#3d7fc1',shape:'clouds'},
+  car:   {c1:'#d8dde3',c2:'#3a414c',shape:'road'},
+  moto:  {c1:'#e0c9a6',c2:'#5b4a3a',shape:'road'},
+  shirt: {c1:'#e8a09a',c2:'#8c3b3f',shape:'portrait'}
+};
+function art(kind, seed){
+  const a = ART[kind] || ART.lake;
+  const id = 'g'+seed;
+  let extra = '';
+  if(a.shape==='hills'||a.shape==='peaks'){
+    const hi = a.shape==='peaks'
+      ? `<path d="M0 210 L120 70 L210 165 L320 40 L470 210 Z" fill="#fff" opacity=".18"/><path d="M120 210 L300 110 L470 210 Z" fill="#000" opacity=".12"/>`
+      : `<path d="M0 175 Q120 120 240 172 T480 168 L480 260 L0 260 Z" fill="#fff" opacity=".14"/><path d="M0 205 Q140 175 280 205 T480 200 L480 260 L0 260 Z" fill="#000" opacity=".12"/>`;
+    extra = hi;
+  } else if(a.shape==='clouds'){
+    extra = `<ellipse cx="130" cy="78" rx="95" ry="26" fill="#fff" opacity=".28"/><ellipse cx="330" cy="112" rx="130" ry="30" fill="#fff" opacity=".2"/><circle cx="390" cy="60" r="30" fill="#fff" opacity=".35"/>`;
+  } else if(a.shape==='road'){
+    extra = `<path d="M0 260 L190 130 L290 130 L480 260 Z" fill="#000" opacity=".16"/><rect x="235" y="150" width="12" height="24" rx="3" fill="#fff" opacity=".5"/><rect x="235" y="190" width="12" height="26" rx="3" fill="#fff" opacity=".5"/>`;
+  } else {
+    extra = `<circle cx="240" cy="92" r="46" fill="#fff" opacity=".2"/><path d="M150 260 Q160 150 240 145 Q320 150 330 260 Z" fill="#000" opacity=".14"/>`;
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 260" width="480" height="260"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a.c1}"/><stop offset="1" stop-color="${a.c2}"/></linearGradient></defs><rect width="480" height="260" fill="url(#${id})"/>${extra}</svg>`;
+  return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+}
+
+const HERO = [
+  {kind:'lake', eyebrow:'CHAPTER 01 · NATURE', title:'湖水与远山。', sub:'把一整个下午的光，留在这一帧里。', cta:'看看这一组'},
+  {kind:'sky',  eyebrow:'CHAPTER 02 · LIGHT',  title:'那天的蓝天。', sub:'没有定位，没有设备信息，只有画面本身。', cta:'按年份浏览'},
+  {kind:'car',  eyebrow:'CHAPTER 03 · ROAD',   title:'路上的东西。', sub:'汽车、摩托车、红色衬衫——说出来就能找到。', cta:'试试语义搜索'}
+];
+const slidesEl=document.getElementById('slides'), ctrlEl=document.getElementById('heroCtrl');
+HERO.forEach((h,i)=>{
+  const d=document.createElement('div');
+  d.className='hero-slide'+(i===0?' is-active':'');
+  d.innerHTML=`<img class="hero-art" src="${art(h.kind,i)}" alt=""><div class="hero-scrim"></div>
+    <div class="hero-copy"><div class="inner">
+      <div class="eyebrow" style="color:rgba(255,255,255,.7)">${h.eyebrow}</div>
+      <h1>${h.title}</h1><p class="sub">${h.sub}</p>
+      <button class="cta" data-target="${i===2?'#search':'#search'}">${h.cta} <span aria-hidden="true">→</span></button>
+    </div></div>`;
+  slidesEl.appendChild(d);
+  const b=document.createElement('button');
+  b.setAttribute('aria-label','第 '+(i+1)+' 个章节');
+  b.className=i===0?'is-active':'';
+  b.onclick=()=>show(i);
+  ctrlEl.appendChild(b);
+});
+let cur=0, timer=null;
+function show(i){
+  cur=(i+HERO.length)%HERO.length;
+  [...slidesEl.children].forEach((n,j)=>n.classList.toggle('is-active',j===cur));
+  [...ctrlEl.children].forEach((n,j)=>n.classList.toggle('is-active',j===cur));
+}
+function tick(){ timer=setTimeout(()=>{show(cur+1);tick();},6500); }
+if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches) tick();
+document.addEventListener('keydown',e=>{ if(e.key==='ArrowRight')show(cur+1); if(e.key==='ArrowLeft')show(cur-1); });
+document.querySelectorAll('.hero .cta').forEach(b=>b.onclick=()=>document.querySelector('#search').scrollIntoView());
+
+const PHOTOS = [
+  {id:'p1',kind:'lake', title:'湖边的下午', year:2025, month:7, tags:['湖水','山峰','蓝天'], en:'Lakeside afternoon'},
+  {id:'p2',kind:'peak', title:'山脊线', year:2025, month:8, tags:['山峰','蓝天'], en:'Ridge line'},
+  {id:'p3',kind:'sky',  title:'一整片蓝', year:2025, month:6, tags:['蓝天'], en:'Open blue sky'},
+  {id:'p4',kind:'car',  title:'停车场', year:2024, month:10, tags:['汽车','蓝天'], en:'Parking lot'},
+  {id:'p5',kind:'moto', title:'路过的摩托车', year:2024, month:9, tags:['摩托车','汽车'], en:'Motorcycle passing by'},
+  {id:'p6',kind:'shirt',title:'红色衬衫', year:2025, month:5, tags:['红色衬衫','红色'], en:'Red shirt'}
+];
+const SUGGEST=['湖水','山峰','蓝天','汽车','摩托车','红色衬衫','2025 年','2025 年的蓝天和汽车'];
+const VOCAB={
+  '湖水':{terms:['湖水','lake','山峰'],label:'湖水 / lake'},
+  '山峰':{terms:['山峰','mountain'],label:'山峰 / mountain'},
+  '蓝天':{terms:['蓝天','blue sky'],label:'蓝天 / blue sky'},
+  '汽车':{terms:['汽车','car'],label:'汽车 / car'},
+  '摩托车':{terms:['摩托车','motorcycle'],label:'摩托车 / motorcycle'},
+  '红色衬衫':{terms:['红色衬衫','红色','shirt'],label:'红色衬衫 / red shirt（颜色 + 物体组合）'}
+};
+const chipsEl=document.getElementById('chips'), qEl=document.getElementById('q'),
+      explainEl=document.getElementById('explain'), resultsEl=document.getElementById('results'),
+      emptyEl=document.getElementById('empty');
+SUGGEST.forEach(s=>{
+  const b=document.createElement('button');b.className='chip';b.textContent=s;
+  b.onclick=()=>{qEl.value=s;run();};chipsEl.appendChild(b);
+});
+function search(q){
+  const explain=[], terms=[];
+  let year=null, month=null;
+  const ym=/((?:19|20)\d{2})\s*年/.exec(q);
+  if(ym){ year=Number(ym[1]); explain.push({kind:'year',input:ym[0],mappedTo:'year = '+year}); }
+  const mo=/(\d{1,2})\s*月/.exec(q);
+  if(mo){ month=Number(mo[1]); explain.push({kind:'month',input:mo[0],mappedTo:'month = '+month}); }
+  for(const k of Object.keys(VOCAB)){
+    if(q.includes(k)){ terms.push(k); explain.push({kind:k==='红色衬衫'?'color+object':'term',input:k,mappedTo:VOCAB[k].label}); }
+  }
+  if(!terms.length && !year && !month && q.trim()){
+    explain.push({kind:'fallback',input:q.trim(),mappedTo:'清单本地标签匹配 / manifest tag match'});
+  }
+  const items=PHOTOS.filter(p=>{
+    if(year && p.year!==year) return false;
+    if(month && p.month!==month) return false;
+    if(!terms.length) return q.trim()? p.tags.some(t=>q.includes(t)||t.includes(q.trim())) || p.title.includes(q.trim()) : true;
+    return terms.every(t=>p.tags.some(tag=>tag.includes(t)||t.includes(tag)) || (t==='红色衬衫'&&p.tags.includes('红色衬衫')));
+  });
+  return {items,explain};
+}
+function run(){
+  const q=qEl.value.trim();
+  [...chipsEl.children].forEach(c=>c.classList.toggle('is-active',c.textContent===q));
+  const {items,explain}=search(q);
+  if(!explain.length) explainEl.innerHTML='<b>全部照片</b> · 输入自然语言或点选上面的建议。 <span class="en">All photos — type a query or pick a suggestion.</span>';
+  else explainEl.innerHTML='<b>检索条件</b> · '+explain.map(e=>`<span class="tag">${e.input} → ${e.mappedTo}</span>`).join('')+
+    `<br><span class="en">${items.length} result(s); recognition outage degrades to manifest-only filtering.</span>`;
+  resultsEl.innerHTML=items.map((p,i)=>`<article class="card">
+    <img class="art" src="${art(p.kind,i+10)}" alt="">
+    <div class="meta"><h3>${p.title}</h3><p>${p.year} 年 ${p.month} 月 · ${p.en}</p>
+    <div class="tags">${p.tags.map(t=>`<span>${t}</span>`).join('')}</div></div></article>`).join('');
+  emptyEl.hidden=items.length>0;
+}
+document.getElementById('go').onclick=run;
+qEl.addEventListener('input',run);
+qEl.addEventListener('keydown',e=>{if(e.key==='Enter')run();});
+run();
+
+const DOMAINS={
+  'CI/CD':{title:'流水线状态',en:'Workflow runs',rows:[['album','deploy-web','main','passed','GitHub Actions'],['album','build-image','main','passed','GitHub Actions'],['album-mgmt','container','main','passed','GitHub Actions'],['album-infra','infra','main','plan only','manual apply gate']]},
+  '资源':{title:'资源目录',en:'Resource inventory',rows:[['aws','ap-southeast-1','S3','chenyouyi','active'],['aws','ap-southeast-1','Lambda','album-processor','active'],['aws','global','CloudFront','photos.chenyouyi.top','active'],['aws','global','CloudFront','cx.chenyouyi.top','on-demand']]},
+  '日志':{title:'结构化日志',en:'Structured logs',rows:[['upload.completed','auth','success','corr_91af…','22ms'],['processor.completed','processor','success','corr_91af…','21.4s'],['recognition.completed','recognition','success','corr_91af…','1.8s'],['index.published','index','success','corr_91af…','310ms']]},
+  '指标':{title:'关键指标',en:'Key metrics',rows:[['upload.success_rate','99.4%','—','last 24h','ok'],['processor.duration_ms','21,400','p95','last 24h','ok'],['dlq.depth','0','—','now','ok'],['cost.budget_threshold','18%','of cap','this month','ok']]},
+  '安全':{title:'安全态势',en:'Security posture',rows:[['public artifacts','no GPS / EXIF / filename','pass','build','ok'],['management API','read-only + RBAC','pass','runtime','ok'],['branch protection','Copilot check + human approval','pending','GitHub','warn'],['long-lived keys','none','pass','all repos','ok']]},
+  '账单':{title:'成本概览',en:'Billing summary',rows:[['S3 + CloudFront','¥3.2','this month','low traffic','ok'],['ECS Express (on-demand)','¥0.0','off by default','stopped','mute'],['Rekognition','¥0.2','31 images','free tier','ok'],['Total when off','≈ ¥15','/ month','target','ok']]}
+};
+const mtabsEl=document.getElementById('mtabs'), mbodyEl=document.getElementById('mbody');
+const names=Object.keys(DOMAINS);
+names.forEach((n,i)=>{
+  const b=document.createElement('button');b.textContent=n;b.className=i===0?'is-active':'';
+  b.onclick=()=>{[...mtabsEl.children].forEach(x=>x.classList.remove('is-active'));b.classList.add('is-active');render(n);};
+  mtabsEl.appendChild(b);
+});
+function render(n){
+  const d=DOMAINS[n];
+  const heads=['名称 / Name','详情 / Detail','状态 / Status','来源或关联 / Source','结果 / Result'];
+  mbodyEl.innerHTML=`<h3>${d.title}</h3><span class="en">${d.en} · provider-neutral DTO · source: fixture</span>
+    <table><thead><tr>${heads.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>
+    ${d.rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td><span class="pill ${r[4]==='ok'?'ok':r[4]==='warn'?'warn':'mute'}">${r[4]==='ok'?'正常':r[4]==='warn'?'待办':'—'}</span></td></tr>`).join('')}
+    </tbody></table>`;
+  document.getElementById('srcBadge').textContent='source: fixture · '+n;
+}
+render(names[0]);
+
+const LOG_LINES=[
+  'event=upload.completed        corr=corr_91af3c2e5b7d4401  stage=auth        outcome=success  22ms',
+  'event=processor.completed     corr=corr_91af3c2e5b7d4401  stage=processor   outcome=success  21403ms',
+  'event=recognition.completed   corr=corr_91af3c2e5b7d4401  stage=recognition outcome=success  1820ms',
+  'event=index.published         corr=corr_91af3c2e5b7d4401  stage=index       outcome=success  310ms',
+  'event=invalidation.created    corr=corr_91af3c2e5b7d4401  stage=publish     outcome=success  88ms',
+  'event=management.read         corr=corr_4d02bc19ae6f7730  stage=management  outcome=success  41ms'
+];
+document.getElementById('logstream').innerHTML=LOG_LINES.join('\n');
+</script>
+</body>
+</html>
