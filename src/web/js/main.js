@@ -170,7 +170,9 @@ function syncControlValues() {
 }
 
 function renderSearchTools() {
+  const semanticSuggestions = ['湖水', '山峰', '蓝天', '汽车', '摩托车', '红色衬衫'];
   const suggestions = [...new Set([
+    ...semanticSuggestions,
     ...ctx.index.tags,
     ...ctx.index.photos.map((photo) => photo.title).filter(Boolean),
   ])].slice(0, 8);
