@@ -16,6 +16,18 @@ on:
       - 'docker/**'
       - '.dockerignore'
       - '.github/workflows/build-image.yml'
+  # PR 也跑单测：这个 job 是分支保护里的 required check，
+  # 合并前必须在干净的 runner 上通过。
+  # The unit-test job is a required check on PRs; it must pass on a clean
+  # runner before a merge.
+  pull_request:
+    paths:
+      - 'src/server/**'
+      - 'src/build/**'
+      - 'src/web/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-image.yml'
   workflow_dispatch:
 
 concurrency:
