@@ -14,7 +14,8 @@
 # 安全边界 / safety boundaries:
 #   - 不合并任何 PR（合并 = Copilot review + 人工审批之后你自己点）
 #   - 不触发任何部署（部署 workflow 由合并自动触发，infra apply 仍是手动 gate）
-#   - ruleset 不加 bypass actor（管理员也受规则约束，留审计才可 override）
+#   - ruleset 的 bypass actor 仅限仓库管理员（单人仓库自审死锁的解法），
+#     每次绕过合并都有审计记录可查
 #
 # 幂等 / idempotent：PR 已存在则跳过；同名 ruleset 已存在则更新（PATCH by id）。
 ###############################################################################
@@ -52,13 +53,17 @@ make_ruleset_body() { # repo
 
   # Copilot code review 通过 pull_request 参数开启（无独立规则类型）
   # Copilot review is enabled via a pull_request parameter (no standalone rule type)
+  # bypass = 仓库管理员（role_id=5）：单人仓库无法自审自己的 PR，
+  # 管理员可强制合并；每次绕过都会留下审计记录。
+  # bypass = repository admin: a solo owner cannot approve their own PR,
+  # so the admin may force-merge; every bypass is recorded for audit.
   cat <<EOF
 {
   "name": "main-governance-v5",
   "target": "branch",
   "enforcement": "active",
   "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
-  "bypass_actors": [],
+  "bypass_actors": [{"actor_type": "RepositoryRole", "actor_id": 5}],
   "rules": [
     {"type": "deletion"},
     {"type": "non_fast_forward"},
