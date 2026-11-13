@@ -8,8 +8,8 @@
 # 本脚本做的事 / What this does (per repo):
 #   1. 创建 PR → main（album / album-infra / album-mgmt，双语正文）
 #   2. 建立分支规则集（ruleset）：protected main、禁止 force push 与删除、
-#      必须走 PR + 1 人工审批、required status checks、尝试启用 Copilot review
-#   3. 打印 Copilot 需要在 UI 里完成的最后一步（若 API 不支持）
+#      必须走 PR + 1 人工审批、required status checks、经 pull_request 参数启用 Copilot review
+#   3. 打印 Copilot 的 UI 兜底步骤（若参数被静默忽略，如仓库无 Copilot 订阅）
 #
 # 安全边界 / safety boundaries:
 #   - 不合并任何 PR（合并 = Copilot review + 人工审批之后你自己点）
@@ -38,22 +38,20 @@ api() { gh api -H "Accept: application/vnd.github+json" "$@"; }
 # the context must match the check-run name verbatim
 checks_for() {
   case "$1" in
-    album)        echo '["单测 / unit tests"]' ;;
-    album-infra)  echo '["lint"]' ;;
-    album-mgmt)   echo '["image"]' ;;
+    album)        echo '[{"context":"单测 / unit tests"}]' ;;
+    album-infra)  echo '[{"context":"lint"}]' ;;
+    album-mgmt)   echo '[{"context":"image"}]' ;;
     album-android) echo '[]' ;;
     *)            echo '[]' ;;
   esac
 }
 
 make_ruleset_body() { # repo
-  local repo="$1" checks copilot_rule
+  local repo="$1" checks
   checks="$(checks_for "$repo")"
 
-  # Copilot code review 作为规则尝试加入；API 若拒绝，降级到 UI 步骤
-  # try the copilot rule; on API rejection we fall back to the UI step
-  copilot_rule=',{"type":"copilot_code_review","parameters":{"review_level":"every_pull_request"}}'
-
+  # Copilot code review 通过 pull_request 参数开启（无独立规则类型）
+  # Copilot review is enabled via a pull_request parameter (no standalone rule type)
   cat <<EOF
 {
   "name": "main-governance-v5",
@@ -67,13 +65,15 @@ make_ruleset_body() { # repo
     {"type": "pull_request", "parameters": {
       "required_approving_review_count": 1,
       "dismiss_stale_reviews_on_push": true,
+      "require_code_owner_review": false,
       "require_last_push_approval": true,
-      "required_review_thread_resolution": false
+      "required_review_thread_resolution": false,
+      "automatic_copilot_code_review_enabled": true
     }},
     {"type": "required_status_checks", "parameters": {
       "strict_required_status_checks_policy": true,
       "required_status_checks": $checks
-    }}$copilot_rule
+    }}
   ]
 }
 EOF
@@ -185,10 +185,12 @@ for repo in album album-infra album-mgmt album-android; do
 done
 
 echo ""
-echo "═══ 完成后的最后一步（若 Copilot API 未生效）/ final UI step if Copilot rule was rejected ═══"
-echo "每个仓库 Settings → Rules → Rulesets → main-governance-v5 →"
-echo "勾选 'Copilot code review'（每次 PR 都 review，不自动提交意见为 required 之外的绕行）。"
-echo "Per repo: Settings → Rules → Rulesets → main-governance-v5 → enable Copilot code review."
+echo "═══ Copilot 兜底步骤（仅当 review 未自动生效时）/ Copilot fallback step ═══"
+echo "Copilot review 已通过 ruleset 参数开启；若某个 PR 上未自动触发，"
+echo "可到 Settings → Rules → Rulesets → main-governance-v5 检查参数是否保留，"
+echo "或在 PR 页面 Reviewers → Copilot 手动请求 review。"
+echo "Copilot review is enabled via the ruleset parameter; if a PR misses it,"
+echo "verify the ruleset, or request Copilot review manually on the PR."
 echo ""
 echo "合并后部署 / post-merge deploys: album（内容 + 镜像）与 album-infra（plan-only）自动触发；"
 echo "infra apply 与管理站上线仍是手动 gate（workflow_dispatch + confirm）。"
