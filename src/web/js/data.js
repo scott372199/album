@@ -30,6 +30,21 @@ export async function loadManifest(url) {
   return response.json();
 }
 
+/**
+ * 拉取 S3 静态语义索引 / Fetch the static S3 search index.
+ * 失败只抛一个不含地址、状态码的通用错误，避免把内部实现细节带进 UI；
+ * 调用方据此降级为 manifest 本地筛选。
+ *
+ * On failure it throws a generic error with no URL or status code, so no
+ * internal detail reaches the UI; the caller then degrades to manifest-only
+ * filtering.
+ */
+export async function loadSearchIndex(url) {
+  const response = await fetch(url, { cache: 'no-cache' });
+  if (!response.ok) throw new Error('search index unavailable');
+  return response.json();
+}
+
 export function buildIndex(manifest) {
   const photos = Array.isArray(manifest.photos) ? manifest.photos : [];
   const albums = Array.isArray(manifest.albums) ? manifest.albums : [];
@@ -52,6 +67,9 @@ export function buildIndex(manifest) {
     years: [...years].sort((a, b) => b - a),
     months: [...months].sort((a, b) => a - b),
     hero: manifest.hero || photos[0]?.id || '',
+    // V5：hero 章节配置（缺省空数组，由 hero.js 按需自动生成）
+    // V5: hero sections (empty by default; hero.js auto-generates on demand)
+    heroSections: Array.isArray(manifest.heroSections) ? manifest.heroSections : [],
   };
 }
 

@@ -1,0 +1,702 @@
+{
+  "version": "v5.1.0",
+  "publicFields": [
+    "album",
+    "caption",
+    "colors",
+    "explanation",
+    "id",
+    "labels",
+    "month",
+    "paths",
+    "ratio",
+    "score",
+    "tags",
+    "title",
+    "year"
+  ],
+  "forbiddenFields": [
+    "accessKey",
+    "authorization",
+    "captureTimestamp",
+    "deviceSerial",
+    "gps",
+    "originalFilename",
+    "originalKey",
+    "originalUrl",
+    "password",
+    "phone",
+    "phoneNumber",
+    "rawExif",
+    "rawModelResponse",
+    "rawRekognitionResponse",
+    "refreshToken",
+    "secret",
+    "sourcePath",
+    "terraformState",
+    "token"
+  ],
+  "search": {
+    "query": {
+      "type": "object",
+      "required": [
+        "query",
+        "page",
+        "pageSize"
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "filters": {
+          "type": "object",
+          "properties": {
+            "year": {
+              "type": "integer",
+              "minimum": 1900,
+              "maximum": 2200
+            },
+            "month": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "maxItems": 20
+            }
+          },
+          "additionalProperties": false
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "items",
+        "page",
+        "pageSize",
+        "total"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "album",
+              "year",
+              "month",
+              "ratio",
+              "tags",
+              "paths"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "album": {
+                "type": "string"
+              },
+              "year": {
+                "type": "integer"
+              },
+              "month": {
+                "type": "integer"
+              },
+              "ratio": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "paths": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "score": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "recognition": {
+    "event": {
+      "type": "object",
+      "required": [
+        "event",
+        "eventId",
+        "correlationId",
+        "assetId",
+        "contentHash",
+        "sourceAsset",
+        "status",
+        "occurredAt"
+      ],
+      "properties": {
+        "event": {
+          "const": "recognition.completed"
+        },
+        "eventId": {
+          "type": "string"
+        },
+        "correlationId": {
+          "type": "string"
+        },
+        "assetId": {
+          "type": "string"
+        },
+        "contentHash": {
+          "type": "string"
+        },
+        "sourceAsset": {
+          "type": "string",
+          "pattern": "^photos/[a-f0-9]{12}/(grid|view)\\.webp$"
+        },
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "success",
+            "failed",
+            "skipped"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "confidence",
+              "category"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "category": {
+                "type": "string",
+                "maxLength": 40
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "errorClass": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "audit": {
+    "event": {
+      "type": "object",
+      "required": [
+        "event",
+        "correlationId",
+        "actor",
+        "action",
+        "resource",
+        "outcome",
+        "occurredAt"
+      ],
+      "properties": {
+        "event": {
+          "const": "audit.recorded"
+        },
+        "correlationId": {
+          "type": "string"
+        },
+        "actor": {
+          "type": "object",
+          "required": [
+            "type",
+            "idHash"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "admin",
+                "service",
+                "workflow"
+              ]
+            },
+            "idHash": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "action": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "resource": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "outcome": {
+          "enum": [
+            "success",
+            "denied",
+            "failed"
+          ]
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "observability": {
+    "requiredFields": [
+      "event",
+      "correlationId",
+      "stage",
+      "outcome",
+      "durationMs",
+      "provider",
+      "errorClass"
+    ],
+    "forbiddenFields": [
+      "phone",
+      "token",
+      "authorization",
+      "secret",
+      "originalUrl",
+      "rawExif",
+      "rawModelResponse"
+    ]
+  },
+  "providerPorts": [
+    "CloudProvider",
+    "LogProvider",
+    "MetricProvider",
+    "TraceProvider",
+    "AlertProvider",
+    "BillingProvider",
+    "SecurityProvider",
+    "CicdProvider",
+    "AuditStore",
+    "IdentityProvider",
+    "RecognitionProvider",
+    "SearchIndexStore"
+  ],
+  "status": "implementation baseline for the v5 rebuild",
+  "decisionSource": "spec/v5/DECISIONS.md",
+  "correlationId": {
+    "format": "corr_[0-9a-f]{16}",
+    "header": "X-Correlation-Id",
+    "sources": [
+      "client header if format-valid",
+      "server-generated otherwise"
+    ],
+    "propagation": [
+      "auth /upload-url",
+      "S3 x-amz-meta-correlation-id",
+      "S3 event -> processor",
+      "processor -> recognition queue attribute",
+      "recognition -> index publish",
+      "CloudFront invalidation caller reference",
+      "GitHub workflow_dispatch input",
+      "management API request/response header"
+    ]
+  },
+  "s3PrefixOwnership": {
+    "assets/": {
+      "writer": "deploy-web",
+      "canDelete": true
+    },
+    "index.html": {
+      "writer": "deploy-web",
+      "canDelete": false
+    },
+    "data/manifest.<rev>.json": {
+      "writer": "album-processor",
+      "canDelete": false
+    },
+    "data/version.json": {
+      "writer": "album-processor",
+      "canDelete": false
+    },
+    "data/search-index.<rev>.json": {
+      "writer": "album-search-publisher",
+      "canDelete": false
+    },
+    "photos/<id>/{320,768,2048,grid,view}.webp": {
+      "writer": "album-processor",
+      "canDelete": false
+    },
+    "incoming/": {
+      "writer": "presigned upload",
+      "canDelete": "processor after success"
+    },
+    "apk/": {
+      "writer": "local publish script",
+      "canDelete": false
+    }
+  },
+  "searchIndex": {
+    "objectKeyPattern": "data/search-index.<rev>.json",
+    "descriptionZh": "S3 静态索引；前端一次性拉取后在浏览器本地检索，无在线查询 API",
+    "descriptionEn": "Static index in S3, fetched once and queried in the browser; no online query API",
+    "shape": {
+      "version": "v5.1.0",
+      "rev": "content sha256 hex",
+      "vocabulary": {
+        "<zh term>": [
+          "<canonical term>",
+          "<synonym>"
+        ]
+      },
+      "items": [
+        {
+          "id": "12-hex asset id",
+          "year": 2025,
+          "month": 7,
+          "tags": [
+            "safe string"
+          ],
+          "labels": [
+            {
+              "term": "canonical lowercase label",
+              "zh": "中文展示词",
+              "kind": "object|scene|color",
+              "confidence": 0.0
+            }
+          ],
+          "colors": [
+            "canonical color"
+          ],
+          "source": "rekognition|manifest|manual"
+        }
+      ]
+    },
+    "constraints": [
+      "items[].id must exist in the active manifest",
+      "labels[].confidence is a single float, never a raw model response",
+      "no object key, filename, EXIF, GPS or exact capture time",
+      "duplicate id is rejected by the publisher",
+      "missing or stale index degrades to manifest-only filtering"
+    ]
+  },
+  "queryContract": {
+    "examples": [
+      "湖水",
+      "山峰",
+      "蓝天",
+      "汽车",
+      "摩托车",
+      "红色衬衫",
+      "2025 年",
+      "2025 年的蓝天和汽车"
+    ],
+    "parseResult": {
+      "terms": [
+        "canonical terms"
+      ],
+      "filters": {
+        "year": "integer|null",
+        "month": "integer|null",
+        "colors": [
+          "string"
+        ],
+        "tags": [
+          "string"
+        ]
+      },
+      "explanation": [
+        {
+          "kind": "term|synonym|year|month|color",
+          "input": "string",
+          "mappedTo": "string"
+        }
+      ],
+      "page": 1,
+      "pageSize": 40
+    },
+    "ranking": "match count desc, confidence sum desc, year desc, id asc",
+    "fallback": "manifest-only filtering when the index is unavailable"
+  },
+  "structuredLogEvent": {
+    "required": [
+      "event",
+      "correlationId",
+      "stage",
+      "outcome",
+      "durationMs"
+    ],
+    "optional": [
+      "assetId",
+      "objectKeyDigest",
+      "errorClass",
+      "provider",
+      "attempt"
+    ],
+    "stages": [
+      "upload",
+      "auth",
+      "processor",
+      "redaction",
+      "recognition",
+      "index",
+      "publish",
+      "invalidation",
+      "cicd",
+      "infra",
+      "management"
+    ]
+  },
+  "metrics": [
+    "upload.success_rate",
+    "upload.error_rate",
+    "processor.duration_ms",
+    "processor.error_rate",
+    "recognition.duration_ms",
+    "recognition.success_rate",
+    "recognition.retry_count",
+    "recognition.queue_age_ms",
+    "dlq.depth",
+    "dlq.oldest_age_ms",
+    "manifest.publish_conflict",
+    "manifest.publish_retry",
+    "cicd.workflow_failure",
+    "cicd.deploy_duration_ms",
+    "management.api_latency_ms",
+    "management.api_5xx_rate",
+    "cost.budget_threshold",
+    "cost.anomaly"
+  ],
+  "managementApi": {
+    "base": "/api/v1",
+    "auth": {
+      "login": "POST /api/v1/auth/login",
+      "refresh": "POST /api/v1/auth/refresh",
+      "logout": "POST /api/v1/auth/logout"
+    },
+    "endpoints": [
+      {
+        "path": "GET /api/v1/cicd/workflows",
+        "domain": "cicd",
+        "permission": "cicd:read"
+      },
+      {
+        "path": "GET /api/v1/resources",
+        "domain": "resources",
+        "permission": "resources:read"
+      },
+      {
+        "path": "GET /api/v1/logs",
+        "domain": "logs",
+        "permission": "logs:read"
+      },
+      {
+        "path": "GET /api/v1/metrics",
+        "domain": "metrics",
+        "permission": "metrics:read"
+      },
+      {
+        "path": "GET /api/v1/security",
+        "domain": "security",
+        "permission": "security:read"
+      },
+      {
+        "path": "GET /api/v1/billing",
+        "domain": "billing",
+        "permission": "billing:read"
+      },
+      {
+        "path": "GET /api/v1/audit",
+        "domain": "audit",
+        "permission": "audit:read"
+      },
+      {
+        "path": "GET /api/v1/health",
+        "domain": "public",
+        "permission": "none"
+      }
+    ],
+    "commonEnvelope": {
+      "items": "array of provider-neutral DTOs",
+      "source": "aws|github|fixture|unavailable",
+      "asOf": "ISO-8601 UTC",
+      "correlationId": "corr_[0-9a-f]{16}",
+      "unavailable": "string|null"
+    },
+    "resourceDto": {
+      "provider": "aws|azure|gcp",
+      "account": "string",
+      "region": "string",
+      "type": "string",
+      "id": "string",
+      "status": "active|degraded|planned|unknown",
+      "tags": "object",
+      "extensions": "provider-specific object, never a vendor DTO"
+    },
+    "forbiddenInResponse": [
+      "full ARN",
+      "SSM value",
+      "internal object key",
+      "raw log line with PII",
+      "terraformState"
+    ]
+  },
+  "identity": {
+    "phoneAllowlist": "SSM /album/auth/phones (shared with upload)",
+    "sharedKey": "SSM /album/auth/key_hash + scrypt verification",
+    "jwtSecret": "SSM /album/mgmt/jwt_secret (independent)",
+    "accessTokenTtl": "3600 seconds",
+    "refreshTokenTtl": "604800 seconds",
+    "roles": {
+      "admin": [
+        "cicd:read",
+        "resources:read",
+        "logs:read",
+        "metrics:read",
+        "security:read",
+        "billing:read",
+        "audit:read"
+      ],
+      "auditor": [
+        "audit:read",
+        "security:read"
+      ],
+      "viewer": [
+        "resources:read",
+        "cicd:read"
+      ]
+    },
+    "auditEvent": {
+      "who": "hashed subject",
+      "when": "ISO-8601 UTC",
+      "domain": "string",
+      "action": "read",
+      "correlationId": "string",
+      "outcome": "allow|deny"
+    }
+  },
+  "iamBoundaries": {
+    "album-mgmt-container": "no long-lived credentials; read adapters use a dedicated read-only task role",
+    "album-search-recognition": "rekognition:DetectLabels only + read photos/<id>/grid.webp",
+    "album-search-publisher": "s3:PutObject on data/search-index.*.json only",
+    "terraform-apply": "OIDC short-lived role, manual dispatch with double confirmation",
+    "forbidden": [
+      "iam:*",
+      "long-lived access keys",
+      "fork PR cloud credentials"
+    ]
+  },
+  "siteSplit": {
+    "shared": "00-account/",
+    "sites": {
+      "photos": [
+        "00-bootstrap",
+        "10-storage",
+        "20-edge",
+        "30-compute"
+      ],
+      "management": [
+        "00-bootstrap",
+        "10-storage",
+        "20-edge",
+        "30-compute"
+      ]
+    },
+    "stateKeyPattern": "<scope>/<layer>/terraform.tfstate",
+    "rule": "sites are independent; layers inside one site run serially; cross-site plan/apply may run in parallel"
+  },
+  "mgmtEnabled": {
+    "on": "ECS Express management + ALB + cx CloudFront + DNS + Fargate observability stack",
+    "off": "destroy all runtime above; keep ECR image, ACM, S3, tfstate, logs and search index",
+    "default": false
+  },
+  "governance": {
+    "requiredChecks": [
+      "copilot-code-review",
+      "unit-tests",
+      "verify",
+      "repo-check",
+      "terraform-fmt-validate"
+    ],
+    "requiredApprovals": 1,
+    "copilotApprovalCountsTowardMerge": false,
+    "onMerge": "deploy to main; retain last-known-good on failure",
+    "reviewInputScope": [
+      "PR diff",
+      "related source",
+      "test results"
+    ],
+    "reviewExcludedScope": [
+      "secrets",
+      "production logs",
+      "original photos",
+      "terraform state"
+    ]
+  }
+}

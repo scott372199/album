@@ -17,7 +17,7 @@
 
   <nav class="site-nav" aria-label="主导航">
     <div class="nav-inner">
-      <a class="brand" href="#top">PHOTO ARCHIVE</a>
+      <a class="brand" href="#top">__TITLE__</a>
       <div class="tabs" role="tablist" aria-label="视图">
         <button type="button" class="tab is-active" data-view="timeline" role="tab" aria-selected="true">时间轴</button>
         <button type="button" class="tab" data-view="album" role="tab" aria-selected="false">相册</button>
@@ -26,23 +26,39 @@
         <button type="button" class="nav-action" id="open-story">故事</button>
         <button type="button" class="nav-action" id="open-wall">照片墙</button>
         <button type="button" class="nav-action" id="open-upload" hidden>上传</button>
-        <label class="nav-search">
-          <span class="sr-only">搜索照片</span>
-          <input id="q" type="search" placeholder="搜索照片、标签或年份" autocomplete="off" aria-label="搜索照片">
-        </label>
+        <div class="nav-search-wrap" id="search-wrap">
+          <label class="nav-search">
+            <span class="sr-only">搜索照片</span>
+            <input id="q" type="search" placeholder="搜索照片、年份、颜色" autocomplete="off" aria-label="搜索照片" aria-controls="search-panel">
+          </label>
+          <div class="search-panel" id="search-panel" hidden role="group" aria-label="搜索建议与筛选">
+            <p class="search-panel-title">试试这些</p>
+            <div class="search-suggestions" id="search-suggestions" role="listbox" aria-label="查询建议"></div>
+            <div class="search-chips" id="search-chips" role="group" aria-label="年份"></div>
+            <p class="search-status" id="search-status" role="status" aria-live="polite" hidden></p>
+            <p class="search-explain" id="search-explain" hidden></p>
+            <button type="button" class="search-retry" id="search-retry" hidden>重试载入</button>
+          </div>
+        </div>
       </div>
     </div>
   </nav>
 
   <header class="hero" id="top">
-    <div class="hero-stage">
+    <div class="hero-stage" id="hero-stage" tabindex="0" aria-roledescription="章节轮播" aria-label="首页大图章节，可用左右方向键切换">
       <img class="hero-media" id="hero-media" alt="" decoding="async" fetchpriority="high">
+      <img class="hero-media hero-media--next" id="hero-media-next" alt="" decoding="async" aria-hidden="true" hidden>
       <div class="hero-scrim" aria-hidden="true"></div>
       <div class="hero-copy">
         <p class="eyebrow" id="hero-eyebrow">PHOTO ARCHIVE</p>
         <h1 id="site-title">__TITLE__</h1>
         <p class="hero-subtitle" id="site-subtitle"></p>
-        <a class="hero-cta" id="hero-cta" href="#catalog" hidden></a>
+        <a class="hero-cta" id="hero-cta" hidden></a>
+      </div>
+      <div class="hero-controls" id="hero-controls" hidden>
+        <button type="button" class="hero-arrow" id="hero-prev" aria-label="上一个章节">&#8249;</button>
+        <div class="hero-dots" id="hero-dots" role="tablist" aria-label="章节"></div>
+        <button type="button" class="hero-arrow" id="hero-next" aria-label="下一个章节">&#8250;</button>
       </div>
       <div class="hero-hint" aria-hidden="true">
         <span class="hero-hint-line"></span>
@@ -88,14 +104,8 @@
           <button type="button" id="clear" class="clear" hidden>清除筛选</button>
         </div>
       </div>
-      <div class="search-tools" aria-label="搜索建议">
-        <span class="search-tools-label">试试</span>
-        <div id="search-suggestions" class="search-chips"></div>
-        <span class="search-tools-label">时间</span>
-        <div id="search-years" class="search-chips"></div>
-      </div>
-      <p id="search-status" class="search-status" role="status" aria-live="polite"></p>
 
+      <p class="search-empty" id="search-empty" role="status" aria-live="polite" hidden></p>
       <div id="content" class="content"></div>
       <div id="sentinel" class="sentinel" aria-hidden="true"></div>
     </section>
@@ -258,6 +268,7 @@
           <span class="upload-pick-hint">图片 30MB / 视频 200MB 以内，一次最多 20 个</span>
         </label>
         <ul class="upload-list" id="upload-list" aria-live="polite"></ul>
+        <div class="upload-legend" id="upload-legend" role="group" aria-label="上传状态图例"></div>
         <div class="upload-foot">
           <span class="upload-count" id="upload-count"></span>
           <button type="button" class="upload-link upload-link--retry" id="upload-retry" hidden>重试失败项</button>

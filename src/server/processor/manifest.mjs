@@ -17,11 +17,10 @@ const DEFAULT_WALL = { interval: 10, clock: true, night: { from: '22:00', to: '0
 
 export function emptyManifest() {
   return {
-    site: { title: 'PHOTO ARCHIVE', subtitle: '' },
+    site: { title: '个人相册', subtitle: '' },
     wall: { ...DEFAULT_WALL, night: { ...DEFAULT_WALL.night } },
     story: { pace: 'normal' },
     hero: '',
-    heroSections: [],
     photos: [],
     albums: [],
   };

@@ -23,7 +23,14 @@ export const state = {
   },
   wall: { index: 0, interval: 10, clock: true, playing: true, night: null },
   story: { index: 0, chapter: 0, paused: false },
+  // V5 语义索引运行状态；不写入 URL，查询本身复用已有的 q 字段。
+  // V5 semantic-index runtime state; not serialized into the URL — the query
+  // keeps reusing the existing `q` field.
+  search: { status: 'idle', rev: '', index: null, error: '' },
 };
+
+/** 搜索结果每页条数（契约 pageSize 上限 100）/ Page size for search results */
+export const SEARCH_PAGE_SIZE = 40;
 
 /* ---------------- URL hash ---------------- */
 

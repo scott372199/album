@@ -1,5 +1,5 @@
-import { state, buildHash, parseHashString, filterPhotos } from './state.js';
-import { loadManifest, buildIndex, resolveManifest } from './data.js';
+import { state, buildHash, parseHashString, filterPhotos, SEARCH_PAGE_SIZE } from './state.js';
+import { loadManifest, buildIndex, resolveManifest, loadSearchIndex } from './data.js';
 import { createCatalog, renderFeatured, renderAlbums } from './gallery.js';
 import { initLightbox, openLightbox, closeLightbox, isLightboxOpen } from './lightbox.js';
 import { initStory, openStory, closeStory, isStoryOpen } from './story.js';
@@ -7,11 +7,13 @@ import { initWall, enterWall, exitWall, isWallOpen } from './wall.js';
 import { initMotion, photoTransition } from './motion.js';
 import { installBackBridge } from './native.js';
 import { initUpload } from './upload.js';
+import { el, toast, formatSpan } from './ui.js';
 import {
-  el, toast, formatSpan, photoAlt, srcsetFor, sizesFor, reducedMotion,
-} from './ui.js';
-
-const DEFAULT_SUBTITLE = '按时间、相册与标签，重新翻阅这些瞬间。';
+  parseQuery, runSearch, indexUrl, isIndexUsable, sanitizeIndex, INDEX_VERSION,
+} from './search.js';
+import { initSearchUI } from './search-ui.js';
+import { initHero } from './hero.js';
+import { mountUploadLegend } from './upload-state.js';
 
 const ctx = {
   index: null,
@@ -20,8 +22,8 @@ const ctx = {
   lastHash: null,
   rev: '',
   scrollBeforeMode: 0,
-  heroIndex: 0,
-  heroTimer: null,
+  hero: null,
+  searchUI: null,
 };
 
 function manifestRev(url) {
@@ -29,82 +31,90 @@ function manifestRev(url) {
   return match ? match[1] : '';
 }
 
-/* ---------- 静态区块 ---------- */
+/* ---------- 语义搜索 / Semantic search ---------- */
 
-function renderHero() {
-  const { photos, hero } = ctx.index;
-  const sections = ctx.index.heroSections.length
-    ? ctx.index.heroSections
-    : [{ photo: hero, eyebrow: `PHOTO ARCHIVE · ${photos.length} 个瞬间` }];
-  const section = sections[ctx.heroIndex % sections.length];
-  const photo = photos.find((item) => item.id === section.photo) || photos[0];
-  const media = el('hero-media');
-  const title = el('site-title');
-  const subtitle = el('site-subtitle');
-  const eyebrow = el('hero-eyebrow');
-  const cta = el('hero-cta');
-
-  title.textContent = section.title || state.data?.site?.title || 'PHOTO ARCHIVE';
-  const sub = section.subtitle || state.data?.site?.subtitle || '';
-  subtitle.textContent = sub || DEFAULT_SUBTITLE;
-  eyebrow.textContent = section.eyebrow || 'PHOTO ARCHIVE';
-  cta.hidden = !section.cta;
-  cta.textContent = section.cta || '';
-  cta.href = section.target || '#catalog';
-
-  if (!photo) {
-    media.removeAttribute('src');
-    media.alt = '';
-    document.body.classList.add('is-empty');
-    return;
+/**
+ * 统一入口：显式筛选（相册/标签/年/月）始终生效；q 交给 search.js。
+ * 索引可用走本地索引检索，不可用则降级为 manifest 本地筛选。
+ * 两条路径返回的都是 ctx.index.photos 里的同一批对象，供现有渲染器复用，
+ * 不会另建第二套模型。
+ *
+ * Unified entry: explicit filters always apply; `q` goes through search.js
+ * (index path or manifest fallback). Both return the same photo objects so the
+ * existing renderer is reused — no second gallery model.
+ */
+function computeFiltered() {
+  const all = ctx.index.photos;
+  const scoped = filterPhotos(all, { ...state, q: '' });
+  const q = String(state.q || '').trim();
+  if (!q) {
+    return {
+      items: scoped,
+      meta: { status: 'idle', parse: null, total: scoped.length, degraded: false, error: '' },
+    };
   }
-  media.classList.toggle('is-switching', !reducedMotion.matches);
-  media.srcset = srcsetFor(photo, 'feature');
-  media.sizes = sizesFor('feature');
-  const revealHero = () => media.classList.remove('is-switching');
-  media.addEventListener('load', revealHero, { once: true });
-  media.src = photo.view || photo.grid || photo.poster;
-  media.alt = photoAlt(photo);
-  if (media.complete && media.naturalWidth > 0) revealHero();
-  preloadHeroSections(sections, ctx.heroIndex);
-
-  // 舞台高度跟着照片比例走（D-01：满幅宽度 + 按比例算高度，不裁切）
-  const ratio = Number(photo.ratio);
-  document.querySelector('.hero')?.style.setProperty('--hero-ratio', String(Number.isFinite(ratio) && ratio > 0 ? ratio : 1.5));
-}
-
-function preloadHeroSections(sections, index) {
-  for (const offset of [0, 1]) {
-    const section = sections[(index + offset) % sections.length];
-    const photo = ctx.index.photos.find((item) => item.id === section.photo);
-    if (!photo) continue;
-    const image = new Image();
-    image.srcset = srcsetFor(photo, 'feature');
-    image.sizes = sizesFor('feature');
-    image.src = photo.view || photo.grid || photo.poster;
-  }
-}
-
-function shouldRotateHero() {
-  return !reducedMotion.matches
-    && !navigator.connection?.saveData
-    && !(Number(navigator.hardwareConcurrency) > 0 && navigator.hardwareConcurrency <= 2);
-}
-
-function startHeroRotation() {
-  clearTimeout(ctx.heroTimer);
-  const sections = ctx.index?.heroSections || [];
-  if (sections.length < 2 || !shouldRotateHero()) return;
-  const nextDuration = () => Math.max(3000, Number(sections[ctx.heroIndex]?.duration) || 6500);
-  const schedule = () => {
-    ctx.heroTimer = setTimeout(() => {
-      ctx.heroIndex = (ctx.heroIndex + 1) % sections.length;
-      renderHero();
-      schedule();
-    }, nextDuration());
+  const parse = parseQuery(q);
+  const result = runSearch({
+    index: state.search.index,
+    parse,
+    photos: scoped,
+    indexOptions: { version: INDEX_VERSION },
+    page: 1,
+    pageSize: SEARCH_PAGE_SIZE,
+  });
+  return {
+    // catalog 自己做分批渲染（等效客户端分页），这里交付完整排序结果
+    // The catalog does progressive rendering (client-side paging) itself.
+    items: result.matched,
+    meta: {
+      status: state.search.status,
+      parse,
+      total: result.total,
+      degraded: result.degraded,
+      error: state.search.error,
+    },
   };
-  schedule();
 }
+
+/**
+ * 载入静态索引。缺失 / 过期 / 加载失败都收敛成「基础筛选可用」，
+ * 绝不因为搜索不可用而阻塞照片浏览。
+ *
+ * Load the static index. Missing / stale / failed loads all converge to
+ * "baseline filtering available"; search never blocks photo browsing.
+ */
+async function loadIndex() {
+  state.search.status = 'loading';
+  state.search.error = '';
+  ctx.searchUI?.render({ q: state.q, status: 'loading', years: ctx.index?.years || [] });
+
+  let raw = null;
+  try {
+    raw = await loadSearchIndex(indexUrl(ctx.rev));
+  } catch {
+    try { raw = await loadSearchIndex('data/search-index.json'); } catch { raw = null; }
+  }
+  const clean = sanitizeIndex(raw);
+  state.search.index = null;
+  state.search.rev = ctx.rev;
+  if (clean && isIndexUsable(clean, { version: INDEX_VERSION })) {
+    state.search.index = clean;
+    state.search.status = 'ready';
+  } else {
+    state.search.status = 'degraded';
+    state.search.error = '索引不可用';
+  }
+  refresh();
+}
+
+/** 搜索框输入 → 写入 state.q + URL，并即时重算 / Query input -> state.q + URL + refresh */
+function onQuery(q) {
+  state.q = String(q || '').trim();
+  refresh();
+  syncUrl(true);
+}
+
+/* ---------- 静态区块 ---------- */
 
 function renderStats() {
   const { photos, albums } = ctx.index;
@@ -125,9 +135,10 @@ function featuredPhotos() {
 }
 
 function renderSite() {
-  ctx.heroIndex = 0;
-  renderHero();
-  startHeroRotation();
+  // 数据驱动的多章节 hero：无配置自动生成，首屏同步可见。
+  // Data-driven multi-section hero: auto-generated when unconfigured, first
+  // paint is synchronous so the hero is never blank.
+  ctx.hero = initHero(state.data, ctx.index.byId);
   renderStats();
 
   const featured = featuredPhotos();
@@ -169,61 +180,6 @@ function syncControlValues() {
   el('clear').hidden = !hasFilter;
 }
 
-function renderSearchTools() {
-  const semanticSuggestions = ['湖水', '山峰', '蓝天', '汽车', '摩托车', '红色衬衫'];
-  const suggestions = [...new Set([
-    ...semanticSuggestions,
-    ...ctx.index.tags,
-    ...ctx.index.photos.map((photo) => photo.title).filter(Boolean),
-  ])].slice(0, 8);
-  const renderChips = (host, values, onSelect, formatter = (value) => value) => {
-    host.replaceChildren();
-    for (const value of values) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'search-chip';
-      button.textContent = formatter(value);
-      button.addEventListener('click', () => onSelect(value));
-      host.appendChild(button);
-    }
-  };
-  renderChips(el('search-suggestions'), suggestions, (value) => {
-    state.q = value;
-    refresh();
-    syncUrl(true);
-    el('q').focus();
-  });
-  renderChips(el('search-years'), ctx.index.years.slice(0, 5), (value) => {
-    state.q = '';
-    state.year = String(value);
-    refresh();
-    syncUrl(true);
-  }, (value) => `${value} 年`);
-}
-
-function renderSearchStatus() {
-  const node = el('search-status');
-  const query = state.q.trim();
-  const hasFilter = Boolean(query || state.tag || state.year || state.month);
-  if (!hasFilter) {
-    node.textContent = '支持照片标题、标签、相册和年份；搜索服务不可用时仍可使用基础筛选。';
-    node.classList.remove('is-empty', 'is-error');
-    return;
-  }
-  const count = state.filtered.length;
-  if (!count) {
-    node.textContent = query
-      ? `没有找到“${query}”。可以尝试标签、相册名或年份。`
-      : '没有符合条件的照片，请调整筛选条件。';
-    node.classList.add('is-empty');
-    node.classList.remove('is-error');
-    return;
-  }
-  const source = query ? '本地基础筛选' : '基础筛选';
-  node.textContent = `找到 ${count} 张照片 · ${source}`;
-  node.classList.remove('is-empty', 'is-error');
-}
-
 /* ---------- 渲染 ---------- */
 
 function applyView() {
@@ -247,7 +203,8 @@ function applyView() {
 }
 
 function refresh() {
-  state.filtered = filterPhotos(ctx.index.photos, state);
+  const { items, meta } = computeFiltered();
+  state.filtered = items;
   const hasFilter = Boolean(state.tag || state.year || state.month || state.q);
   el('photo-count').textContent = hasFilter
     ? `${state.filtered.length} / ${ctx.index.photos.length} 张`
@@ -255,7 +212,18 @@ function refresh() {
 
   applyView();
   syncControlValues();
-  renderSearchStatus();
+
+  // 搜索状态（建议 / 时间 chip / 解释 / 空结果 / 加载 / 错误）统一交给 search-ui
+  // Search status is delegated to search-ui as a single render call.
+  ctx.searchUI?.render({
+    q: state.q,
+    status: meta.status,
+    parse: meta.parse,
+    total: meta.total,
+    degraded: meta.degraded,
+    years: ctx.index.years,
+    error: meta.error,
+  });
 
   if (state.view === 'album' && !state.album) return;
   ctx.catalog.update(state.filtered, { reset: true });
@@ -366,7 +334,9 @@ function launchWall(push = true) {
       ctx.index = buildIndex(manifest);
       fillFilters();
       renderStats();
-      ctx.catalog.update(filterPhotos(ctx.index.photos, state), { reset: true });
+      ctx.hero?.update(manifest, ctx.index.byId);
+      state.filtered = computeFiltered().items;
+      ctx.catalog.update(state.filtered, { reset: true });
     },
   });
   if (push) syncUrl(true);
@@ -390,12 +360,8 @@ function wire() {
     syncUrl(true);
   });
 
-  el('q').addEventListener('input', (event) => {
-    state.q = event.target.value.trim();
-    refresh();
-    syncUrl(true);
-  });
-
+  // #q 的输入事件由 search-ui.js 统一处理（单一所有者，避免重复监听）
+  // The #q input is owned by search-ui.js (single owner, no double listener).
   for (const id of ['tag', 'year', 'month']) {
     el(id).addEventListener('change', (event) => {
       state[id] = event.target.value;
@@ -489,15 +455,12 @@ function goBack() {
 /* ---------- 启动 ---------- */
 
 async function boot() {
-  el('search-status').textContent = '正在载入照片清单…';
   // 先取 version.json 再取清单：前端产物不再包含任何清单地址
   // Fetch version.json first; the shell no longer embeds a manifest URL
   let source;
   try {
     source = await resolveManifest();
   } catch (err) {
-    el('search-status').textContent = '照片清单载入失败，基础筛选暂不可用，请刷新重试。';
-    el('search-status').classList.add('is-error');
     toast('照片清单载入失败，请刷新重试');
     console.error(err);
     return;
@@ -510,8 +473,6 @@ async function boot() {
   try {
     manifest = await loadManifest(url);
   } catch (err) {
-    el('search-status').textContent = '照片清单载入失败，基础筛选暂不可用，请刷新重试。';
-    el('search-status').classList.add('is-error');
     toast('照片清单载入失败，请刷新重试');
     console.error(err);
     return;
@@ -538,13 +499,19 @@ async function boot() {
   initMotion();
 
   fillFilters();
-  renderSearchTools();
   renderSite();
+  // V5：搜索界面、五态图例；两者都只在已有静态骨架上装配，不新建第二套模型。
+  // V5: search UI and the five-state legend, mounted on the existing skeleton.
+  ctx.searchUI = initSearchUI({ onQuery, onRetry: loadIndex });
+  mountUploadLegend(el('upload-legend'));
   wire();
   // 安卓壳通过它决定返回键是关内层还是退出 Activity
   installBackBridge({ canGoBack: hasInnerState, goBack });
   // 上传入口只在「有原生桥 + 配了接口地址」时才挂载，浏览器里是空操作
   initUpload();
+  // 索引不可用时静默降级，不阻塞任何浏览路径（见 loadIndex）
+  // Index outage degrades silently and never blocks browsing (see loadIndex).
+  await loadIndex();
   await applyFromHash({ initial: true });
 }
 

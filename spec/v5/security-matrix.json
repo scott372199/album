@@ -1,0 +1,192 @@
+{
+  "version": "v5.0",
+  "roles": {
+    "publicViewer": {
+      "can": [
+        "read_public_manifest",
+        "read_redacted_assets"
+      ],
+      "cannot": [
+        "read_originals",
+        "write_content",
+        "read_management_data"
+      ]
+    },
+    "uploader": {
+      "can": [
+        "request_presigned_upload",
+        "upload_to_incoming_prefix"
+      ],
+      "cannot": [
+        "write_public_prefix",
+        "read_originals",
+        "run_management_actions"
+      ]
+    },
+    "processor": {
+      "can": [
+        "read_incoming",
+        "delete_incoming_after_processing",
+        "write_redacted_assets",
+        "write_manifest",
+        "publish_correlation_events"
+      ],
+      "cannot": [
+        "read_management_secrets",
+        "modify_iam",
+        "apply_terraform"
+      ]
+    },
+    "recognitionWorker": {
+      "can": [
+        "read_redacted_derivatives",
+        "write_recognition_metadata",
+        "publish_correlation_events"
+      ],
+      "cannot": [
+        "read_incoming",
+        "write_public_manifest_directly",
+        "modify_iam",
+        "apply_terraform"
+      ]
+    },
+    "managementReader": {
+      "can": [
+        "read_github_status",
+        "read_aws_inventory",
+        "read_loki",
+        "read_prometheus",
+        "read_tempo",
+        "read_security_posture",
+        "read_billing_summary",
+        "write_audit_events"
+      ],
+      "cannot": [
+        "apply_terraform",
+        "modify_iam",
+        "delete_resources",
+        "read_originals",
+        "read_raw_secrets"
+      ]
+    },
+    "githubReview": {
+      "can": [
+        "read_pull_request_diff",
+        "read_required_check_results",
+        "write_review_check"
+      ],
+      "cannot": [
+        "read_secrets",
+        "read_terraform_state",
+        "read_production_logs",
+        "read_originals",
+        "write_cloud_resources"
+      ]
+    },
+    "infraPlan": {
+      "can": [
+        "read_infrastructure",
+        "read_and_lock_terraform_state"
+      ],
+      "cannot": [
+        "write_infrastructure",
+        "modify_iam",
+        "read_originals"
+      ]
+    },
+    "infraApply": {
+      "can": [
+        "apply_approved_infrastructure_changes"
+      ],
+      "cannot": [
+        "run_without_manual_approval",
+        "read_originals_unless_explicitly_required"
+      ]
+    }
+  },
+  "dataBoundaries": {
+    "originals": {
+      "location": "s3://source/incoming/",
+      "readers": [
+        "processor"
+      ],
+      "retention": "delete_after_success_or_lifecycle_backstop",
+      "externalTransfer": false
+    },
+    "publicManifest": {
+      "location": "s3://site/data/",
+      "readers": [
+        "publicViewer",
+        "managementReader"
+      ],
+      "writers": [
+        "processor",
+        "contentDeployment"
+      ],
+      "contains": [
+        "id",
+        "album",
+        "year",
+        "month",
+        "ratio",
+        "tags",
+        "title",
+        "caption",
+        "paths"
+      ],
+      "mustNotContain": [
+        "gps",
+        "deviceSerial",
+        "originalFilename",
+        "exactCaptureTime"
+      ]
+    },
+    "recognitionInput": {
+      "source": "s3://site/photos/<id>/grid.webp",
+      "readers": [
+        "recognitionWorker"
+      ],
+      "mustNotRead": [
+        "s3://source/incoming/"
+      ]
+    },
+    "observability": {
+      "systems": [
+        "loki",
+        "prometheus",
+        "tempo"
+      ],
+      "readers": [
+        "managementReader"
+      ],
+      "mustNotContain": [
+        "phone",
+        "token",
+        "authorization",
+        "secret",
+        "rawExif",
+        "rawModelResponse"
+      ]
+    }
+  },
+  "ownership": {
+    "iamOwner": "album-infra/layers/30-compute",
+    "edgeOwner": "album-infra/layers/20-edge",
+    "stateOwner": "album-infra/layers/*",
+    "contentOwners": {
+      "assets": "deploy-web",
+      "indexHtml": "deploy-web",
+      "photos": "album-processor",
+      "data": "album-processor",
+      "apk": "album-android-local-publish"
+    },
+    "costOwner": "album-infra/tags-and-budget-policy"
+  },
+  "rollback": {
+    "frontend": "disable_v5_feature_or_revert_web_deploy",
+    "recognition": "stop_worker_and_keep_v4_publication_path",
+    "management": "revert_cx_distribution_or_disable_ecs_express",
+    "infrastructure": "revert_layer_commit_then_plan_then_manual_apply",
+    "governance": "retain_last_known_good_workflow_and_explicit_audited_override"
+  }
+}

@@ -1,14 +1,29 @@
 # 个人相册 · 第五版任务清单 / Personal Album · Version 5 Tasks
 
 > Spec-Driven Development · 阶段 3 / 5（Tasks） / Stage 3 / 5 (Tasks)
-> 状态：**V5 基础设施已部署，验收记录持续维护** / Status: **V5 infrastructure deployed; acceptance record maintained**
-> 日期 / Date: 2026-11-13
+> 状态：**基础设施已部署，搜索/识别未接运行时，治理未开始** / Status: **Infrastructure deployed; search and recognition are library-only; governance not started**
+> 日期 / Date: 2026-11-13（核查与校准同日 / reviewed and recalibrated the same day）
 > 上游 / Upstream: [`spec.md`](./spec.md)（confirmed）+ [`plan.md`](./plan.md)（confirmed）
+> 核查记录 / Review record: [`review.md`](./review.md)
 
 本文把 V5 Plan 拆成可独立验收的任务。实现阶段不得绕过任务依赖直接修改生产资源。
 
 *This document decomposes the confirmed V5 Plan into independently verifiable tasks. Production resources
 must not be changed out of dependency order during implementation.*
+
+**状态口径 / Status legend**（2026-11-13 校准）
+
+| 标记 / Mark | 含义 / Meaning |
+| --- | --- |
+| ✅ 完成 / Done | 代码已入库且有可复现证据；**仍可能是离线库或 fixture**，以该条描述为准 |
+| 🚧 进行中 / In progress | 已有一部分落地，但未达到验收标准 |
+| ⏳ 未开始 / Not started | 尚无实现 |
+| ⏸ 延后 / Deferred | 有意不做，理由已写明 |
+
+⚠️ **`✅` 不等于「已达验收」**。跨仓库的最终判定只看 [`V5-ACCEPTANCE.md`](./V5-ACCEPTANCE.md)。
+
+*`✅` means the code is committed with reproducible evidence — not that acceptance is met.
+Acceptance is decided only by `V5-ACCEPTANCE.md`.*
 
 ## 1. 阶段与依赖 / Phases and dependencies
 
@@ -113,8 +128,7 @@ P7 Acceptance       T-30 → T-31 → T-32
   记录 recognition event。
 - **验收 / Done when**：测试能证明原图不会进入识别调用；重复事件只产生一次任务。
 - **追溯 / Traces to**：FR-02、FR-25。
-- **状态 / Status**：✅ 完成 / Done — added a strict redacted-derivative boundary, deterministic idempotency key, vendor-neutral recognition input, and tests rejecting `incoming/` originals or non-recognition assets.
-
+- **状态 / Status**：✅ 完成 / Done — 边界校验已入库并有测试（拒绝 `incoming/` 与非识别资产、确定性 idempotency key），但**尚无任何调用方**。 *Boundary validation is committed and tested; it has no caller yet.*
 #### T-09 结构化标签识别 worker / Build the structured-label worker
 
 - **依赖 / Deps**：T-08
@@ -122,8 +136,7 @@ P7 Acceptance       T-30 → T-31 → T-32
   不阻塞 processor 发布。
 - **验收 / Done when**：一张脱敏测试图完成识别；坏输入/供应商失败可见且照片仍上线。
 - **追溯 / Traces to**：FR-02、Plan §4。
-- **状态 / Status**：✅ 完成 / Done — added an injected async worker boundary with structured labels, idempotent duplicate suppression, retry handling, DLQ visibility, and provider-output validation; processor publication remains independent.
-
+- **状态 / Status**：🚧 进行中 / In progress — 已完成注入式 worker 边界、结构化标签、幂等去重、重试与 DLQ 语义、供应商输出校验；**缺 SQS 队列、Lambda 入口与镜像内 provider**，因此「一张脱敏图完成识别」尚未真实发生过。 *Worker boundary done; queue, Lambda entry and a real provider are missing.*
 #### T-10 中文 query parser / Build the Chinese query parser
 
 - **依赖 / Deps**：T-01、T-09
@@ -139,16 +152,14 @@ P7 Acceptance       T-30 → T-31 → T-32
   本任务不强制引入 vector database。
 - **验收 / Done when**：重复处理不重复索引；结果只含公开字段；索引不可用时基础筛选可用。
 - **追溯 / Traces to**：FR-02、Hard invariants。
-- **状态 / Status**：✅ 完成 / Done — added a structured index, paginated manifest-safe API facade, deterministic ranking, duplicate-safe upserts, baseline filtering fallback, and replaceable embedding adapter.
-
+- **状态 / Status**：🚧 进行中 / In progress — 已完成结构化倒排索引、manifest-safe 分页 facade、确定性排序、重复 upsert 与 embedding port；**索引只在内存、无 HTTP 路由、无持久化**。 *Index and facade exist in memory; no route, no persistence.*
 #### T-12 搜索端到端验收 / Verify semantic search end to end
 
 - **依赖 / Deps**：T-11、T-06
 - **内容 / Work**：上传/处理一张测试图 → 识别 → 索引 → 查询 → 进入灯箱；验证失败降级。
 - **验收 / Done when**：成功、重复、识别失败、索引不可用四条路径都有证据。
 - **追溯 / Traces to**：FR-02、Plan §9。
-- **状态 / Status**：✅ 完成 / Done — added an offline vertical-slice test covering redacted input → recognition → structured index → query/lightbox-safe result, plus duplicate, recognition failure, and index-unavailable fallback paths.
-
+- **状态 / Status**：🚧 进行中 / In progress — 离线链路测试已覆盖成功、重复、识别失败、索引不可用四条路径，但用的是测试替身，**真实照片尚未跑过**。 *Offline slice covered with test doubles; no real photo has traversed it.*
 ### P3 · `album-mgmt` Java prototype / Java 管理站原型
 
 #### T-13 创建 `album-mgmt` 工程 / Create the management repository
@@ -195,6 +206,7 @@ P7 Acceptance       T-30 → T-31 → T-32
   先 shadow/read-only。
 - **验收 / Done when**：`https://cx.chenyouyi.top` 可访问；`photos` distribution 和站点行为无变化。
 - **追溯 / Traces to**：FR-03、Plan §2.3、§8。
+- **状态 / Status**：✅ 完成 / Done — `cx` 已可访问（`/actuator/health` 返回 200），DNS 指向独立分发 `EX15BSO66B05G`；`photos` 分发与站点行为未改动。 *Live and reachable; the photos distribution is untouched.*
 
 ### P4 · Open-source observability / 开源可观测性
 
@@ -294,6 +306,12 @@ P7 Acceptance       T-30 → T-31 → T-32
   CODEOWNERS/环境保护。
 - **验收 / Done when**：无审批 PR 无法合并；规则不会意外授予 fork PR 云权限。
 - **追溯 / Traces to**：FR-06、Plan §7。
+- **状态 / Status**：✅ 完成 / Done — 四个仓库已建 `main-governance-v5` ruleset（禁止删除/force push、
+  PR + 1 人工审批、required checks：album「单测 / unit tests」、album-infra「lint」、album-mgmt「image」）。
+  三个 v5 PR 当前均 BLOCKED 于 REVIEW_REQUIRED，即验收条件本身。合并（merge to main）仍由主人手动执行。
+  *Rulesets `main-governance-v5` created in all four repos (deletion/force-push blocked, PR + 1 human
+  approval, required checks per repo). All three v5 PRs are BLOCKED on review only — the acceptance
+  criterion itself. Actual merges remain a manual owner action.*
 
 #### T-28 GPT code review / 接入 GPT code review
 
@@ -302,6 +320,14 @@ P7 Acceptance       T-30 → T-31 → T-32
   timeout/failure 默认阻断，管理员 override 留审计。
 - **验收 / Done when**：真实测试 PR 有 review/check；secret、原图、state 不会进入 review context。
 - **追溯 / Traces to**：FR-06、Plan §7.2。
+- **状态 / Status**：🔶 部分完成 / Partial — 尝试经 ruleset REST API 传
+  `automatic_copilot_code_review_enabled: true`，GitHub 返回时已静默剥离（当前 REST API 不接受）。
+  兜底：在 UI 上为各仓库 ruleset 勾选 Copilot code review，或 PR 页 Reviewers → Copilot 手动请求。
+  规则集其余部分（审批 + required checks）已生效并阻断合并。
+  *Attempted `automatic_copilot_code_review_enabled` via the ruleset API; GitHub silently stripped
+  the field (not accepted by REST today). Fallback: enable Copilot code review on each ruleset in the
+  UI, or request it per-PR under Reviewers → Copilot. The rest of the ruleset (approval + required
+  checks) is active and blocking.*
 
 #### T-29 Merge-to-main CI/CD / 验证合并后流水线
 
@@ -310,6 +336,7 @@ P7 Acceptance       T-30 → T-31 → T-32
   保持边界；失败保留 last-known-good。
 - **验收 / Done when**：成功 merge 触发正确 pipeline；故意失败不会破坏线上版本。
 - **追溯 / Traces to**：FR-06、Plan §7。
+- **状态 / Status**：⏳ 未开始 / Not started — `album-mgmt` 只有 `container.yml`（构建 + 推 ECR）；ECS 部署仍靠 `album-infra` 手动 apply。 *Only an image build workflow exists; deployment is a manual infra apply.*
 
 ### P7 · Acceptance / 总体验收
 
@@ -319,6 +346,7 @@ P7 Acceptance       T-30 → T-31 → T-32
 - **内容 / Work**：验证 frontend → search → management read model → observability → GitHub CI/CD 全链路。
 - **验收 / Done when**：成功路径、识别失败、搜索不可用、管理站不可用、观测栈不可用均有降级。
 - **追溯 / Traces to**：V5 全部 FR。
+- **状态 / Status**：⏳ 未开始 / Not started — 前置 T-12、T-21、T-29 未达验收。 *Blocked by T-12, T-21 and T-29.*
 
 #### T-31 Security and privacy acceptance / 安全与隐私验收
 
@@ -327,6 +355,7 @@ P7 Acceptance       T-30 → T-31 → T-32
   验证 RBAC、TLS、branch policy、OIDC、无长期密钥。
 - **验收 / Done when**：所有 hard invariants 有证据；不合格项阻断发布。
 - **追溯 / Traces to**：Hard invariants、FR-05、FR-06。
+- **状态 / Status**：⏳ 未开始 / Not started — 部分隔离项已被 `docs/03-security.md` §11 自检覆盖（含管理站只读与敏感字段扫描）。 *Partially covered by the docs pre-flight list.*
 
 #### T-32 V5 release gate / V5 发布关卡
 
@@ -334,6 +363,7 @@ P7 Acceptance       T-30 → T-31 → T-32
 - **内容 / Work**：记录性能、成本、告警、回滚、用户原型反馈和已知限制；确认是否扩大管理站权限或引入 embedding。
 - **验收 / Done when**：Spec/Plan/Tasks 交付记录完整；下一轮范围不与 V5 混写。
 - **追溯 / Traces to**：Plan §12。
+- **状态 / Status**：⏳ 未开始 / Not started — 仍受 `V5-ACCEPTANCE.md` 的 5 条 release blocker 约束。 *Still gated by five release blockers.*
 
 ## 3. 用户检查点 / User checkpoints
 
