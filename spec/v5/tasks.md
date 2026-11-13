@@ -1,8 +1,8 @@
 # 个人相册 · 第五版任务清单 / Personal Album · Version 5 Tasks
 
 > Spec-Driven Development · 阶段 3 / 5（Tasks） / Stage 3 / 5 (Tasks)
-> 状态：**待执行** / Status: **Pending execution**
-> 日期 / Date: 2026-11-12
+> 状态：**V5 基础设施已部署，验收记录持续维护** / Status: **V5 infrastructure deployed; acceptance record maintained**
+> 日期 / Date: 2026-11-13
 > 上游 / Upstream: [`spec.md`](./spec.md)（confirmed）+ [`plan.md`](./plan.md)（confirmed）
 
 本文把 V5 Plan 拆成可独立验收的任务。实现阶段不得绕过任务依赖直接修改生产资源。
