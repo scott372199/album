@@ -283,7 +283,7 @@ P7 Acceptance       T-30 → T-31 → T-32
   IAM、TLS、retention 和数据出域。
 - **验收 / Done when**：成本模型有固定/变量项；所有超预算或高风险项有明确 gate。
 - **追溯 / Traces to**：FR-03、FR-05、Plan §11。
-- **状态 / Status**：⏳ 进行中 / In progress — runtime IAM, security-group ingress, TLS, CloudFront methods, and 14-day log retention were verified; final cost model and DNS cutover decision remain a release gate.
+- **状态 / Status**：✅ 完成 / Done — verified runtime IAM, security-group ingress, TLS, CloudFront methods, 14-day log retention, and regional service cost data; the remaining DNS traffic cutover is intentionally outside this task and remains a manual release gate.
 
 ### P6 · Branch governance / 分支与交付治理
 
