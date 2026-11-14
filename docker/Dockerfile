@@ -37,6 +37,12 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY src/server/ ./
 
+# V5 契约是 correlation.mjs 启动时读的唯一真相源。镜像里没有仓库根目录，
+# 所以把它拷进 /var/task/spec/，与代码里的第二个候选路径一致。
+# The V5 contract is read at startup by correlation.mjs. The image has no repo
+# root, so copy it to /var/task/spec/ to match the second candidate path.
+COPY spec/v5/contracts/v5-contracts.json ./spec/v5/contracts/v5-contracts.json
+
 # ENTRYPOINT 固定，CMD 就是「哪个 handler」——Lambda 的 image_config.command
 # 覆盖的正是 CMD，于是两个函数共用一个镜像不需要任何额外机制。
 # ENTRYPOINT is fixed and CMD carries the handler; image_config.command

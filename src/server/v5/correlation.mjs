@@ -16,10 +16,36 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-/** 契约只加载一次 / Load the contract once. */
-export const CONTRACT = JSON.parse(
-  readFileSync(new URL('../../../spec/v5/contracts/v5-contracts.json', import.meta.url), 'utf8'),
-);
+/**
+ * 契约只加载一次。两个候选路径对应两种运行环境：
+ *   1. 仓库里 src/server/v5/ → ../../../spec/… （开发/单测/CI）
+ *   2. Lambda 镜像里 /var/task/v5/ → ../spec/…（Dockerfile 把契约拷进
+ *      /var/task/spec/；镜像没有仓库根目录，../../../ 会解析到 /spec/）
+ * 契约仍是唯一真相源，不在代码里另抄一份。
+ *
+ * Load the contract once. Two candidates cover both runtimes:
+ *   1. In the repo, src/server/v5/ -> ../../../spec/... (dev/tests/CI)
+ *   2. In the Lambda image, /var/task/v5/ -> ../spec/... (the Dockerfile
+ *      copies the contract into /var/task/spec/; there is no repo root,
+ *      so ../../../ would resolve to /spec/)
+ * The contract remains the single source of truth.
+ */
+function loadContract() {
+  const candidates = [
+    new URL('../../../spec/v5/contracts/v5-contracts.json', import.meta.url),
+    new URL('../spec/v5/contracts/v5-contracts.json', import.meta.url),
+  ];
+  for (const url of candidates) {
+    try {
+      return JSON.parse(readFileSync(url, 'utf8'));
+    } catch (err) {
+      if (err?.code !== 'ENOENT') throw err;
+    }
+  }
+  throw new Error('v5-contracts.json 未找到 / not found');
+}
+
+export const CONTRACT = loadContract();
 
 export const PUBLIC_FIELDS = [...CONTRACT.publicFields];
 export const FORBIDDEN_FIELDS = [...CONTRACT.forbiddenFields];
