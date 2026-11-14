@@ -1,5 +1,5 @@
 import {
-  groupByYearMonth, computeEditorialRows, layoutParams, normalizeDensity,
+  groupByYearMonth, computeEditorialRows, layoutParams, normalizeDensity, albumSummary,
 } from './state.js';
 import { escapeHtml, photoAlt, srcsetFor, sizesFor, isTouch, reducedMotion, markWhenReady } from './ui.js';
 
@@ -288,6 +288,7 @@ function createRow(plan, { byId, onOpen }) {
 function createYearSection(plan, { byId, onOpen }) {
   const section = document.createElement('section');
   section.className = 'year-group';
+  section.dataset.year = String(plan.year);
 
   const head = document.createElement('h2');
   head.className = 'year';
@@ -300,6 +301,7 @@ function createYearSection(plan, { byId, onOpen }) {
     if (item.kind === 'month') {
       const title = document.createElement('h3');
       title.className = 'month';
+      title.dataset.month = String(item.month);
       title.innerHTML = `${item.month} 月<span>${item.count}</span>`;
       rowsHost.appendChild(title);
     } else {
@@ -468,10 +470,20 @@ export function renderFeatured(host, photos, { onOpen }) {
 
 /* ---------- 相册卡片 ---------- */
 
-export function renderAlbums(host, albums, { onOpenAlbum, byId }) {
+export function renderAlbums(host, albums, { onOpenAlbum, byId, photos = [] }) {
   host.replaceChildren();
+
+  // 一次分组，避免每张卡片都对全部照片 filter 一遍
+  const members = new Map();
+  for (const photo of photos) {
+    if (!photo.album) continue;
+    if (!members.has(photo.album)) members.set(photo.album, []);
+    members.get(photo.album).push(photo);
+  }
+
   for (const album of albums) {
-    const cover = byId?.get(album.cover);
+    const summary = albumSummary(album, members.get(album.name) || []);
+    const cover = summary.cover || byId?.get(summary.coverId);
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'album-card';
@@ -484,17 +496,21 @@ export function renderAlbums(host, albums, { onOpenAlbum, byId }) {
       img.alt = `${album.name} 相册封面`;
       img.loading = 'lazy';
       img.decoding = 'async';
-      img.src = cover.view || cover.grid || cover.poster;
+      img.src = cover.grid || cover.thumb || cover.poster;
       markWhenReady(img, img, 'is-loaded');
       frame.appendChild(img);
     }
 
     const name = document.createElement('h3');
     name.textContent = album.name;
-    const count = document.createElement('p');
-    count.textContent = `${album.count} 张`;
+    const meta = document.createElement('p');
+    meta.className = 'album-meta';
+    // 只报「张数 · 时间跨度」：manifest 没有发布时间，就不编「最近更新」（O-03）
+    meta.textContent = summary.span
+      ? `${summary.count} 张 · ${summary.span}`
+      : `${summary.count} 张`;
 
-    card.append(frame, name, count);
+    card.append(frame, name, meta);
     card.addEventListener('click', () => onOpenAlbum(album.name));
     host.appendChild(card);
   }

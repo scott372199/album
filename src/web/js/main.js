@@ -15,6 +15,9 @@ import {
   parseQuery, runSearch, indexUrl, isIndexUsable, sanitizeIndex, INDEX_VERSION,
 } from './search.js';
 import { initSearchUI } from './search-ui.js';
+import {
+  ANCHOR_KEY, serializeAnchor, parseAnchor, nearestAnchor,
+} from './anchor.js';
 import { initHero } from './hero.js';
 import { mountUploadLegend } from './upload-state.js';
 
@@ -150,6 +153,74 @@ function writePref(key, value) {
   }
 }
 
+function clearPref(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* 同上 */
+  }
+}
+
+/* ---------- 回到上次位置（T-17） ---------- */
+
+/** 参考线在视口上方 1/4 处：比顶边更贴近「我正在看哪一段」 */
+const anchorLine = () => window.innerHeight * 0.25;
+
+/** 从 DOM 收集「年 + 月 + 当前顶边」，只会用月份标题作锚点 */
+function collectAnchors() {
+  const out = [];
+  for (const section of document.querySelectorAll('.year-group')) {
+    const year = Number(section.dataset.year);
+    for (const title of section.querySelectorAll('.month')) {
+      out.push({
+        year,
+        month: Number(title.dataset.month),
+        top: title.getBoundingClientRect().top,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * 记住位置：只在「纯时间流」里记——筛选结果、相册页、搜索态都不记，
+ * 否则记忆会指向一个用户平时根本回不去的位置。
+ */
+function rememberAnchor() {
+  if (state.mode || state.view !== 'timeline') return;
+  if (state.album || state.q || state.tag || state.year || state.month) return;
+  const entry = nearestAnchor(collectAnchors(), anchorLine());
+  if (!entry?.month) return;
+  const value = serializeAnchor(entry);
+  if (value) {
+    writePref(ANCHOR_KEY, value);
+    paintAnchorReset();
+  }
+}
+
+/** 恢复到上次的年月；返回 true 表示跳过了一次顶部对齐 */
+function restoreAnchor() {
+  const anchor = parseAnchor(readPref(ANCHOR_KEY));
+  if (!anchor) return false;
+  if (state.q || state.tag || state.year || state.month || state.album) return false;
+
+  const node = document.querySelector(
+    `.year-group[data-year="${anchor.year}"] .month[data-month="${anchor.month}"]`,
+  );
+  if (!node) return false;
+  node.scrollIntoView({ block: 'start', behavior: 'auto' });
+  // 吸顶导航会盖住月份标题，往下让出它的高度
+  const nav = document.querySelector('.site-nav');
+  if (nav) window.scrollBy(0, -(nav.getBoundingClientRect().height + 8));
+  return true;
+}
+
+function paintAnchorReset() {
+  const button = el('anchor-reset');
+  if (!button) return;
+  button.hidden = !readPref(ANCHOR_KEY);
+}
+
 /* ---------- 静态区块 ---------- */
 
 function renderStats() {
@@ -183,6 +254,7 @@ function renderSite() {
   el('featured').hidden = !hasFeatured;
 
   renderAlbums(el('album-grid'), ctx.index.albums, {
+    photos: ctx.index.photos,
     byId: ctx.index.byId,
     onOpenAlbum: (name) => {
       state.view = 'album';
@@ -327,6 +399,8 @@ async function applyFromHash({ initial = false } = {}) {
   ctx.lastHash = location.hash;
   if (photoId) openById(photoId);
   else if (initial) window.scrollTo(0, 0);
+  // 返回「是否已经定位到具体照片」：定位了就别再按记忆滚一次
+  return Boolean(photoId);
 }
 
 /* ---------- 模式 ---------- */
@@ -442,6 +516,22 @@ function wire() {
     if (!ctx.catalog.hasMore) el('sentinel').hidden = true;
   }, { rootMargin: '600px' });
   more.observe(el('sentinel'));
+
+  // 滚动位置记忆：rAF 节流，滚动中不做任何布局读写以外的事
+  let anchorFrame = 0;
+  window.addEventListener('scroll', () => {
+    if (anchorFrame) return;
+    anchorFrame = requestAnimationFrame(() => {
+      anchorFrame = 0;
+      rememberAnchor();
+    });
+  }, { passive: true });
+
+  el('anchor-reset').addEventListener('click', () => {
+    clearPref(ANCHOR_KEY);
+    paintAnchorReset();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
 
   window.addEventListener('popstate', () => {
     if (location.hash === ctx.lastHash) return;
@@ -563,7 +653,11 @@ async function boot() {
   // 索引不可用时静默降级，不阻塞任何浏览路径（见 loadIndex）
   // Index outage degrades silently and never blocks browsing (see loadIndex).
   await loadIndex();
-  await applyFromHash({ initial: true });
+  // 关掉浏览器的自动滚动恢复：我们自己按年月恢复，避免「先跳顶部再跳回来」的闪动
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  const restored = await applyFromHash({ initial: true });
+  if (!restored) restoreAnchor();
+  paintAnchorReset();
 }
 
 boot();

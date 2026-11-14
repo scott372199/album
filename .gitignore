@@ -32,3 +32,6 @@ data/
 
 # 工作区笔记（含账号/资源 ID 等内部信息，不进公开仓库）
 .workbuddy/
+
+# 体积门禁的基线（T-12），每次构建自动写，不进仓库
+.budget-baseline.json

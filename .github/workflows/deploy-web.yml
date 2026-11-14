@@ -72,6 +72,13 @@ jobs:
       - name: 结构断言 / Structure assertions
         run: npm run verify
 
+      # 体积门禁（T-12）：同样必须在构建之后。它量的是 dist/ 的 gzip 之和，
+      # 所以不能塞进 `npm run verify`——verify 在干净检出上跑，那时还没有 dist。
+      # Budget gate (T-12) also runs after the build; it measures dist/, so it
+      # cannot live inside `verify`, which runs on a clean checkout.
+      - name: 体积门禁 / Size budget
+        run: node scripts/check-budget.mjs
+
       - name: 单测 / Unit tests
         run: npm test
 

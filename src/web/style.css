@@ -742,7 +742,15 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
   margin: 0;
   font-size: var(--fs-caption);
   letter-spacing: 0.1em;
-  color: var(--ink-3);
+  color: var(--ink-3);}
+
+/* 张数 · 时间跨度：320px 卡片里也不能换行挤成两截 */
+.album-card .album-meta {
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---------- 11. 深色章节 ---------- */
@@ -1961,3 +1969,24 @@ body.is-empty .hero-cta { display: none; }
   ::view-transition-old(hero-media),
   ::view-transition-new(hero-media) { animation: none !important; }
 }
+
+/* 回到上次位置：只在有记忆时出现的悬浮按钮（T-17） */
+.anchor-reset {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 30;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  box-shadow: var(--shadow-lift);
+  cursor: pointer;
+}
+
+.anchor-reset[hidden] { display: none; }
+.anchor-reset:hover { border-color: var(--ink); }
+.anchor-reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

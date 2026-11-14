@@ -218,6 +218,58 @@ export function computeEditorialRows(items, width, opts = {}) {
   return rows;
 }
 
+/* ---------------- 相册卡片 ---------------- */
+
+/**
+ * 相册卡片要说的三件事：时间跨度、封面、张数。
+ *
+ * 封面**不能用 `Math.random()`**——卡片在任何一次重绘（筛选、改密度、窗口缩放）
+ * 都会重新渲染，随机封面的结果是「同一张卡片每次都在换脸」。
+ * 这里用相册名的 FNV-1a 哈希取模选成员：同一个名字永远落在同一张。
+ *
+ * 哈希只做取模，不参与任何跨进程比较，所以不存在跨平台差异问题。
+ *
+ * The cover is chosen by a name hash, never at random: cards re-render on every
+ * filter / density / resize, and a random cover would visibly reshuffle.
+ */
+export function hashOf(text) {
+  let hash = 2166136261;
+  const value = String(text ?? '');
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+/** `2024.3–2024.5`；单月时只写一个；跨年时两端都带年 */
+export function formatAlbumSpan(members) {
+  const list = Array.isArray(members) ? members : [];
+  if (!list.length) return '';
+  const keys = list.map((photo) => (Number(photo.year) || 0) * 100 + (Number(photo.month) || 0));
+  const min = Math.min(...keys);
+  const max = Math.max(...keys);
+  const label = (key) => `${Math.floor(key / 100)}.${key % 100}`;
+  return min === max ? label(min) : `${label(min)}–${label(max)}`;
+}
+
+/**
+ * 一个相册的卡片事实：封面（确定性）、张数、时间跨度。
+ * 没有发布时间字段时**不编造**「最近更新」，只报张数（O-03 已定，不新增写路径）。
+ */
+export function albumSummary(album, members) {
+  const list = Array.isArray(members) ? members : [];
+  const count = Number.isFinite(album?.count) ? album.count : list.length;
+  const pick = list.length ? list[hashOf(album?.name) % list.length] : null;
+  return {
+    name: album?.name || '',
+    count,
+    span: formatAlbumSpan(list),
+    coverId: pick?.id || album?.cover || '',
+    cover: pick || null,
+  };
+}
+
 /* ---------------- 故事分章 ---------------- */
 
 /**
