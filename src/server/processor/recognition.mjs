@@ -49,15 +49,13 @@
  * SQS worker + incremental index land in V6.
  */
 import { createHash } from 'node:crypto';
-import sharp from 'sharp';
 import { env } from '../lib/config.mjs';
-import { log, errorFields } from '../lib/log.mjs';
+import { log } from '../lib/log.mjs';
 import { backoffMs } from '../lib/retry.mjs';
-import * as store from './store.mjs';
 import { buildRecognitionInput } from '../recognition/input.mjs';
 import { normalizeLabels } from '../recognition/provider.mjs';
 import { normalizeRekognitionResponse } from '../recognition/rekognition.mjs';
-import { createIndex, INDEX_VERSION } from '../search/index.mjs';
+import { createIndex } from '../search/index.mjs';
 import { computeRev, indexObjectKey } from '../search/publish.mjs';
 
 /** 标签持久层前缀 / labels persistence prefix. */
@@ -76,6 +74,25 @@ export const DETECT_PARAMS = {
 /** 识别开关：RECOGNITION_ENABLED=0 时只发布索引，不调用 Rekognition。 */
 export function recognitionEnabled() {
   return env('RECOGNITION_ENABLED', '1') !== '0';
+}
+
+// sharp 与 store 都按需动态加载：单测是「零依赖安装」的（build-image.yml
+// 直接跑 npm test，不装包），所以本模块在 import 时不能碰任何外部包。
+// 生产环境（Lambda 镜像里有 sharp 与 AWS SDK）不受影响。
+// sharp and store load lazily: unit tests run with zero installs
+// (build-image.yml runs npm test without installing anything), so merely
+// importing this module must not touch any external package. The Lambda
+// image contains sharp and the AWS SDKs, so production is unaffected.
+let defaultIoPromise = null;
+
+async function defaultIo() {
+  defaultIoPromise ??= import('./store.mjs').then((store) => ({ store }));
+  return defaultIoPromise;
+}
+
+async function defaultConvertToJpeg(gridBuffer) {
+  const { default: sharp } = await import('sharp');
+  return sharp(gridBuffer).jpeg({ quality: 88 }).toBuffer();
 }
 
 // Rekognition SDK 按需动态加载：测试与未启用识别的环境完全不碰 AWS 包。
@@ -132,6 +149,7 @@ export async function recognizeGrid({
   assetId,
   gridBuffer,
   callDetectLabels = defaultCallDetectLabels,
+  convertToJpeg = defaultConvertToJpeg,
 } = {}) {
   if (!recognitionEnabled()) return null;
   if (!Buffer.isBuffer(gridBuffer) || gridBuffer.length === 0) {
@@ -139,7 +157,7 @@ export async function recognizeGrid({
   }
 
   // Rekognition 只认 JPEG/PNG / Rekognition accepts JPEG/PNG only
-  const jpegBuffer = await sharp(gridBuffer).jpeg({ quality: 88 }).toBuffer();
+  const jpegBuffer = await convertToJpeg(gridBuffer);
 
   const contentHash = createHash('sha256').update(gridBuffer).digest('hex');
   const input = buildRecognitionInput({
@@ -212,21 +230,22 @@ export async function publishRecognition({
   siteBucket,
   assetId,
   recognition = null,
-  io = { store },
+  io = null,
 } = {}) {
+  const { store: ioStore } = io || await defaultIo();
   if (recognition?.labels?.length && assetId) {
-    await writeLabelsFile(siteBucket, assetId, recognition, io);
+    await writeLabelsFile(siteBucket, assetId, recognition, { store: ioStore });
   }
 
   const versionKey = env('VERSION_KEY', 'data/version.json');
-  const version = await io.store.readJson(siteBucket, versionKey);
+  const version = await ioStore.readJson(siteBucket, versionKey);
   const manifestKey = version?.manifest || env('MANIFEST_KEY', 'data/manifest.json');
-  const manifest = await io.store.readJson(siteBucket, manifestKey);
+  const manifest = await ioStore.readJson(siteBucket, manifestKey);
   if (!manifest?.photos?.length) {
     return { rev: null, items: 0, recognized: 0 };
   }
 
-  const labelKeys = await io.store.listKeys(siteBucket, LABELS_PREFIX);
+  const labelKeys = await ioStore.listKeys(siteBucket, LABELS_PREFIX);
   if (labelKeys.length > LABEL_REBUILD_CAP) {
     log.warn('index.rebuild_skipped_cap', { labelFiles: labelKeys.length, cap: LABEL_REBUILD_CAP });
     return { rev: null, items: 0, recognized: 0, skipped: 'cap' };
@@ -234,7 +253,7 @@ export async function publishRecognition({
 
   const labelEntries = [];
   for (const key of labelKeys) {
-    const entry = await io.store.readJson(siteBucket, key);
+    const entry = await ioStore.readJson(siteBucket, key);
     if (entry?.id && Array.isArray(entry.labels)) labelEntries.push(entry);
   }
 
@@ -247,13 +266,13 @@ export async function publishRecognition({
   // Immutable rev object: key must match the publisher whitelist; the fallback
   // object is no-store and is what the frontend degrades to.
   const versionedKey = indexObjectKey(rev);
-  await io.store.putBuffer(siteBucket, versionedKey, Buffer.from(body, 'utf8'), {
+  await ioStore.putBuffer(siteBucket, versionedKey, Buffer.from(body, 'utf8'), {
     contentType: 'application/json; charset=utf-8',
-    cacheControl: io.store.CACHE_IMMUTABLE,
+    cacheControl: ioStore.CACHE_IMMUTABLE,
   });
-  await io.store.putBuffer(siteBucket, 'data/search-index.json', Buffer.from(body, 'utf8'), {
+  await ioStore.putBuffer(siteBucket, 'data/search-index.json', Buffer.from(body, 'utf8'), {
     contentType: 'application/json; charset=utf-8',
-    cacheControl: io.store.CACHE_NO_STORE,
+    cacheControl: ioStore.CACHE_NO_STORE,
   });
 
   return { rev, items: index.items.length, recognized: items.length };
