@@ -84,9 +84,9 @@ function fail(msg) {
     '索引只在 S3 站点桶里，本仓库不含 data/。先从桶里取一份：',
     '',
     '  # 桶名 = Lambda album-processor 的环境变量 SITE_BUCKET',
-    '  aws s3 cp s3://<SITE_BUCKET>/data/search-index.json data/',
+    '  aws s3 cp s3://$SITE_BUCKET/data/search-index.json data/',
     '',
-    '或直接打开 https://photos.chenyouyi.top/data/search-index.json 另存为 data/search-index.json。',
+    '或直接打开 https://<站点域名>/data/search-index.json 另存为 data/search-index.json。',
     'data/ 已在 .gitignore 中，不会被提交。',
     '',
   ].join('\n'));

@@ -1,0 +1,1093 @@
+{
+  "version": 1,
+  "note": "唯一真相：中文词表。改这里，然后跑 node scripts/gen-lexicon.mjs",
+  "terms": [
+    {
+      "term": "lake",
+      "zh": "湖水",
+      "kind": "scene",
+      "aliases": [
+        "湖泊",
+        "湖",
+        "水面",
+        "湖景"
+      ]
+    },
+    {
+      "term": "mountain",
+      "zh": "山峰",
+      "kind": "scene",
+      "aliases": [
+        "山",
+        "群山",
+        "高山",
+        "雪山",
+        "山峦"
+      ]
+    },
+    {
+      "term": "blue sky",
+      "zh": "蓝天",
+      "kind": "scene",
+      "aliases": [
+        "青天",
+        "天空",
+        "晴空",
+        "蓝天白云"
+      ]
+    },
+    {
+      "term": "car",
+      "zh": "汽车",
+      "kind": "object",
+      "aliases": [
+        "轿车",
+        "小汽车",
+        "车子",
+        "车辆",
+        "私家车"
+      ]
+    },
+    {
+      "term": "motorcycle",
+      "zh": "摩托车",
+      "kind": "object",
+      "aliases": [
+        "机车",
+        "摩托",
+        "电单车"
+      ]
+    },
+    {
+      "term": "shirt",
+      "zh": "衬衫",
+      "kind": "object",
+      "aliases": [
+        "衬衣"
+      ]
+    },
+    {
+      "term": "red",
+      "zh": "红色",
+      "kind": "color",
+      "aliases": [
+        "红"
+      ]
+    },
+    {
+      "term": "blue",
+      "zh": "蓝色",
+      "kind": "color",
+      "aliases": [
+        "蓝"
+      ]
+    },
+    {
+      "term": "green",
+      "zh": "绿色",
+      "kind": "color",
+      "aliases": [
+        "绿"
+      ]
+    },
+    {
+      "term": "white",
+      "zh": "白色",
+      "kind": "color",
+      "aliases": [
+        "白"
+      ]
+    },
+    {
+      "term": "black",
+      "zh": "黑色",
+      "kind": "color",
+      "aliases": [
+        "黑"
+      ]
+    },
+    {
+      "term": "yellow",
+      "zh": "黄色",
+      "kind": "color",
+      "aliases": [
+        "黄"
+      ]
+    },
+    {
+      "term": "grey",
+      "zh": "灰色",
+      "kind": "color",
+      "aliases": [
+        "灰",
+        "浅灰"
+      ]
+    },
+    {
+      "term": "person",
+      "zh": "人物",
+      "kind": "object",
+      "aliases": [
+        "人",
+        "有人"
+      ]
+    },
+    {
+      "term": "brown",
+      "zh": "棕色",
+      "kind": "color",
+      "aliases": [
+        "褐色",
+        "咖啡色"
+      ]
+    },
+    {
+      "term": "head",
+      "zh": "头",
+      "kind": "object",
+      "aliases": [
+        "头部",
+        "脑袋"
+      ]
+    },
+    {
+      "term": "boy",
+      "zh": "男孩",
+      "kind": "object",
+      "aliases": [
+        "男生",
+        "小男孩",
+        "儿子"
+      ]
+    },
+    {
+      "term": "child",
+      "zh": "小孩",
+      "kind": "object",
+      "aliases": [
+        "孩子",
+        "儿童",
+        "小朋友",
+        "娃",
+        "小娃"
+      ]
+    },
+    {
+      "term": "face",
+      "zh": "脸",
+      "kind": "object",
+      "aliases": [
+        "面部",
+        "脸蛋",
+        "正脸",
+        "脸部"
+      ]
+    },
+    {
+      "term": "male",
+      "zh": "男性",
+      "kind": "object",
+      "aliases": [
+        "男士"
+      ]
+    },
+    {
+      "term": "people",
+      "zh": "人群",
+      "kind": "object",
+      "aliases": [
+        "一群人",
+        "大家"
+      ]
+    },
+    {
+      "term": "sleeve",
+      "zh": "袖子",
+      "kind": "object",
+      "aliases": [
+        "衣袖",
+        "短袖",
+        "长袖"
+      ]
+    },
+    {
+      "term": "happy",
+      "zh": "开心",
+      "kind": "object",
+      "aliases": [
+        "高兴",
+        "快乐",
+        "愉快"
+      ]
+    },
+    {
+      "term": "pink",
+      "zh": "粉色",
+      "kind": "color",
+      "aliases": [
+        "粉红",
+        "粉"
+      ]
+    },
+    {
+      "term": "sitting",
+      "zh": "坐着",
+      "kind": "object",
+      "aliases": [
+        "坐",
+        "坐姿"
+      ]
+    },
+    {
+      "term": "adult",
+      "zh": "大人",
+      "kind": "object",
+      "aliases": [
+        "成年人",
+        "成人"
+      ]
+    },
+    {
+      "term": "food",
+      "zh": "食物",
+      "kind": "object",
+      "aliases": [
+        "吃的",
+        "美食",
+        "饭菜"
+      ]
+    },
+    {
+      "term": "furniture",
+      "zh": "家具",
+      "kind": "object",
+      "aliases": [
+        "桌椅",
+        "柜子",
+        "家居"
+      ]
+    },
+    {
+      "term": "indoors",
+      "zh": "室内",
+      "kind": "object",
+      "aliases": [
+        "屋里",
+        "房间内",
+        "屋内"
+      ]
+    },
+    {
+      "term": "man",
+      "zh": "男人",
+      "kind": "object",
+      "aliases": [
+        "男子"
+      ]
+    },
+    {
+      "term": "shorts",
+      "zh": "短裤",
+      "kind": "object",
+      "aliases": []
+    },
+    {
+      "term": "urban",
+      "zh": "都市",
+      "kind": "scene",
+      "aliases": [
+        "城市街景",
+        "街区"
+      ]
+    },
+    {
+      "term": "accessories",
+      "zh": "配饰",
+      "kind": "object",
+      "aliases": [
+        "饰品",
+        "首饰",
+        "配件"
+      ]
+    },
+    {
+      "term": "bag",
+      "zh": "包",
+      "kind": "object",
+      "aliases": [
+        "背包",
+        "书包",
+        "包包"
+      ]
+    },
+    {
+      "term": "black hair",
+      "zh": "黑发",
+      "kind": "object",
+      "aliases": [
+        "黑色头发"
+      ]
+    },
+    {
+      "term": "city",
+      "zh": "城市",
+      "kind": "object",
+      "aliases": [
+        "街景",
+        "街头"
+      ]
+    },
+    {
+      "term": "cream",
+      "zh": "奶油",
+      "kind": "object",
+      "aliases": [
+        "淡奶油"
+      ]
+    },
+    {
+      "term": "dessert",
+      "zh": "甜点",
+      "kind": "object",
+      "aliases": [
+        "点心",
+        "甜品",
+        "糕点"
+      ]
+    },
+    {
+      "term": "electronics",
+      "zh": "电子产品",
+      "kind": "object",
+      "aliases": [
+        "电器",
+        "数码"
+      ]
+    },
+    {
+      "term": "female",
+      "zh": "女性",
+      "kind": "object",
+      "aliases": [
+        "女士"
+      ]
+    },
+    {
+      "term": "footwear",
+      "zh": "鞋类",
+      "kind": "object",
+      "aliases": [
+        "鞋子"
+      ]
+    },
+    {
+      "term": "hair",
+      "zh": "头发",
+      "kind": "object",
+      "aliases": [
+        "发型"
+      ]
+    },
+    {
+      "term": "handbag",
+      "zh": "手提包",
+      "kind": "object",
+      "aliases": [
+        "手袋"
+      ]
+    },
+    {
+      "term": "ice cream",
+      "zh": "冰淇淋",
+      "kind": "object",
+      "aliases": [
+        "雪糕",
+        "冰激凌"
+      ]
+    },
+    {
+      "term": "orange",
+      "zh": "橙色",
+      "kind": "color",
+      "aliases": [
+        "橙"
+      ]
+    },
+    {
+      "term": "pants",
+      "zh": "裤子",
+      "kind": "object",
+      "aliases": [
+        "长裤"
+      ]
+    },
+    {
+      "term": "photography",
+      "zh": "摄影",
+      "kind": "object",
+      "aliases": [
+        "照片"
+      ]
+    },
+    {
+      "term": "portrait",
+      "zh": "人像",
+      "kind": "object",
+      "aliases": [
+        "肖像",
+        "特写",
+        "写真"
+      ]
+    },
+    {
+      "term": "shoe",
+      "zh": "鞋",
+      "kind": "object",
+      "aliases": [
+        "皮鞋",
+        "球鞋"
+      ]
+    },
+    {
+      "term": "sliding",
+      "zh": "滑梯",
+      "kind": "object",
+      "aliases": [
+        "滑行"
+      ]
+    },
+    {
+      "term": "smile",
+      "zh": "微笑",
+      "kind": "object",
+      "aliases": [
+        "笑",
+        "笑容",
+        "笑脸"
+      ]
+    },
+    {
+      "term": "architecture",
+      "zh": "建筑",
+      "kind": "object",
+      "aliases": [
+        "建筑物"
+      ]
+    },
+    {
+      "term": "art",
+      "zh": "艺术",
+      "kind": "object",
+      "aliases": [
+        "艺术品"
+      ]
+    },
+    {
+      "term": "baby",
+      "zh": "宝宝",
+      "kind": "object",
+      "aliases": [
+        "婴儿",
+        "小宝宝"
+      ]
+    },
+    {
+      "term": "christmas",
+      "zh": "圣诞",
+      "kind": "object",
+      "aliases": [
+        "圣诞节"
+      ]
+    },
+    {
+      "term": "christmas decorations",
+      "zh": "圣诞装饰",
+      "kind": "object",
+      "aliases": [
+        "彩灯",
+        "挂饰"
+      ]
+    },
+    {
+      "term": "computer",
+      "zh": "电脑",
+      "kind": "object",
+      "aliases": [
+        "计算机"
+      ]
+    },
+    {
+      "term": "cup",
+      "zh": "杯子",
+      "kind": "object",
+      "aliases": [
+        "马克杯",
+        "水杯"
+      ]
+    },
+    {
+      "term": "festival",
+      "zh": "节日",
+      "kind": "object",
+      "aliases": [
+        "庆典",
+        "活动"
+      ]
+    },
+    {
+      "term": "girl",
+      "zh": "女孩",
+      "kind": "object",
+      "aliases": [
+        "女生",
+        "小女孩",
+        "女儿",
+        "闺女"
+      ]
+    },
+    {
+      "term": "pajamas",
+      "zh": "睡衣",
+      "kind": "object",
+      "aliases": []
+    },
+    {
+      "term": "plant",
+      "zh": "植物",
+      "kind": "object",
+      "aliases": [
+        "绿植",
+        "盆栽",
+        "花草"
+      ]
+    },
+    {
+      "term": "road",
+      "zh": "马路",
+      "kind": "object",
+      "aliases": [
+        "公路",
+        "车道",
+        "道路"
+      ]
+    },
+    {
+      "term": "street",
+      "zh": "街道",
+      "kind": "object",
+      "aliases": [
+        "街上",
+        "路口"
+      ]
+    },
+    {
+      "term": "table",
+      "zh": "桌子",
+      "kind": "object",
+      "aliases": [
+        "餐桌",
+        "饭桌"
+      ]
+    },
+    {
+      "term": "text",
+      "zh": "文字",
+      "kind": "object",
+      "aliases": [
+        "字"
+      ]
+    },
+    {
+      "term": "advertisement",
+      "zh": "广告",
+      "kind": "object",
+      "aliases": [
+        "海报"
+      ]
+    },
+    {
+      "term": "baby laughing",
+      "zh": "宝宝笑",
+      "kind": "object",
+      "aliases": [
+        "婴儿笑"
+      ]
+    },
+    {
+      "term": "baseball cap",
+      "zh": "棒球帽",
+      "kind": "object",
+      "aliases": [
+        "鸭舌帽"
+      ]
+    },
+    {
+      "term": "bowl",
+      "zh": "碗",
+      "kind": "object",
+      "aliases": []
+    },
+    {
+      "term": "box",
+      "zh": "盒子",
+      "kind": "object",
+      "aliases": [
+        "箱子"
+      ]
+    },
+    {
+      "term": "building",
+      "zh": "楼房",
+      "kind": "object",
+      "aliases": [
+        "大楼",
+        "高楼"
+      ]
+    },
+    {
+      "term": "bus",
+      "zh": "公交车",
+      "kind": "object",
+      "aliases": [
+        "巴士",
+        "公交"
+      ]
+    },
+    {
+      "term": "cap",
+      "zh": "帽子",
+      "kind": "object",
+      "aliases": [
+        "便帽"
+      ]
+    },
+    {
+      "term": "chair",
+      "zh": "椅子",
+      "kind": "object",
+      "aliases": [
+        "座椅"
+      ]
+    },
+    {
+      "term": "christmas tree",
+      "zh": "圣诞树",
+      "kind": "object",
+      "aliases": []
+    },
+    {
+      "term": "computer hardware",
+      "zh": "电脑硬件",
+      "kind": "object",
+      "aliases": [
+        "硬件设备"
+      ]
+    },
+    {
+      "term": "conversation",
+      "zh": "交谈",
+      "kind": "object",
+      "aliases": [
+        "聊天",
+        "对话"
+      ]
+    },
+    {
+      "term": "cutlery",
+      "zh": "餐具",
+      "kind": "object",
+      "aliases": [
+        "刀叉"
+      ]
+    },
+    {
+      "term": "desk",
+      "zh": "书桌",
+      "kind": "object",
+      "aliases": [
+        "办公桌",
+        "写字台"
+      ]
+    },
+    {
+      "term": "disposable cup",
+      "zh": "一次性杯",
+      "kind": "object",
+      "aliases": [
+        "纸杯"
+      ]
+    },
+    {
+      "term": "family",
+      "zh": "全家福",
+      "kind": "object",
+      "aliases": [
+        "一家人",
+        "合影"
+      ]
+    },
+    {
+      "term": "fountain",
+      "zh": "喷泉",
+      "kind": "scene",
+      "aliases": []
+    },
+    {
+      "term": "foyer",
+      "zh": "门厅",
+      "kind": "object",
+      "aliases": [
+        "玄关",
+        "大堂"
+      ]
+    },
+    {
+      "term": "grass",
+      "zh": "草地",
+      "kind": "object",
+      "aliases": [
+        "草坪",
+        "青草"
+      ]
+    },
+    {
+      "term": "handicraft",
+      "zh": "手工",
+      "kind": "object",
+      "aliases": [
+        "手工艺品"
+      ]
+    },
+    {
+      "term": "hardware",
+      "zh": "硬件",
+      "kind": "object",
+      "aliases": []
+    },
+    {
+      "term": "hat",
+      "zh": "礼帽",
+      "kind": "object",
+      "aliases": [
+        "有檐帽",
+        "遮阳帽"
+      ]
+    },
+    {
+      "term": "icing",
+      "zh": "糖霜",
+      "kind": "object",
+      "aliases": [
+        "奶油霜"
+      ]
+    },
+    {
+      "term": "laptop",
+      "zh": "笔记本电脑",
+      "kind": "object",
+      "aliases": [
+        "笔记本",
+        "手提电脑"
+      ]
+    },
+    {
+      "term": "leaf",
+      "zh": "树叶",
+      "kind": "object",
+      "aliases": [
+        "叶子",
+        "落叶"
+      ]
+    },
+    {
+      "term": "lego set",
+      "zh": "乐高",
+      "kind": "object",
+      "aliases": [
+        "积木",
+        "乐高积木"
+      ]
+    },
+    {
+      "term": "machine",
+      "zh": "机器",
+      "kind": "object",
+      "aliases": [
+        "设备"
+      ]
+    },
+    {
+      "term": "monitor",
+      "zh": "显示器",
+      "kind": "object",
+      "aliases": [
+        "显示屏"
+      ]
+    },
+    {
+      "term": "number",
+      "zh": "数字",
+      "kind": "object",
+      "aliases": []
+    },
+    {
+      "term": "paint container",
+      "zh": "颜料罐",
+      "kind": "object",
+      "aliases": [
+        "颜料"
+      ]
+    },
+    {
+      "term": "painting",
+      "zh": "画作",
+      "kind": "object",
+      "aliases": [
+        "油画",
+        "画"
+      ]
+    },
+    {
+      "term": "park",
+      "zh": "公园",
+      "kind": "object",
+      "aliases": []
+    },
+    {
+      "term": "pc",
+      "zh": "台式电脑",
+      "kind": "object",
+      "aliases": [
+        "主机"
+      ]
+    },
+    {
+      "term": "performer",
+      "zh": "表演者",
+      "kind": "object",
+      "aliases": [
+        "演员"
+      ]
+    },
+    {
+      "term": "purple",
+      "zh": "紫色",
+      "kind": "color",
+      "aliases": [
+        "紫"
+      ]
+    },
+    {
+      "term": "romantic",
+      "zh": "浪漫",
+      "kind": "object",
+      "aliases": []
+    },
+    {
+      "term": "screen",
+      "zh": "屏幕",
+      "kind": "object",
+      "aliases": [
+        "荧幕"
+      ]
+    },
+    {
+      "term": "soft serve ice cream",
+      "zh": "甜筒",
+      "kind": "object",
+      "aliases": [
+        "软冰淇淋"
+      ]
+    },
+    {
+      "term": "solo performance",
+      "zh": "独奏",
+      "kind": "object",
+      "aliases": [
+        "单人表演"
+      ]
+    },
+    {
+      "term": "spoon",
+      "zh": "勺子",
+      "kind": "object",
+      "aliases": [
+        "汤匙"
+      ]
+    },
+    {
+      "term": "standing",
+      "zh": "站着",
+      "kind": "object",
+      "aliases": [
+        "站立"
+      ]
+    },
+    {
+      "term": "student",
+      "zh": "学生",
+      "kind": "object",
+      "aliases": [
+        "同学"
+      ]
+    },
+    {
+      "term": "symbol",
+      "zh": "符号",
+      "kind": "object",
+      "aliases": [
+        "标志"
+      ]
+    },
+    {
+      "term": "tablet computer",
+      "zh": "平板电脑",
+      "kind": "object",
+      "aliases": [
+        "平板"
+      ]
+    },
+    {
+      "term": "toy",
+      "zh": "玩具",
+      "kind": "object",
+      "aliases": []
+    },
+    {
+      "term": "triumphant",
+      "zh": "欢呼",
+      "kind": "object",
+      "aliases": [
+        "庆祝"
+      ]
+    },
+    {
+      "term": "walking",
+      "zh": "走路",
+      "kind": "object",
+      "aliases": [
+        "散步",
+        "行走"
+      ]
+    },
+    {
+      "term": "waterfront",
+      "zh": "水边",
+      "kind": "scene",
+      "aliases": [
+        "河岸",
+        "湖畔"
+      ]
+    },
+    {
+      "term": "wedding proposal",
+      "zh": "求婚",
+      "kind": "object",
+      "aliases": []
+    },
+    {
+      "term": "wheel",
+      "zh": "车轮",
+      "kind": "object",
+      "aliases": [
+        "轮子"
+      ]
+    },
+    {
+      "term": "woman",
+      "zh": "女人",
+      "kind": "object",
+      "aliases": [
+        "女子"
+      ]
+    },
+    {
+      "term": "working out",
+      "zh": "健身",
+      "kind": "object",
+      "aliases": [
+        "运动"
+      ]
+    },
+    {
+      "term": "sky",
+      "zh": "天空",
+      "kind": "scene",
+      "searchable": false
+    },
+    {
+      "term": "water",
+      "zh": "水面",
+      "kind": "scene",
+      "searchable": false
+    },
+    {
+      "term": "vehicle",
+      "zh": "车辆",
+      "kind": "object",
+      "searchable": false
+    },
+    {
+      "term": "clothing",
+      "zh": "服饰",
+      "kind": "object",
+      "searchable": false
+    },
+    {
+      "term": "apparel",
+      "zh": "服装",
+      "kind": "object",
+      "searchable": false
+    },
+    {
+      "term": "nature",
+      "zh": "自然",
+      "kind": "scene",
+      "aliases": [
+        "大自然",
+        "风景"
+      ]
+    },
+    {
+      "term": "outdoors",
+      "zh": "户外",
+      "kind": "scene",
+      "aliases": [
+        "室外",
+        "野外"
+      ]
+    },
+    {
+      "term": "transportation",
+      "zh": "交通工具",
+      "kind": "object",
+      "aliases": [
+        "交通",
+        "载具"
+      ]
+    }
+  ],
+  "combinations": [
+    {
+      "phrase": "红色衬衫",
+      "colorPhrase": "红色",
+      "termPhrase": "衬衫",
+      "color": "red",
+      "term": "shirt"
+    },
+    {
+      "phrase": "蓝色汽车",
+      "colorPhrase": "蓝色",
+      "termPhrase": "汽车",
+      "color": "blue",
+      "term": "car"
+    },
+    {
+      "phrase": "白色摩托车",
+      "colorPhrase": "白色",
+      "termPhrase": "摩托车",
+      "color": "white",
+      "term": "motorcycle"
+    }
+  ]
+}

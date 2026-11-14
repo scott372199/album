@@ -29,43 +29,18 @@ export const FORBIDDEN_FIELDS = [
 ];
 
 /**
- * 中文词 → 规范词 + 类别。
- * value = [canonical, kind]，kind ∈ term|synonym|color。
- * 规范词用小写英文，和索引 labels[].term 对齐；中文展示词由 explanation.input 保留。
+ * 中文词表：**不再在本文件硬编码**。
  *
- * Chinese phrase -> canonical term + kind. Canonical terms are lowercase and
- * align with the index `labels[].term`; `explanation.input` keeps the Chinese.
+ * 唯一真相是 `src/shared/lexicon.json`，由 `scripts/gen-lexicon.mjs` 展开成
+ * `lexicon.generated.js`（Lambda 侧另有一份内容相同的 .mjs，因为镜像只拷 src/server/）。
+ * 两侧读同一份生成物，CI 用 `gen-lexicon.mjs --check` 兜住漂移。
+ *
+ * The vocabulary is no longer hardcoded here: one JSON source, one generated
+ * artifact per consumer, with a sync check in CI.
  */
-export const LEXICON = {
-  // 场景 / scene
-  '湖水': ['lake', 'term'],
-  '湖泊': ['lake', 'synonym'], '湖': ['lake', 'synonym'],
-  '水面': ['lake', 'synonym'], '湖景': ['lake', 'synonym'],
-  '山峰': ['mountain', 'term'],
-  '山': ['mountain', 'synonym'], '群山': ['mountain', 'synonym'],
-  '高山': ['mountain', 'synonym'], '雪山': ['mountain', 'synonym'],
-  '山峦': ['mountain', 'synonym'],
-  '蓝天': ['blue sky', 'term'],
-  '青天': ['blue sky', 'synonym'], '天空': ['blue sky', 'synonym'],
-  '晴空': ['blue sky', 'synonym'], '蓝天白云': ['blue sky', 'synonym'],
-  // 物体 / object
-  '汽车': ['car', 'term'],
-  '轿车': ['car', 'synonym'], '小汽车': ['car', 'synonym'],
-  '车子': ['car', 'synonym'], '车辆': ['car', 'synonym'],
-  '摩托车': ['motorcycle', 'term'],
-  '机车': ['motorcycle', 'synonym'], '摩托': ['motorcycle', 'synonym'],
-  '电单车': ['motorcycle', 'synonym'],
-  '衬衫': ['shirt', 'term'], '衬衣': ['shirt', 'synonym'],
-  // 颜色 / color
-  '红色': ['red', 'color'], '红': ['red', 'color'],
-  '蓝色': ['blue', 'color'], '蓝': ['blue', 'color'],
-  '绿色': ['green', 'color'], '绿': ['green', 'color'],
-  '白色': ['white', 'color'], '白': ['white', 'color'],
-  '黑色': ['black', 'color'], '黑': ['black', 'color'],
-  '黄色': ['yellow', 'color'], '黄': ['yellow', 'color'],
-};
+import { LEXICON, LEXICON_KEYS } from './lexicon.generated.js';
 
-const LEXICON_KEYS = Object.keys(LEXICON).sort((a, b) => b.length - a.length);
+export { LEXICON, LEXICON_KEYS };
 
 function scanChunk(chunk, ctx) {
   let i = 0;

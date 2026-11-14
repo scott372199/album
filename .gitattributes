@@ -1,0 +1,37 @@
+# 统一换行 / Line ending policy
+#
+# 仓库内文本一律以 LF 存入并检出。本项目有多处「逐字节比较」的校验
+# （词表生成物一致性、构建产物哈希），Windows 上 core.autocrlf=true 会把
+# 工作区改成 CRLF，让这些校验在本地假失败、在 CI 通过——同一个提交两种结论。
+#
+# Every text file is stored and checked out with LF. This repo has byte-exact
+# checks (lexicon artifact sync, build output hashes); on Windows with
+# core.autocrlf=true those checks fail locally yet pass in CI. Pinning LF makes
+# the verdict identical on every platform.
+* text=auto eol=lf
+
+# 脚本与钩子必须保持 LF，否则在 Linux 容器里会 exec 失败
+*.sh text eol=lf
+*.mjs text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+Dockerfile text eol=lf
+
+# 二进制资源不参与任何换行/编码转换
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.avif binary
+*.heic binary
+*.mp4 binary
+*.mov binary
+*.webm binary
+*.mp3 binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary

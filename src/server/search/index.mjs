@@ -21,7 +21,7 @@ import {
 import {
   normalizeLabels, LABEL_KINDS, isFiniteConfidence,
 } from '../recognition/provider.mjs';
-import { vocabularySnapshot } from './vocabulary.mjs';
+import { vocabularySnapshot, zhForTerm } from './vocabulary.mjs';
 
 export const INDEX_VERSION = CONTRACT.version;
 export const ITEM_FIELDS = ['id', 'year', 'month', 'tags', 'labels', 'colors', 'source'];
@@ -157,7 +157,16 @@ export function createIndex({ manifest, items = [], vocabulary = vocabularySnaps
   const recognized = new Map(items.map((item) => [item.id, item]));
   const finalItems = manifest.photos.map((photo) => {
     const rec = recognized.get(photo.id);
-    const labels = normalizeLabels(Array.isArray(rec?.labels) ? rec.labels : []);
+    // 中文名在**索引构建期**回填，不依赖识别期的产物（V6 C-3）：
+    // 词表更新后只需重建索引，不必重跑 Rekognition。
+    // `zhForTerm()` 的兜底是 term 本身，所以「有 zh」不等于「有中文名」——
+    // 判读覆盖率时要用「含汉字」而不是「非空」（见 scripts/audit-terms.mjs）。
+    //
+    // The Chinese name is resolved at index-build time, not at recognition time,
+    // so a vocabulary update only needs an index rebuild. `zhForTerm()` falls
+    // back to the term itself, so a non-empty `zh` does not imply a real name.
+    const labels = normalizeLabels(Array.isArray(rec?.labels) ? rec.labels : [])
+      .map((label) => (label.zh ? label : { ...label, zh: zhForTerm(label.term) }));
     const colors = Array.isArray(rec?.colors)
       ? [...new Set(rec.colors.filter((color) => typeof color === 'string'))]
       : [];

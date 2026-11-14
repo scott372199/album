@@ -22,8 +22,8 @@
 
 | ID | 任务 | 切片 | 依赖 | 需求 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| T-01 | 词表单一来源 + 生成与一致性门禁 | V6.0 | — | FR-13 | pending |
-| T-02 | `zh` 回填下移到索引构建期 | V6.0 | T-01 | FR-04 | pending |
+| T-01 | 词表单一来源 + 生成与一致性门禁 | V6.0 | — | FR-13 | **done(代码)** |
+| T-02 | `zh` 回填下移到索引构建期 | V6.0 | T-01 | FR-04 | **done(代码)** |
 | T-03 | term 覆盖率审计 | V6.0 | T-02 | FR-04 | **done(代码)** |
 | T-04 | 词表扩容到 ≥380 | V6.0 | T-01、T-03 | FR-04 | **doing**（106 词候选待审） |
 | T-05 | 检索四态 + `unmatched` + AND | V6.0 | T-01 | FR-03 | pending |
@@ -57,16 +57,20 @@
 
 ### T-01 词表单一来源 + 生成与一致性门禁 〔FR-13〕
 
-**改动**：`+ src/shared/lexicon.json`、`+ scripts/gen-lexicon.mjs`、`+ scripts/check-lexicon.mjs`、`+ src/web/js/lexicon.generated.js`、`~ src/server/search/vocabulary.mjs`、`~ src/web/js/search.js`
+**改动**：`+ src/shared/lexicon.json`、`+ scripts/gen-lexicon.mjs`、`+ src/web/js/lexicon.generated.js`、`+ src/server/search/lexicon.generated.mjs`、`~ src/server/search/vocabulary.mjs`、`~ src/web/js/search.js`、`~ package.json`
+
+> 与初版计划的偏差：原定 `scripts/check-lexicon.mjs` 独立脚本，实际**并进 `gen-lexicon.mjs --check`**（一份逻辑，避免校验器与被校验物各自演化）。`npm run check:lexicon` 是它的别名，并已前置到 `npm run verify` 与 `build-image.yml`。
+>
+> 产物是**两份**而不是一份：`docker/Dockerfile:38` 只 `COPY src/server/`，前端构建只搬 `src/web/js/`，服务端 import `src/web/` 会在镜像里断链。单一来源由「一个生成器 + 逐字节一致性门禁」保证，而不是共享物理路径。
 
 **硬约束**：`src/server/test/v5-search.test.mjs` 导入了 `LEXICON, TERM_KIND, TERM_ZH, COLOR_TERMS, COLOR_OBJECT_COMBINATIONS, lookup, canonicalFor, zhForTerm, kindForTerm, expandSynonyms, resolveCombination, vocabularySnapshot` —— **这 12 个导出一个都不能少，形状也不能变**，只换背后的数据源。
 
 **做法**
 
-- `lexicon.json` 以 **term 为中心**：`{ terms: [{ term, zh, kind, aliases: [{ zh, kind }] }] }`；生成器负责展开成 `LEXICON`（`zh → [term, kind]`）与 `TERM_ZH` 两个方向。
-- `gen-lexicon.mjs` 产出前端模块（`export const LEXICON = ...` + `export const TERM_ZH = ...`），文件头写 `// 由 scripts/gen-lexicon.mjs 生成，勿手改`。
-- `vocabulary.mjs` 改为 `readFileSync` 读 JSON 后构造同样的导出面，其余纯函数逻辑不动。
-- `check-lexicon.mjs`：重新生成 → 与已提交文件逐字节比对 → 不一致则 exit 1。
+- `lexicon.json` 以 **term 为中心**：`{ terms: [{ term, zh, kind, aliases: [], searchable? }] }`；生成器负责展开成 `LEXICON`（`zh → [term, kind]`）与 `TERM_ZH` 两个方向。
+- `gen-lexicon.mjs` 产出两端产物，文件头写 `// 由 scripts/gen-lexicon.mjs 生成，勿手改` 与词表 `rev`。
+- `vocabulary.mjs` 改为 import 生成物并原样再导出，其余纯函数逻辑不动（136 → 80 行）。
+- `--check`：重新生成 → 与已提交产物比对 → 不一致或两份产物不逐字节相同则 exit 1。
 
 **完成判定**
 
@@ -75,6 +79,8 @@ node scripts/gen-lexicon.mjs --check   # 绿
 npm test                                # 全绿（含 v5-search 双侧）
 grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 ```
+
+**实际结果（2026-11-14）**：词表 126 term / **319 个可搜中文词**（原 39）/ 11 个颜色词，`rev 86b1eb418dfab759`。`npm run verify` 新增断言「中文词表只有一份来源」：校验源文件存在、两份产物逐字节相同、`src/web/js` 下没有第二份 `LEXICON` 字面量、`vocabulary.mjs` 下没有第二份 `TERM_ZH` 字面量。
 
 ---
 
@@ -87,6 +93,9 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 **为什么重要**：现在 `zh` 由 Lambda 在识别时算好写进 `data/labels/<id>.json`。词表一扩，历史照片的中文名不会跟着变，只能重跑识别。挪到索引构建期后，**改词表 = 重建索引**，一次几秒。
 
 **完成判定**：新单测两个用例——① 输入 label 无 `zh`，构建后按词表补齐；② 输入 label 有 `zh`，保留原值不覆盖。
+
+**实际结果（2026-11-14）**：`+ src/server/test/v6-index-zh.test.mjs`，**6 条**用例（在原定 2 条基础上补了 4 条）：③ 识别产物只带英文 term 时索引侧必须补出中文名；④ 词表外 term 兜底为 term 本身——用测试钉住「有 `zh` ≠ 有中文名」这个判定口径；⑤ `zh` 在 `LABEL_FIELDS` 内、`INDEX_VERSION` 仍为 `v5.1.0`（C-1）；⑥ 识别失败的照片仍进索引（I-2）。
+做过**缺陷注入验证**：把回填写回 `label.zh ? label : …` 去掉后，③④① 三条立刻变红，还原后 6/6 绿——确认测试不是自我印证。
 
 ---
 
@@ -400,14 +409,29 @@ T-08 ──┬─→ T-09 ─┐                 │
 
 ```bash
 npm test && npm run verify && node scripts/check-repo.mjs
-node scripts/check-lexicon.mjs          # T-01 后
 node scripts/check-budget.mjs           # T-12 后
 ```
+
+`npm run verify` 自 T-01 起已前置 `gen-lexicon.mjs --check`，词表门禁不必单独跑。
 
 外加人工三条：① 打开首页，控制台零错误；② 相册根 ↔ 时间流可来回；③ 中文输入法打「湖水」不卡。
 
 **V6.1**：六处界面暗色截图；三档密度切换不跳；404 模拟有占位卡。
 **V6.2**：断网跑一遍（故事 / 策展 / 年度页 / 离线浏览）；`data/*.json` 缺失时首页不崩。
+
+---
+
+## 4.1 基础设施修正 / Infrastructure fixes
+
+T-01 落地时暴露了两个**与 V6 功能无关、但会让人误判绿红**的仓库级缺陷，一并修掉：
+
+| 编号 | 现象 | 根因 | 处置 |
+| --- | --- | --- | --- |
+| **I-1** | `npm run verify` 在 Windows 本地红，报「web 目标不得写增量缓存」，但代码从未改过 | `verify.mjs` 用**多行字面量**对源码做 `includes` 断言；仓库 blob 是 LF，Windows `core.autocrlf=true` 把工作区检出成 CRLF，断言永远匹配不上。CI 是 Linux，所以只有本地红 | ① `+ .gitattributes` 把仓库钉成 LF；② `verify.mjs` 新增 `readSrc()`，源码文本断言统一归一化换行（纵深防御） |
+| **I-2** | `verify` 报 `scripts/audit-terms.mjs 硬编码了 chenyouyi` | T-03 脚本的帮助文案里写死了站点域名 | 改为 `$SITE_BUCKET` / `<站点域名>` 占位符。这条是仓库既有护栏**主动抓到我**的，不是新引入 |
+
+> I-1 的教训：**逐字节 / 多行文本断言在跨平台仓库里天然脆弱**。凡是「读源码文本再比对」的检查，要么归一化换行，要么让仓库只存在一种换行。这次两个都做了。
+
 
 ---
 

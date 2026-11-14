@@ -10,6 +10,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
 let checks = 0;
 
+// 源码文本断言一律按 LF 读取。
+// 仓库内的文件是 LF，但 Windows 上 core.autocrlf=true 会把工作区检出成 CRLF，
+// 于是含 "\n" 的多行断言在本地假失败、在 CI 通过。归一化让两者判定一致。
+// Source-text assertions always read as LF. Repo files are LF, but Windows with
+// core.autocrlf=true checks them out as CRLF, so multi-line assertions containing
+// "\n" fail locally while passing in CI. Normalising keeps both verdicts identical.
+const readSrc = async (file) => (await readFile(file, 'utf8')).replace(/\r\n/g, '\n');
+
 function ok(label, fn) {
   fn();
   checks += 1;
@@ -180,11 +188,11 @@ ok('默认状态生成空 hash', () => {
 });
 
 /* 3. 前端结构与产物 */
-const html = await readFile(path.join(ROOT, 'src/web/index.html'), 'utf8');
-const css = await readFile(path.join(ROOT, 'src/web/style.css'), 'utf8');
+const html = await readSrc(path.join(ROOT, 'src/web/index.html'));
+const css = await readSrc(path.join(ROOT, 'src/web/style.css'));
 const jsDir = path.join(ROOT, 'src/web/js');
 const jsNames = (await readdir(jsDir)).filter((f) => f.endsWith('.js')).sort();
-const jsSources = await Promise.all(jsNames.map(async (f) => [f, await readFile(path.join(jsDir, f), 'utf8')]));
+const jsSources = await Promise.all(jsNames.map(async (f) => [f, await readSrc(path.join(jsDir, f))]));
 const allJs = jsSources.map(([, text]) => text).join('\n');
 
 ok('前端已按模块拆分，入口为 main.js', () => {
@@ -271,14 +279,14 @@ await okAsync('清单改为运行时解析，且 web 构建不依赖 photos/', a
   assert.ok(data.includes('version.json'), 'resolveManifest 应先读 version.json');
   assert.ok(data.includes("cache: 'no-store'"), 'version.json 必须以 no-store 取，否则热更新失效');
 
-  const build = await readFile(path.join(ROOT, 'src/build/build.mjs'), 'utf8');
+  const build = await readSrc(path.join(ROOT, 'src/build/build.mjs'));
   assert.ok(build.includes("'--target='"), 'build.mjs 应支持 --target');
   assert.ok(/TARGET === 'all'\s*\?\s*await buildFromPhotos/.test(build),
     'web 目标必须跳过照片处理');
   assert.ok(build.includes("if (TARGET === 'all') {\n    await writeFile(CACHE"),
     'web 目标不得写增量缓存，否则全量重建');
 
-  const pkg = JSON.parse(await readFile(path.join(ROOT, 'package.json'), 'utf8'));
+  const pkg = JSON.parse(await readSrc(path.join(ROOT, 'package.json')));
   assert.ok(pkg.scripts['build:web']?.includes('--target=web'), '缺少 build:web 脚本');
   assert.ok(pkg.scripts['build:all']?.includes('--target=all'), '缺少 build:all 脚本');
 });
@@ -400,7 +408,7 @@ await okAsync('JS 产物走目录级哈希，模块间相对引用可解析', as
 });
 
 ok('视频转码参数先取时间再清元数据，且带 faststart', async () => {
-  const video = await readFile(path.join(ROOT, 'src/build/video.mjs'), 'utf8');
+  const video = await readSrc(path.join(ROOT, 'src/build/video.mjs'));
   for (const token of ['-map_metadata', '-map_chapters', '+bitexact', 'creation_time', '+faststart']) {
     assert.ok(video.includes(token), `视频转码缺少 ${token}`);
   }
@@ -468,7 +476,7 @@ await okAsync('代码里没有硬编码的桶名 / 账号 / 分发 ID', async ()
 });
 
 await okAsync('前端只调用约定好的原生桥方法', async () => {
-  const nativeSrc = await readFile(path.join(ROOT, 'src/web/js/native.js'), 'utf8');
+  const nativeSrc = await readSrc(path.join(ROOT, 'src/web/js/native.js'));
   // 白名单与 album-android 仓库 scripts/check.mjs 的 BRIDGE 一致。跨仓库的
   // 另一半在那边断言（Kotlin 侧必须都带 @JavascriptInterface）；两边都过，
   // 桥才算对得上。这里只能钉住「网页没有悄悄多调一个不存在的方法」。
@@ -486,8 +494,8 @@ await okAsync('前端只调用约定好的原生桥方法', async () => {
 });
 
 await okAsync('返回键的两段式契约在网页这一侧成立', async () => {
-  const nativeSrc = await readFile(path.join(ROOT, 'src/web/js/native.js'), 'utf8');
-  const mainSrc = await readFile(path.join(ROOT, 'src/web/js/main.js'), 'utf8');
+  const nativeSrc = await readSrc(path.join(ROOT, 'src/web/js/native.js'));
+  const mainSrc = await readSrc(path.join(ROOT, 'src/web/js/main.js'));
   // 查询与执行必须分开：合成一个「既查又退」的函数，调用方永远分不清
   // 「退了一层」和「已经到底了」。原生侧按返回值决定要不要 finish()。
   for (const fn of ['__canGoBack', '__goBack']) {
@@ -501,7 +509,7 @@ await okAsync('返回键的两段式契约在网页这一侧成立', async () =>
 
 
 await okAsync('前端发布流水线不碰 photos/ 与 data/', async () => {
-  const wf = await readFile(path.join(ROOT, '.github/workflows/deploy-web.yml'), 'utf8');
+  const wf = await readSrc(path.join(ROOT, '.github/workflows/deploy-web.yml'));
   const code = wf.replace(/#[^\n]*/g, '');
   // 根级 sync --delete 会把处理函数写进去的照片删光（v4 最危险的一条）
   assert.ok(
@@ -517,14 +525,14 @@ await okAsync('前端发布流水线不碰 photos/ 与 data/', async () => {
 });
 
 await okAsync('镜像构建关掉了 provenance（否则 Lambda 拒绝 index 清单）', async () => {
-  const wf = await readFile(path.join(ROOT, '.github/workflows/build-image.yml'), 'utf8');
+  const wf = await readSrc(path.join(ROOT, '.github/workflows/build-image.yml'));
   assert.ok(/provenance:\s*false/.test(wf), 'buildx 默认附加的证明清单会让 Lambda 拒收镜像');
   assert.ok(/platforms:\s*linux\/amd64/.test(wf), 'Lambda 不接受 arm64 镜像');
 });
 
 
 await okAsync('预签名把 content-type 与 x-amz-meta-* 纳入签名', async () => {
-  const src = await readFile(path.join(ROOT, 'src/server/auth/upload.mjs'), 'utf8');
+  const src = await readSrc(path.join(ROOT, 'src/server/auth/upload.mjs'));
   const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
   // 只写 Metadata 不写 signableHeaders 时，客户端带上来的 x-amz-meta-* 会被
   // S3 判成「未签名头」直接 403 —— 这条断言就是钉住那个修复。
@@ -540,7 +548,7 @@ await okAsync('预签名把 content-type 与 x-amz-meta-* 纳入签名', async (
   );
   assert.ok(/signableHeaderNames\(/.test(code), '签名头清单应来自 rules.mjs 的纯函数');
 
-  const rules = await readFile(path.join(ROOT, 'src/server/auth/rules.mjs'), 'utf8');
+  const rules = await readSrc(path.join(ROOT, 'src/server/auth/rules.mjs'));
   assert.ok(/export function signableHeaderNames/.test(rules), 'rules.mjs 应导出 signableHeaderNames');
   assert.ok(rules.includes('x-amz-meta-'), '应拼出 x-amz-meta-<name> 形式的头名');
 });
@@ -549,12 +557,12 @@ await okAsync('前端引用的元素 id 都存在于模板里', async () => {
   // el('x') 只是 getElementById 的薄包装：拼错一个 id 不报错，只会在运行时
   // 「点了没反应」。加按钮/输入框时最容易踩，所以静态对齐一次。
   const dir = path.join(ROOT, 'src/web/js');
-  const html = await readFile(path.join(ROOT, 'src/web/index.html'), 'utf8');
+  const html = await readSrc(path.join(ROOT, 'src/web/index.html'));
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
   const missing = new Set();
   for (const file of await readdir(dir)) {
     if (!file.endsWith('.js')) continue;
-    const code = await readFile(path.join(dir, file), 'utf8');
+    const code = await readSrc(path.join(dir, file));
     for (const m of code.matchAll(/\bel\(\s*'([^']+)'\s*\)/g)) {
       if (!ids.has(m[1])) missing.add(`${file}: ${m[1]}`);
     }
@@ -563,9 +571,9 @@ await okAsync('前端引用的元素 id 都存在于模板里', async () => {
 });
 
 await okAsync('分片上传的两端约定一致', async () => {
-  const client = await readFile(path.join(ROOT, 'src/web/js/upload.js'), 'utf8');
-  const handler = await readFile(path.join(ROOT, 'src/server/auth/handler.mjs'), 'utf8');
-  const upload = await readFile(path.join(ROOT, 'src/server/auth/upload.mjs'), 'utf8');
+  const client = await readSrc(path.join(ROOT, 'src/web/js/upload.js'));
+  const handler = await readSrc(path.join(ROOT, 'src/server/auth/handler.mjs'));
+  const upload = await readSrc(path.join(ROOT, 'src/server/auth/upload.mjs'));
   // 客户端拼的路径与服务端 routeKey 必须逐字一致，否则分片传完合并不了，
   // 而合成失败发生在「片都传上去了」之后，最难查。
   assert.ok(client.includes("'/upload-complete'"), '客户端应调用 /upload-complete');
@@ -581,14 +589,14 @@ await okAsync('分片上传的两端约定一致', async () => {
 });
 
 await okAsync('Docker 构建上下文包含 V5 契约（.dockerignore 未整体排除 spec/）', async () => {
-  const ignore = await readFile(path.join(ROOT, '.dockerignore'), 'utf8');
+  const ignore = await readSrc(path.join(ROOT, '.dockerignore'));
   const lines = ignore.split('\n').map((line) => line.trim())
     .filter((line) => line && !line.startsWith('#'));
   // Dockerfile 的 COPY 源必须在构建上下文里；整体排除 spec/ 会让 build 直接失败。
   // The Dockerfile COPY source must be in the build context; excluding spec/
   // wholesale breaks the build outright.
   assert.ok(!lines.includes('spec'), '.dockerignore 不能整体排除 spec/');
-  const dockerfile = await readFile(path.join(ROOT, 'docker/Dockerfile'), 'utf8');
+  const dockerfile = await readSrc(path.join(ROOT, 'docker/Dockerfile'));
   assert.match(dockerfile, /COPY spec\/v5\/contracts\/v5-contracts\.json/);
   await access(path.join(ROOT, 'spec/v5/contracts/v5-contracts.json'));
 });
@@ -598,7 +606,7 @@ await okAsync('correlation ID 贯穿上传 → 处理 → 发布 → 索引 → 
   // 少写一处不会有任何单测失败，但 CloudWatch 里就接不成一个 ID。
   // Static guard for V5 blocker #4: this chain spans several files, so a
   // missing hop fails no unit test yet breaks the CloudWatch trace.
-  const read = (rel) => readFile(path.join(ROOT, rel), 'utf8');
+  const read = (rel) => readSrc(path.join(ROOT, rel));
   const correlation = await read('src/server/v5/correlation.mjs');
   const rules = await read('src/server/auth/rules.mjs');
   const auth = await read('src/server/auth/handler.mjs');
@@ -630,6 +638,41 @@ await okAsync('correlation ID 贯穿上传 → 处理 → 发布 → 索引 → 
     /metadata\['correlation-id'\][\s\S]{0,300}isValidCorrelationId\(candidate\)/,
     '元数据 ID 必须先过格式校验才使用',
   );
+});
+
+await okAsync('中文词表只有一份来源：src/shared/lexicon.json', async () => {
+  // 词表是 V6 搜索修复的地基。它有两个消费者（浏览器 bundle、Lambda 镜像），
+  // 但 docker/Dockerfile 只 COPY src/server/，所以物理上不可能共享一个文件。
+  // 这里锁住的是「单一来源」的本质：一份 JSON + 一个生成器 + 两份逐字节相同的产物。
+  const gen = (await readSrc(path.join(ROOT, 'scripts/gen-lexicon.mjs')));
+  assert.ok(gen.includes('src/shared/lexicon.json'), '生成器必须读取唯一来源');
+
+  const source = JSON.parse(await readSrc(path.join(ROOT, 'src/shared/lexicon.json')));
+  assert.ok(Array.isArray(source.terms) && source.terms.length >= 100,
+    '词表条目过少，疑似被截断');
+
+  const targets = [
+    path.join(ROOT, 'src/web/js/lexicon.generated.js'),
+    path.join(ROOT, 'src/server/search/lexicon.generated.mjs'),
+  ];
+  const artifacts = await Promise.all(targets.map(async (t) => readSrc(t)));
+  assert.equal(artifacts[0], artifacts[1],
+    '前后端产物必须逐字节相同，否则「单一来源」已破');
+
+  const rev = artifacts[0].match(/LEXICON_REV = '([0-9a-f]+)'/)?.[1] || '';
+  assert.ok(rev, '产物必须带词表 rev');
+
+  // 生成物是派生产物，手改无效且会让两端漂移；源码里出现第二份字面量就是破口。
+  const webJsDir = path.join(ROOT, 'src/web/js');
+  for (const file of await readdir(webJsDir)) {
+    if (!file.endsWith('.js') || file.startsWith('lexicon.generated')) continue;
+    const code = await readSrc(path.join(webJsDir, file));
+    assert.ok(!/^const LEXICON\s*=\s*\{/m.test(code),
+      `${file} 里出现了第二份 LEXICON 字面量，应改为 import 生成物`);
+  }
+  const vocab = await readSrc(path.join(ROOT, 'src/server/search/vocabulary.mjs'));
+  assert.ok(!/^const TERM_ZH\s*=\s*\{/m.test(vocab),
+    'vocabulary.mjs 里出现了第二份 TERM_ZH 字面量，应改为 import 生成物');
 });
 
 console.log(`--- 全部通过：${checks} 项断言 ---`);
