@@ -127,8 +127,40 @@ external registrar before any `cx.chenyouyi.top` check can pass.*
 - ✅ `FixtureData` 的 `planned` → `unknown`（fixture 侧，blocker #6）：album-mgmt PR #2 已合并，
   含 `FixtureStatusTest`；**真实只读清单适配器仍待做**，#6 未关闭。
 - ✅ album-mgmt PR 不再向生产 ECR 推镜像（`container.yml` 的 5 个 publish 步骤加 PR gate）。
-- ⬜ 真实适配器 + 最小权限 task role + CI 只读快照 + `cloud` profile（album-mgmt / album-infra）。
-- ⬜ #2 生产故障注入证据、#5 三端浏览器记录、T-31 安全评审。
+- ✅ **P1-code 剩余代码已就绪（待合并、未点火、不计费）**：
+  - `album-mgmt`：`SdkAwsReadGateway` 真实只读映射覆盖 Resources / Logs / Metrics / Billing /
+    CI-CD / Security 六域；`cloud` profile 注入真实 SDK clients（Cost Explorer / CloudFront 走
+    us-east-1）；`AwsReadAdapterSupport` 统一限流、递归脱敏、诚实降级与契约结构化日志；
+    日志域只放行结构化字段，绝不把原始日志行带出站。53 项 JUnit（新增 22 项）、`npm run check` 通过。
+  - `album-infra`：`30-compute` 新增 `management_task` 最小权限只读 task role（`count` 受
+    `mgmt_enabled` 门控，关站态零授权）、挂上 `task_role_arn`、注入 10 个只读环境变量；
+    `terraform validate` / `fmt -check` / `check.mjs` 91 项全过。
+  - CI 快照：`cicd-snapshot.yml` 用每次 run 自动下发的短期 `github.token` 采集三仓真实
+    workflow runs，写入 `chenyouyi-mgmt-data/cicd/workflows.json`；管理站只 `GetObject`，
+    **完全不直连 GitHub、无长期密钥**。复用 apply role 既有的 S3 写权限，不新增、不扩大 IAM。
+    绑定 `production` 环境固定 OIDC subject；关站态只做只读采集校验、不写对象、不建资源，
+    因此三仓覆盖可在开站前验证。离线用真实数据验证过 24 条 runs、三仓全覆盖、
+    字段零越界、schema 与新鲜度均符合管理站 parser。
+  - 护栏：`mgmt-lifecycle.yml` 移除写死的旧 digest 默认值，`up` 必须显式传 `sha256:<64hex>`，
+    避免把缺少真实适配器的旧镜像拉起来。
+- ✅ **合并前 double check 抓到并修掉 6 个缺陷**（前 4 个直接关系「真实运维数据」）：
+  ① `metrics()` 原查询不带 `FunctionName` dimension，CloudWatch 返回空样本却被包装成
+  `value=0` 的假数据行 → 现按 `MGMT_LAMBDA_FUNCTIONS` 逐函数带 dimension 查询，
+  无样本直接降级，且修正 `Errors` 被错标为 milliseconds；新增 4 项零依赖单测。
+  ② 日志 lookback 120 → 1440 分钟，避免按需拉起时 Logs 域空白。
+  ③ `logs:FilterLogEvents` 的 IAM 资源 ARN 补 `:*` 形式，否则生产拉起后 Logs 域 403。
+  ④ `cicd-snapshot.yml` 的 collect 原本被桶门控，关站态永远无法验证跨仓采集；
+  现解耦为「始终采集、仅写入需桶存在」，并绑定 `production` 环境稳定 OIDC subject。
+  ⑤ `build-image.yml` 的 `pull_request.paths` 不含 `spec/**`，纯文档 PR 不触发 required
+  「单测 / unit tests」check，ruleset 永远等一个不存在的 check → 补 `spec/**`、`docs/**`、
+  `README.md` 为触发路径。
+  ⑥ `infra.yml` 的 `setup-terraform` wrapper 吞掉 `-detailed-exitcode` 的退出码 2，
+  有变更的层在 CI 摘要里被写成「无变更」→ 改为按 plan 输出文本判定，并把
+  `terraform show | head` 改为先落盘再 head 规避 SIGPIPE。分支九层只读 plan 与 main
+  基线逐层一致，确认本批改动关站态零差异、无隐藏 IAM 授权。
+- ⬜ **仍缺生产证据（代码就绪 ≠ 验收通过）**：#3 六域真实数据、#6 真实只读清单要在站点
+  拉起后逐域核验；#2 生产故障注入、#5 三端浏览器记录、T-29~T-32 仍开放。
+  `V5-ACCEPTANCE.md` 的判定**不因本批代码改动而改写**。
 
 *English*
 P0.5 one-click up/down is merged, registered and has never been triggered. **Blocker #4
@@ -137,17 +169,52 @@ deployed it to both Lambdas, and a real upload with `corr_bb6f8616101611d0` prod
 single-ID trace across both CloudWatch log groups and the CloudFront CallerReference,
 followed by a byte-identical baseline restore. The fixture-side `planned → unknown` fix
 landed in album-mgmt PR #2, but blocker #6 still needs the real read-only inventory
-adapter. PRs no longer push images to the production ECR. Real adapters, the
-least-privilege task role, the CI read-only snapshot, failure-injection and browser
-evidence and the T-31 review remain open.*
+adapter. PRs no longer push images to the production ECR.
+
+The remaining P1-code work is now code-ready but **not merged, not deployed and not
+evidenced**: real AWS read adapters for all six domains with a cloud profile and 53
+passing JUnit tests; a least-privilege read-only task role gated by `mgmt_enabled`; and
+a CI-written S3 workflow snapshot so the management site never talks to GitHub and
+holds no long-lived token. The lifecycle workflow no longer carries a stale default
+image digest.
+
+A pre-merge double check caught and fixed six defects, four of which would have
+undermined "real operational data": (1) `metrics()` queried CloudWatch without a
+`FunctionName` dimension and wrapped empty samples into fake `value=0` rows — it
+now queries per function with the dimension, degrades when there are no samples,
+and labels `Errors` as a count; four new dependency-free tests cover it; (2) the
+log lookback grew from 120 to 1440 minutes; (3) the `logs:FilterLogEvents` IAM
+ARNs gained the `:*` form; (4) snapshot collection is no longer gated on the
+bucket, so cross-repo coverage is verifiable while the site is off, and the job
+binds `environment: production` to pin the OIDC subject. (5) `build-image.yml`
+did not trigger the required unit-test check for docs-only PRs; `spec/**`,
+`docs/**` and `README.md` are now trigger paths. (6) The `setup-terraform`
+wrapper in `infra.yml` swallowed `-detailed-exitcode` and reported pending
+changes as "no changes"; detection now parses plan output text. A nine-layer
+branch plan matched the main baseline layer by layer, confirming zero off-state
+drift and no hidden IAM grants. Production evidence for #3/#6, failure injection
+(#2), three-platform browser records (#5) and T-29~T-32 remain open;
+`V5-ACCEPTANCE.md` is deliberately unchanged by this code batch.*
 
 ### 4.1 一键命令 / One-click commands
 
 ```bash
-# 拉起 / bring up（前置：secret MGMT_GRAFANA_ADMIN_PASSWORD，≥16 字符）
+# 拉起 / bring up
+# 前置 / prerequisites: secret MGMT_GRAFANA_ADMIN_PASSWORD (≥16 字符)
+# 0) 可选：开站前在关站态验证快照采集（只读，不写任何 S3 对象）
+#    看 job summary 的「覆盖仓库」是否为 3 / 3、「结论」是否为「仅采集校验」
+gh workflow run cicd-snapshot.yml --repo scott372199/album-infra
+
+# 1) 取 album-mgmt 当次 main CI 产出的镜像 digest（不写死、不用旧镜像）
+DIGEST=$(aws ecr describe-images --repository-name album-mgmt --region ap-southeast-1 \
+  --query 'sort_by(imageDetails, &imagePushedAt)[-1].imageDigest' --output text)
+# 2) 二次确认 + 显式 digest，一次触发拉起四层
 gh workflow run mgmt-lifecycle.yml --repo scott372199/album-infra \
-  -f action=up -f confirm=up \
-  -f image_uri=sha256:366e16939127214f8170365f888b1fcdfff611736c93fef1fb3fc7145edac47d
+  -f action=up -f confirm=up -f image_uri="$DIGEST"
+
+# 3) up 完成后 10-storage 已建桶，lifecycle 的 workflow_run 会自动刷新 CI 快照；
+#    若需保鲜或自动刷新未跑，手动执行一次 / optional refresh before acceptance
+gh workflow run cicd-snapshot.yml --repo scott372199/album-infra
 
 # 关站 / switch off
 gh workflow run mgmt-lifecycle.yml --repo scott372199/album-infra \
@@ -156,12 +223,24 @@ gh workflow run mgmt-lifecycle.yml --repo scott372199/album-infra \
 
 也可在 GitHub Actions 页面选 `up` / `down` 并把动作名再输一次作为二次确认。
 `up` 完成后从 job summary 取新 CloudFront 域名，由用户改 CNAME；`down` 只销毁运行时。
-工作流本身已在离线侧验证：YAML 解析、4 段内嵌 shell 的 `bash -n`、
+工作流本身已在离线侧验证：YAML 解析、内嵌 shell 的 `bash -n`、
 `scripts/check.mjs` 91 项、`terraform fmt -check` 全过，**且从未触发过任何 apply**。
+快照 workflow 不设定时任务，但 `infra` / `mgmt-lifecycle` 在 main 上跑完会自动触发
+一次：关站态只读 `head-bucket` 后仍采集三仓 runs 做校验，桶不存在就**不写任何对象、
+不创建任何资源**，因此三仓覆盖可在开站前确认。验收前若快照超过 180 分钟阈值，
+手动 dispatch `cicd-snapshot.yml` 刷新一次即可。Logs 域窗口为 24 小时，若验收时该域
+显示 `unavailable`，需按既有 E2E 流程做一次真实上传取证（含基线清理）以产生结构化日志。
 
 *The same actions can be triggered from the Actions UI. Offline verification of the
-workflow (YAML parse, `bash -n` on all embedded scripts, 91 structural assertions,
-`terraform fmt -check`) passed; no apply has ever been triggered.*
+workflows (YAML parse, `bash -n` on embedded scripts, 91 structural assertions,
+`terraform fmt -check`) passed; no apply has ever been triggered. The snapshot
+workflow has no schedule, but a completed `infra` or `mgmt-lifecycle` run on main
+triggers it: while the site is off it still collects all three repositories for a
+coverage check, yet writes **no object and creates no resource** when the bucket is
+absent. Dispatch it once before acceptance if the snapshot is older than the
+180-minute threshold. The Logs domain uses a 24h window; if it reports
+`unavailable` during acceptance, run the existing E2E upload evidence flow
+(including baseline restoration) to produce structured log events.*
 
 ## 5. 验收触发条件 / Acceptance trigger
 

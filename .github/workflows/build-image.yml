@@ -27,6 +27,13 @@ on:
       - 'src/web/**'
       - 'package.json'
       - 'package-lock.json'
+      # 纯文档 PR 也必须触发「单测 / unit tests」这个 required check；
+      # 否则 ruleset 会永远等一个不存在的 check，只能靠管理员绕过才能合并。
+      # Docs-only PRs must still trigger the required unit-test check, otherwise
+      # the ruleset waits forever on a check that never runs.
+      - 'spec/**'
+      - 'docs/**'
+      - 'README.md'
       - '.github/workflows/build-image.yml'
   workflow_dispatch:
 
