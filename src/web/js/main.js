@@ -1,4 +1,7 @@
-import { state, buildHash, parseHashString, filterPhotos, SEARCH_PAGE_SIZE } from './state.js';
+import {
+  state, buildHash, parseHashString, filterPhotos, SEARCH_PAGE_SIZE,
+  normalizeDensity, DENSITY_KEY,
+} from './state.js';
 import { loadManifest, buildIndex, resolveManifest, loadSearchIndex } from './data.js';
 import { createCatalog, renderFeatured, renderAlbums } from './gallery.js';
 import { initLightbox, openLightbox, closeLightbox, isLightboxOpen } from './lightbox.js';
@@ -122,6 +125,31 @@ function onQuery(q) {
   syncUrl(true);
 }
 
+/* ---------- 偏好（密度） ---------- */
+
+/**
+ * 偏好读写一律包在 try 里：隐私模式下 `localStorage` 可能直接抛异常，
+ * 那也不该影响浏览——读不到就用默认值，存不了就算了。
+ *
+ * Preference reads/writes are wrapped: private mode can throw, and that must
+ * never affect browsing.
+ */
+function readPref(key, fallback = '') {
+  try {
+    return localStorage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writePref(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* 存不了就算了，本次会话内仍然生效 */
+  }
+}
+
 /* ---------- 静态区块 ---------- */
 
 function renderStats() {
@@ -183,7 +211,12 @@ function syncControlValues() {
   el('tag').value = state.tag;
   el('year').value = state.year;
   el('month').value = state.month;
-  el('q').value = state.q;
+  // 输入框正在被编辑时不要回写：查询是 150ms 防抖的，这期间 state.q 还是旧值，
+  // 任何一次 refresh 都会把用户刚打的字擦掉。
+  // Don't write back while the field is being edited: the query is debounced,
+  // so state.q still holds the old value and any refresh would erase keystrokes.
+  const input = el('q');
+  if (input && document.activeElement !== input) input.value = state.q;
   const hasFilter = Boolean(state.tag || state.year || state.month || state.q);
   el('clear').hidden = !hasFilter;
 }
@@ -388,6 +421,12 @@ function wire() {
     syncUrl(true);
   });
 
+  el('density').addEventListener('change', (event) => {
+    const value = normalizeDensity(event.target.value);
+    writePref(DENSITY_KEY, value);
+    ctx.catalog.setDensity(value);
+  });
+
   el('open-story').addEventListener('click', () => enterStoryMode());
   el('story-cta-button').addEventListener('click', () => enterStoryMode());
   el('open-wall').addEventListener('click', () => launchWall());
@@ -491,10 +530,13 @@ async function boot() {
   ctx.index = buildIndex(manifest);
   state.filtered = ctx.index.photos;
 
+  const density = normalizeDensity(readPref(DENSITY_KEY, 'standard'));
   ctx.catalog = createCatalog({
     container: el('content'),
     onOpen: (index) => openAt(index),
+    density,
   });
+  el('density').value = density;
 
   initLightbox({
     onNavigate: () => syncUrl(false),

@@ -34,6 +34,69 @@ export function yearChips(years) {
     .map((year) => ({ label: `${year} 年`, query: `${year} 年` }));
 }
 
+/**
+ * 输入调度器：把「每一次按键」收敛成「最多一次查询」。
+ *
+ * 三条规则，按优先级：
+ *   1. 拼音组合期间（`compositionstart` → `compositionend`）**一律不查**，
+ *      中间态是 `hu` `hu shui` 这种半成品，查了只会闪「没听懂」；
+ *   2. 组合结束时**立刻**查一次，不再等防抖——这时用户已经选完字了；
+ *   3. 非组合期按 `wait` 防抖，连打 10 个字符只查最后那一次。
+ *
+ * 为什么单独拆出来：这套时序用 DOM 事件测很啰嗦，拆成纯调度器后可以直接在
+ * Node 里断言「调用次数」，而 `initSearchUI` 只剩「把事件转过来」这一句。
+ *
+ * Collapses keystrokes into at most one query: no query while an IME
+ * composition is open, an immediate query when it closes, and a debounce
+ * otherwise. Kept free of DOM so call counts are assertable in Node.
+ */
+export function createQueryScheduler({ wait = 150, commit } = {}) {
+  let timer = null;
+  let composing = false;
+  let pending = null;
+  let commits = 0;
+
+  const cancel = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  const fire = (value) => {
+    cancel();
+    pending = null;
+    commits += 1;
+    commit?.(value);
+  };
+
+  return {
+    input(value) {
+      pending = value;
+      if (composing) return; // 组合期的中间态不查
+      cancel();
+      timer = setTimeout(() => fire(pending), wait);
+    },
+    compositionStart() {
+      composing = true;
+      cancel();
+    },
+    compositionEnd(value) {
+      composing = false;
+      if (value != null) pending = value;
+      fire(pending ?? '');
+    },
+    flush() {
+      if (pending === null) return;
+      fire(pending);
+    },
+    /** 测试用：已提交次数 / Test hook: number of commits so far */
+    get commits() { return commits; },
+    get composing() { return composing; },
+    get pending() { return pending; },
+  };
+}
+
 /** 把 explanation 翻成中文检索说明 / Human-readable query explanation */
 export function explainText(parse) {
   if (!parse || !Array.isArray(parse.explanation)) return '';
@@ -195,15 +258,30 @@ export function initSearchUI({ onQuery, onRetry } = {}) {
   }
 
   if (input) {
+    // 唯一所有者：输入 → 调度器 → onQuery。防抖后的提交与 refresh() 是同一条路径，
+    // 不另开「搜索专用」渲染分支。
+    // Single owner: input -> scheduler -> onQuery. The debounced commit goes
+    // through the very same path as refresh(); no separate search-only render.
+    const scheduler = createQueryScheduler({ wait: 150, commit: (value) => onQuery?.(value) });
+
     input.addEventListener('focus', open);
     input.addEventListener('input', (event) => {
       const q = event.target.value.trim();
       latest.q = q;
-      onQuery?.(q);
+      scheduler.input(q);
+      open();
+    });
+    input.addEventListener('compositionstart', () => scheduler.compositionStart());
+    input.addEventListener('compositionend', (event) => {
+      const q = event.target.value.trim();
+      latest.q = q;
+      scheduler.compositionEnd(q);
       open();
     });
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') { close(); input.blur(); }
+      // 回车立刻查，不等防抖
+      if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); scheduler.flush(); close(); }
     });
   }
   if (retry) retry.addEventListener('click', () => onRetry?.());

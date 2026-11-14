@@ -1,4 +1,6 @@
-import { groupByYearMonth, computeEditorialRows, layoutParams } from './state.js';
+import {
+  groupByYearMonth, computeEditorialRows, layoutParams, normalizeDensity,
+} from './state.js';
 import { escapeHtml, photoAlt, srcsetFor, sizesFor, isTouch, reducedMotion, markWhenReady } from './ui.js';
 
 /* ---------- 视频瓦片：全局只允许 1 个在播 ---------- */
@@ -42,6 +44,79 @@ function isMotion(photo) {
 
 /* ---------- 单个瓦片 ---------- */
 
+/** 一张图最多试 3 次，全部失败才出占位卡 / Three attempts before the placeholder */
+const MAX_IMAGE_ATTEMPTS = 3;
+
+/**
+ * 同一张照片的候选源，按「想给的清晰度」排好序。
+ * 大图行的首选 `view` 可能还没转出，退到 `grid` 仍然好看；
+ * 网格本来就在用 `grid`，失败时退到 `thumb` 也比白块强。
+ */
+function candidateSources(photo, kind) {
+  const order = kind === 'feature'
+    ? [photo.view, photo.grid, photo.thumb, photo.poster]
+    : [photo.grid, photo.thumb, photo.poster, photo.view];
+  return [...new Set(order.filter(Boolean))];
+}
+
+/**
+ * 图片加载兜底：换源 → 重试 → 占位卡。
+ *
+ * 不抛错、不阻塞：一张图挂了只影响它自己那一格，相邻照片照常出现。
+ * 重试按钮是给「当时断网、现在好了」准备的，所以复位后从首选源重新开始。
+ *
+ * Image fallback: next source, then retry, then a placeholder card. A broken
+ * image only affects its own tile; nothing throws and nothing blocks.
+ */
+function attachImageFallback(tile, img, photo, kind) {
+  const sources = candidateSources(photo, kind);
+  if (!sources.length) return;
+  let attempt = 0;
+
+  const clearError = () => {
+    tile.classList.remove('is-broken');
+    tile.querySelector('.tile-error')?.remove();
+  };
+
+  img.addEventListener('error', () => {
+    attempt += 1;
+    if (attempt < sources.length && attempt <= MAX_IMAGE_ATTEMPTS) {
+      img.src = sources[attempt];
+      const srcset = srcsetFor({ ...photo, view: sources[attempt], grid: sources[attempt] }, kind);
+      if (srcset) img.srcset = srcset; else img.removeAttribute('srcset');
+      return;
+    }
+    showTileError(tile, () => {
+      attempt = 0;
+      img.addEventListener('load', clearError, { once: true });
+      img.src = sources[0];
+    });
+  });
+}
+
+function showTileError(tile, onRetry) {
+  tile.classList.add('is-broken');
+  if (tile.querySelector('.tile-error')) return;
+
+  const box = document.createElement('div');
+  box.className = 'tile-error';
+  const text = document.createElement('p');
+  text.className = 'tile-error-text';
+  text.textContent = '这张暂时打不开';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'tile-retry';
+  button.textContent = '重试';
+  button.addEventListener('click', (event) => {
+    // 别把「重试」点成「打开灯箱」
+    event.preventDefault();
+    event.stopPropagation();
+    onRetry();
+  });
+  box.append(text, button);
+  tile.appendChild(box);
+}
+
 function createTile(photo, { width, height, kind, onOpen, index }) {
   const tile = document.createElement('figure');
   tile.className = 'tile';
@@ -66,6 +141,7 @@ function createTile(photo, { width, height, kind, onOpen, index }) {
   img.sizes = sizesFor(kind);
   img.src = kind === 'feature' ? (photo.view || photo.grid || photo.poster) : (photo.grid || photo.thumb || photo.poster);
   markWhenReady(img, img, 'is-loaded');
+  attachImageFallback(tile, img, photo, kind);
 
   frame.appendChild(img);
   tile.appendChild(frame);
@@ -242,13 +318,14 @@ function createYearSection(plan, { byId, onOpen }) {
  * 增量：追加时只增删改动过的那几年，已经画好的年份一个节点都不碰；
  * 宽度变化、筛选重置这类「整页语义变了」的情况仍走全量重排。
  */
-export function createCatalog({ container, onOpen, initialBatch = 60, chunk = 60 }) {
+export function createCatalog({ container, onOpen, initialBatch = 60, chunk = 60, density = 'standard' }) {
   let photos = [];
   let limit = initialBatch;
   let frame = null;
   let lastWidth = 0;
   let renderedKeys = [];
   let sections = [];
+  let currentDensity = normalizeDensity(density);
 
   function measure() {
     const width = container.clientWidth || 800;
@@ -262,7 +339,7 @@ export function createCatalog({ container, onOpen, initialBatch = 60, chunk = 60
     const width = measure();
     lastWidth = width;
     const visible = photos.slice(0, limit);
-    const plan = planCatalog(visible, width);
+    const plan = planCatalog(visible, width, currentDensity);
     const byId = new Map(visible.map((photo) => [photo.id, photo]));
     const nodes = plan.years.map((yearPlan) => createYearSection(yearPlan, { byId, onOpen }));
 
@@ -277,7 +354,7 @@ export function createCatalog({ container, onOpen, initialBatch = 60, chunk = 60
     const width = measure();
     lastWidth = width;
     const visible = photos.slice(0, limit);
-    const plan = planCatalog(visible, width);
+    const plan = planCatalog(visible, width, currentDensity);
     const { keep, rebuild, stale } = diffYears(renderedKeys, plan.years);
     if (!rebuild.length && !stale) return; // 没有任何变化：一个节点都不碰
 
@@ -328,6 +405,15 @@ export function createCatalog({ container, onOpen, initialBatch = 60, chunk = 60
       appendVisible();
       return true;
     },
+    /** 切密度：整页重排一次（行布局全变了，增量没有意义） */
+    setDensity(next) {
+      const value = normalizeDensity(next);
+      if (value === currentDensity) return false;
+      currentDensity = value;
+      paintFull();
+      return true;
+    },
+    get density() { return currentDensity; },
     get hasMore() { return limit < photos.length; },
     destroy() { observer.disconnect(); },
   };
