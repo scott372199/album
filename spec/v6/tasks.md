@@ -24,8 +24,8 @@
 | --- | --- | --- | --- | --- | --- |
 | T-01 | 词表单一来源 + 生成与一致性门禁 | V6.0 | — | FR-13 | pending |
 | T-02 | `zh` 回填下移到索引构建期 | V6.0 | T-01 | FR-04 | pending |
-| T-03 | term 覆盖率审计 | V6.0 | T-02 | FR-04 | pending |
-| T-04 | 词表扩容到 ≥380 | V6.0 | T-01、T-03 | FR-04 | pending |
+| T-03 | term 覆盖率审计 | V6.0 | T-02 | FR-04 | **done(代码)** |
+| T-04 | 词表扩容到 ≥380 | V6.0 | T-01、T-03 | FR-04 | **doing**（106 词候选待审） |
 | T-05 | 检索四态 + `unmatched` + AND | V6.0 | T-01 | FR-03 | pending |
 | T-06 | 服务端同步 + 双实现一致性单测 | V6.0 | T-05 | FR-03、FR-13 | pending |
 | T-07 | 建议词改为索引派生 | V6.0 | T-05 | FR-03 | pending |
@@ -415,7 +415,7 @@ node scripts/check-budget.mjs           # T-12 后
 
 | # | 阻塞 | 影响任务 | 处置 |
 | --- | --- | --- | --- |
-| **B1** | 工作副本**没有 `data/` 目录**，拿不到生产索引与标签文件 | **T-03、T-04** | 需要一次**只读**拉取（`data/search-index.json` 或 `data/labels/*.json`）。没有它只能瞎猜词表，覆盖不到真实语料。**这是唯一的外部依赖。** |
+| ~~**B1**~~ | ~~工作副本**没有 `data/` 目录**，拿不到生产索引与标签文件~~ | ~~T-03、T-04~~ | **已解除（2026-11-14）**：`aws s3 cp s3://chenyouyi/data/search-index.json data/` 成功；`data/` 已进 `.gitignore`。审计结果见 [`term-audit.md`](./term-audit.md)，中文名候选见 [`term-zh-draft.md`](./term-zh-draft.md) |
 | **B2** | manifest 与 processor 里没有任何视频时长字段 | T-20 | 属新增字段，先定历史视频的回填方式再动手 |
 | **B3** | T-22 / T-23 需要模型凭据（构建期环境变量） | T-22、T-23 | CI 中缺失则降级（空句子 / 硬编码文案），**不阻塞构建** |
 | **B4** | `album` main 有分支保护（要求 PR + 单测） | 全部 | 你已明确「不补 PR 留痕」，当前直接 push main（会留 bypass 记录）；若改走 PR，任务提交粒度即 PR 粒度 |

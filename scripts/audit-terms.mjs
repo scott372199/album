@@ -108,6 +108,25 @@ try {
 const items = Array.isArray(index?.items) ? index.items : null;
 if (!items) fail('索引缺少 items 数组 / index has no items array');
 
+/**
+ * 中文名是否**真的**是中文。
+ *
+ * `zhForTerm()` 的兜底是 `TERM_ZH[term] || term`——查不到就直接把英文 term
+ * 回填进 zh。所以 `zh === term` 或 zh 不含任何汉字，都等于**没有中文名**，
+ * 这样的标签只能用英文检索，而用户不会去敲英文。
+ *
+ * A Chinese name is only real if it contains a CJK ideograph. `zhForTerm()`
+ * falls back to the English term itself, so `zh === term` means "no Chinese
+ * name at all" — such labels are effectively unsearchable in Chinese.
+ */
+const CJK = /[\u4e00-\u9fff]/;
+function zhStatus(zhValues, term) {
+  for (const zh of zhValues) {
+    if (CJK.test(zh) && zh !== term) return 'cn';
+  }
+  return zhValues.size ? 'placeholder' : 'empty';
+}
+
 /* ---------- 统计 / Aggregate ---------- */
 
 const stats = new Map(); // term -> { photos:Set, zh:Set, kinds:Set, maxConf }
@@ -123,7 +142,9 @@ for (const item of items) {
     seenInPhoto.add(term);
 
     if (!stats.has(term)) {
-      stats.set(term, { photos: new Set(), zh: new Set(), kinds: new Set(), maxConf: 0 });
+      stats.set(term, {
+        photos: new Set(), zh: new Set(), kinds: new Set(), maxConf: 0,
+      });
     }
     const row = stats.get(term);
     row.photos.add(item.id);
@@ -138,16 +159,19 @@ const rows = [...stats.entries()]
   .map(([term, v]) => ({
     term,
     photos: v.photos.size,
-    zh: [...v.zh].join(' / '),
+    zh: [...v.zh].filter((z) => CJK.test(z) && z !== term).join(' / '),
+    status: zhStatus(v.zh, term),
     kind: [...v.kinds].join(', '),
     maxConf: v.maxConf,
   }))
   .filter((r) => r.photos >= opt.minPhotos)
-  .filter((r) => (opt.missingOnly ? !r.zh : true))
+  .filter((r) => (opt.missingOnly ? r.status !== 'cn' : true))
   .sort((a, b) => b.photos - a.photos || a.term.localeCompare(b.term));
 
-const withZh = rows.filter((r) => r.zh).length;
-const missing = rows.filter((r) => !r.zh);
+const withZh = rows.filter((r) => r.status === 'cn').length;
+const missing = rows.filter((r) => r.status !== 'cn');
+const placeholder = missing.filter((r) => r.status === 'placeholder').length;
+const emptyZh = missing.filter((r) => r.status === 'empty').length;
 
 /* ---------- 输出 / Render ---------- */
 
@@ -163,18 +187,23 @@ lines.push(`- 索引版本 / version：\`${index.version ?? '(未标注)'}\``);
 lines.push(`- 照片总数 / items：${items.length}`);
 lines.push(`- 有标签的照片：${photosWithLabels}（${pct(photosWithLabels)}）`);
 lines.push(`- distinct term：${rows.length}`);
-lines.push(`- **已有中文名：${withZh}；缺中文名：${missing.length}**`);
+lines.push(`- **有真中文名：${withZh}；缺中文名：${missing.length}**（其中占位=英文 ${placeholder}，空值 ${emptyZh}）`);
+if (placeholder) {
+  lines.push('');
+  lines.push(`> ⚠️ 「占位=英文」指 \`zh\` 被 \`zhForTerm()\` 兜底填成了 term 本身，**该标签只能用英文检索**，对中文用户等于不可搜。`);
+}
 if (opt.minPhotos > 1) lines.push(`- 过滤：只统计出现在 ≥${opt.minPhotos} 张照片上的 term`);
 lines.push('');
-lines.push('## 缺中文名的 term（按出现张数排序）/ Terms without a Chinese name');
+lines.push('## 缺中文名的 term（按出现张数排序）/ Terms without a real Chinese name');
 lines.push('');
 if (!missing.length) {
-  lines.push('无。全部已识别 term 都有中文名。');
+  lines.push('无。全部已识别 term 都有可用的中文名。');
 } else {
-  lines.push('| term | 出现张数 | 覆盖率 | kind | 最高置信度 |');
-  lines.push('| --- | --- | --- | --- | --- |');
+  lines.push('| term | 出现张数 | 覆盖率 | 状态 | kind | 最高置信度 |');
+  lines.push('| --- | --- | --- | --- | --- | --- |');
   for (const r of missing) {
-    lines.push(`| \`${r.term}\` | ${r.photos} | ${pct(r.photos)} | ${r.kind || '-'} | ${r.maxConf.toFixed(1)} |`);
+    const flag = r.status === 'placeholder' ? '占位=英文' : '空';
+    lines.push(`| \`${r.term}\` | ${r.photos} | ${pct(r.photos)} | ${flag} | ${r.kind || '-'} | ${r.maxConf.toFixed(1)} |`);
   }
 }
 if (!opt.missingOnly) {
@@ -184,7 +213,8 @@ if (!opt.missingOnly) {
   lines.push('| term | 出现张数 | 覆盖率 | 中文名 | kind |');
   lines.push('| --- | --- | --- | --- | --- |');
   for (const r of rows) {
-    lines.push(`| \`${r.term}\` | ${r.photos} | ${pct(r.photos)} | ${r.zh || '**缺**'} | ${r.kind || '-'} |`);
+    const name = r.status === 'cn' ? r.zh : '**缺**';
+    lines.push(`| \`${r.term}\` | ${r.photos} | ${pct(r.photos)} | ${name} | ${r.kind || '-'} |`);
   }
 }
 lines.push('');
