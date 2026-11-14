@@ -18,6 +18,10 @@ import { createMemoryLogger } from '../v5/correlation.mjs';
  * publishRecognition runs against an in-memory store double.
  */
 const ID = 'abcdef012345';
+// 单测零依赖：不装 sharp，用合成字节 + 注入转码器验证契约
+// Zero-install tests: no sharp; synthetic bytes + an injected converter.
+const GRID_FIXTURE = Buffer.from('RIFF-webp-fixture');
+const FAKE_JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
 const rekognitionSample = () => ({
   Labels: [
     { Name: 'Lake', Confidence: 92, Categories: [{ Name: 'Nature' }] },
@@ -51,25 +55,24 @@ test('RECOGNITION_ENABLED=0 关闭识别，recognizeGrid 直接返回 null', asy
 
 /* ---------------- recognizeGrid / recognition path ---------------- */
 
-test('recognizeGrid 把 webp 转 JPEG 经 Bytes 送检，返回规范化标签', async () => {
-  const sharp = (await import('sharp')).default;
-  const grid = await sharp({
-    create: { width: 8, height: 8, channels: 3, background: { r: 255, g: 0, b: 0 } },
-  }).webp().toBuffer();
-
+test('recognizeGrid 把 webp 经注入转码器换成 JPEG 后经 Bytes 送检，返回规范化标签', async () => {
   const seen = [];
+  const converted = [];
   const result = await recognizeGrid({
     assetId: ID,
-    gridBuffer: grid,
+    gridBuffer: GRID_FIXTURE,
+    convertToJpeg: async (buffer) => { converted.push(buffer); return FAKE_JPEG; },
     callDetectLabels: async (params) => {
       seen.push(params);
       return rekognitionSample();
     },
   });
 
+  assert.deepEqual(converted, [GRID_FIXTURE], '脱敏派生图必须交给转码器 / the derivative must reach the converter');
   assert.equal(seen.length, 1);
-  // Rekognition 只收 JPEG/PNG：送检字节必须是 JPEG magic
-  // Rekognition accepts JPEG/PNG only: the bytes must carry the JPEG magic
+  // Rekognition 只收 JPEG/PNG：送检字节必须是转码后的 JPEG
+  // Rekognition accepts JPEG/PNG only: the bytes sent must be the converted JPEG
+  assert.deepEqual(seen[0].Image.Bytes, FAKE_JPEG);
   assert.deepEqual(
     [...seen[0].Image.Bytes.slice(0, 2)],
     [0xff, 0xd8],
@@ -87,14 +90,11 @@ test('recognizeGrid 把 webp 转 JPEG 经 Bytes 送检，返回规范化标签',
 test('识别输入不可被调用方注入：sourceAsset 恒为 photos/<id>/grid.webp；空 buffer 拒绝', async () => {
   // recognizeGrid 的 sourceAsset 由 assetId 派生，调用方无法塞 incoming/ 原图
   // The caller cannot inject an incoming/ original — sourceAsset derives from assetId.
-  const sharp = (await import('sharp')).default;
-  const grid = await sharp({
-    create: { width: 4, height: 4, channels: 3, background: { r: 0, g: 255, b: 0 } },
-  }).webp().toBuffer();
   const seen = [];
   await recognizeGrid({
     assetId: ID,
-    gridBuffer: grid,
+    gridBuffer: GRID_FIXTURE,
+    convertToJpeg: async () => FAKE_JPEG,
     callDetectLabels: async (params) => { seen.push(params); return rekognitionSample(); },
   });
   assert.equal(seen.length, 1);
