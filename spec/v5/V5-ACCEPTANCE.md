@@ -6,15 +6,23 @@
 > 2026-11-13 校准 / recalibrated: 本矩阵与 [`tasks.md`](./tasks.md) 的口径已对齐。
 > `tasks.md` 的 ✅ 只表示「代码已入库」，**不代表验收通过**；判定只看这里。
 > 核查过程见 [`review.md`](./review.md)。
+>
+> 2026-11-14 校准 / recalibrated: 语义搜索链路已接入生产并完成实机验收，
+> 下方矩阵按「已取得的生产证据」重述；未拿到证据的 release blockers 保持开放，
+> V5 **仍不得宣布完全验收**。
+>
+> *On 2026-11-14 the semantic-search pipeline reached production and was accepted on the
+> live site. The matrix below restates the evidence actually obtained; blockers without
+> evidence remain open and V5 **must not be declared fully accepted**.*
 
 ## Status summary
 
 | Success criterion | Status | Evidence / blocker |
 | --- | --- | --- |
 | Apple-style responsive home, hero chapters, accessible motion | **Partial** | Hero registry (`site.json` → `manifest.heroSections`, capped at 8), `srcset` preloading of the current and next slide, reduced-motion and low-performance fallback are implemented. Browser acceptance on the real photo set is still required. |
-| Natural-language semantic image search | **Partial / 未接线** | The UI exposes `湖水`, `山峰`, `蓝天`, `汽车`, `摩托车` and `红色衬衫` suggestions; `search/query.mjs` and `search/index.mjs` exist with tests, and the local tag/year fallback works. **No runtime is connected**: no HTTP route, no queue, no index persistence, so the six examples are not served by a recognition pipeline. |
+| Natural-language semantic image search | **生产已接线并实机验收 / Wired and accepted on production**; still **Partial** against the six examples | 版本化静态索引 `data/search-index.<rev>.json` 与兜底 `data/search-index.json` 已发布（2026-11-14 核验：`rev=72fbe1c4c299…`，47 条、34 张带识别标签）；识别输入恒为脱敏派生图 `photos/<id>/grid.webp`，经 WebP→JPEG 送 Rekognition，标签按图存 `data/labels/<id>.json`；新上传在 processor 内 best-effort 识别并重建索引。**实机验收**：黑色、白色、绿色、山峰、湖水、汽车均返回结果。**仍未达成**：六个示例未全部命中（「摩托车」无结果，见 V6 B-02）；新上传的端到端 correlation 追踪尚无生产证据。 / *A versioned static index is published from redacted derivatives, backfilled for 34 of 47 items, and accepted on the live site for colour and scene queries; the six-example coverage and the real-upload correlation trace remain unproven.* |
 | Unified CI/CD, resources, logs, metrics, security and billing management | **Partial** | `cx.chenyouyi.top` is deployed and read-only. CI/CD/resources/security are fixture-backed; Logs, Metrics and Billing explicitly report unavailable until their adapters are connected. |
-| Structured evidence for upload, processing, publishing and infrastructure changes | **Partial** | Correlation IDs, CloudWatch logs, Terraform state and GitHub workflow artifacts provide infrastructure evidence. End-to-end upload → processing → publish → search evidence still needs a real-photo run. |
+| Structured evidence for upload, processing, publishing and infrastructure changes | **Partial** | 基础设施证据齐备：correlation IDs、CloudWatch 日志、Terraform state 与 GitHub 工作流产物；另新增生产 S3 对象证据（`data/labels/<id>.json` ×34、版本化索引 ×1、兜底索引 ×1）与 CI run `43560052551`。**仍缺**真实照片的 upload → processing → publish → search 全链路 correlation 追踪。 / *Infrastructure evidence is complete and production index objects are verifiable; a real-photo end-to-end correlation trace is still missing.* |
 | Layered, least-privilege, planable and rollbackable infrastructure | **Pass** | `30-compute` and `40-management-edge` are independent Terraform states; immutable image digest, IAM roles, HTTPS-only origin, SG boundary and plan/apply evidence are recorded. |
 
 ## Required acceptance commands
@@ -47,6 +55,15 @@ production while four of its files were untracked — the highest-risk defect, n
 are local and await review before pushing.*
 
 ## Release blockers
+
+2026-11-14 进度 / *Progress as of 2026-11-14*：#1 前半段（脱敏派生图产出识别标签 + 可解释查询）
+已有生产索引与实机验收证据，但「六个示例全部命中」未达成；#4 仍完全开放。
+#2 有代码级 best-effort 降级与单测，但缺生产故障注入证据；#3 #6 属管理站，
+尚未拉起；#5 的 V5 前端三端/reduced-motion 记录未见。
+*Blocker #1 is partially met (production labels and explainable queries), while full
+six-example coverage and #4 remain open; #2 has code and unit tests but no production
+failure-injection evidence; #3 and #6 depend on the management site, which is not yet
+brought up; #5 has no recorded V5 browser checks.*
 
 V5 must not be declared fully accepted until all of these have evidence:
 
