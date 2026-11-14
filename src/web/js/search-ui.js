@@ -46,11 +46,35 @@ export function explainText(parse) {
     else parts.push(entry.input);
   }
   const unique = [...new Set(parts)];
-  return unique.length ? `已按 ${unique.join(' · ')} 检索` : '';
+  const base = unique.length ? `已按 ${unique.join(' · ')} 检索` : '';
+  // 部分未识别时明说被忽略了哪些，否则用户会以为自己搜的就是他打的全部
+  // Name what was ignored; otherwise the user assumes the whole query applied.
+  const ignored = (parse.unmatched || []).filter(Boolean);
+  if (!ignored.length) return base;
+  const note = `已忽略：${ignored.slice(0, 3).join('、')}`;
+  return base ? `${base}（${note}）` : note;
 }
 
-/** 空结果解释 / Explainable empty state */
-export function emptyText(parse, degraded) {
+/**
+ * 空结果解释 / Explainable empty state。
+ *
+ * 「没听懂」和「没搜到」必须说两句不同的话：
+ *   - unknown-term：这个词不在可搜范围里，换个说法就行；
+ *   - no-match：词认识，只是没有同时符合的照片，减条件就行。
+ * 之前两者共用一句「没有找到」，用户无法判断该换词还是该放宽条件。
+ *
+ * "Didn't understand" and "nothing matched" need different sentences, otherwise
+ * the user cannot tell whether to rephrase or to loosen the filters.
+ */
+export function emptyText(parse, degraded, queryStatus = '') {
+  if (queryStatus === 'unknown-term') {
+    const words = (parse?.unmatched || []).filter(Boolean).slice(0, 3);
+    const quoted = words.length ? words.map((w) => `「${w}」`).join('') : '这个词';
+    return `${quoted}还不在可搜范围里，我没有去猜。试试画面里的东西、颜色，或直接输入年份。`;
+  }
+  if (queryStatus === 'no-match') {
+    return '没有同时符合这些条件的照片。少说一个词，或去掉年份 / 颜色条件再试。';
+  }
   const base = '没有找到符合的照片。试试更宽泛的词，或去掉年份 / 颜色条件。';
   return degraded ? `${base}（当前为基础筛选模式）` : base;
 }
@@ -157,7 +181,8 @@ export function initSearchUI({ onQuery, onRetry } = {}) {
     }
     if (empty) {
       const showEmpty = Boolean(q) && latest.total === 0 && latest.status !== 'loading';
-      empty.textContent = showEmpty ? emptyText(latest.parse, latest.degraded) : '';
+      empty.textContent = showEmpty
+        ? emptyText(latest.parse, latest.degraded, latest.queryStatus) : '';
       empty.hidden = !showEmpty;
     }
     if (retry) {

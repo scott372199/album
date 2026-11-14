@@ -7,10 +7,20 @@
  * 输出只含 term 与计数，**不打印任何照片 id、路径或相册名**——
  * 这份报告可以安全地贴进聊天或提交入库。
  *
+ * 关键：C-3 之后 `zh` 是**建索引期**才解析的，所以索引里存的 `zh` 会滞后。
+ * 报告分两栏——「索引现状」看已经发布的那份，**「重建后」才是真正还缺多少**，
+ * 因为重建只需几秒而重跑识别要几小时。
+ *
  * Reads the production index and reports, per recognised term, how many photos
  * carry it and whether a Chinese name exists. Output contains terms and counts
  * only — never photo ids, paths or album names — so the report itself is safe
  * to share or commit.
+ *
+ * Since C-3 `zh` is resolved at index-build time, so the `zh` stored in the
+ * published index lags behind the vocabulary. The report therefore has two
+ * columns: what the published index says, and — the one that matters — what
+ * would remain missing after a rebuild (seconds) versus a full re-recognition
+ * (hours).
  *
  * 用法 / Usage:
  *   node scripts/audit-terms.mjs                       # 自动在 data/ 里找索引
@@ -22,6 +32,10 @@
 
 import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+// 用当前词表重算中文名：这才是「重建索引后会怎样」。
+// Resolve Chinese names through the current vocabulary — that is what a
+// rebuild would actually produce.
+import { TERM_ZH } from '../src/server/search/lexicon.generated.mjs';
 
 const DATA_DIR = 'data';
 
@@ -155,23 +169,41 @@ for (const item of items) {
   }
 }
 
+/**
+ * 用当前词表解析中文名，复刻 `zhForTerm()` 的兜底语义。
+ * Resolve a Chinese name the way `zhForTerm()` would, after a rebuild.
+ */
+function zhAfterRebuild(term) {
+  const zh = TERM_ZH[term] || term;
+  return { zh, isReal: CJK.test(zh) && zh !== term };
+}
+
 const rows = [...stats.entries()]
-  .map(([term, v]) => ({
-    term,
-    photos: v.photos.size,
-    zh: [...v.zh].filter((z) => CJK.test(z) && z !== term).join(' / '),
-    status: zhStatus(v.zh, term),
-    kind: [...v.kinds].join(', '),
-    maxConf: v.maxConf,
-  }))
+  .map(([term, v]) => {
+    const after = zhAfterRebuild(term);
+    return {
+      term,
+      photos: v.photos.size,
+      zh: [...v.zh].filter((z) => CJK.test(z) && z !== term).join(' / '),
+      status: zhStatus(v.zh, term),
+      zhAfter: after.zh,
+      statusAfter: after.isReal ? 'cn' : 'missing',
+      kind: [...v.kinds].join(', '),
+      maxConf: v.maxConf,
+    };
+  })
   .filter((r) => r.photos >= opt.minPhotos)
-  .filter((r) => (opt.missingOnly ? r.status !== 'cn' : true))
+  .filter((r) => (opt.missingOnly ? r.statusAfter !== 'cn' : true))
   .sort((a, b) => b.photos - a.photos || a.term.localeCompare(b.term));
 
 const withZh = rows.filter((r) => r.status === 'cn').length;
 const missing = rows.filter((r) => r.status !== 'cn');
 const placeholder = missing.filter((r) => r.status === 'placeholder').length;
 const emptyZh = missing.filter((r) => r.status === 'empty').length;
+
+// 重建后的真实缺口——T-04 的判定依据
+const stillMissing = rows.filter((r) => r.statusAfter !== 'cn');
+const coveredPhotos = rows.filter((r) => r.statusAfter === 'cn').reduce((n, r) => n + r.photos, 0);
 
 /* ---------- 输出 / Render ---------- */
 
@@ -187,17 +219,32 @@ lines.push(`- 索引版本 / version：\`${index.version ?? '(未标注)'}\``);
 lines.push(`- 照片总数 / items：${items.length}`);
 lines.push(`- 有标签的照片：${photosWithLabels}（${pct(photosWithLabels)}）`);
 lines.push(`- distinct term：${rows.length}`);
-lines.push(`- **有真中文名：${withZh}；缺中文名：${missing.length}**（其中占位=英文 ${placeholder}，空值 ${emptyZh}）`);
+lines.push(`- 已发布索引：有真中文名 ${withZh}；缺 ${missing.length}（其中占位=英文 ${placeholder}，空值 ${emptyZh}）`);
+lines.push(`- **用当前词表重建后仍缺：${stillMissing.length}**（已覆盖 ${coveredPhotos} 条标签出现）`);
 if (placeholder) {
   lines.push('');
   lines.push(`> ⚠️ 「占位=英文」指 \`zh\` 被 \`zhForTerm()\` 兜底填成了 term 本身，**该标签只能用英文检索**，对中文用户等于不可搜。`);
 }
+lines.push('');
+lines.push('> 索引里的 `zh` 是**上一次建索引时**解析的，会滞后于词表。判 T-04 进度看下面第二节。');
 if (opt.minPhotos > 1) lines.push(`- 过滤：只统计出现在 ≥${opt.minPhotos} 张照片上的 term`);
 lines.push('');
-lines.push('## 缺中文名的 term（按出现张数排序）/ Terms without a real Chinese name');
+lines.push('## 重建索引后仍缺中文名 / Still missing after a rebuild');
+lines.push('');
+if (!stillMissing.length) {
+  lines.push('无。当前词表已覆盖全部已识别 term，重建索引即可生效。');
+} else {
+  lines.push('| term | 出现张数 | 覆盖率 | kind | 最高置信度 |');
+  lines.push('| --- | --- | --- | --- | --- |');
+  for (const r of stillMissing) {
+    lines.push(`| \`${r.term}\` | ${r.photos} | ${pct(r.photos)} | ${r.kind || '-'} | ${r.maxConf.toFixed(1)} |`);
+  }
+}
+lines.push('');
+lines.push('## 已发布索引的缺口（历史对照）/ Gaps in the published index');
 lines.push('');
 if (!missing.length) {
-  lines.push('无。全部已识别 term 都有可用的中文名。');
+  lines.push('无。');
 } else {
   lines.push('| term | 出现张数 | 覆盖率 | 状态 | kind | 最高置信度 |');
   lines.push('| --- | --- | --- | --- | --- | --- |');
@@ -210,10 +257,10 @@ if (!opt.missingOnly) {
   lines.push('');
   lines.push('## 全部 term / All terms');
   lines.push('');
-  lines.push('| term | 出现张数 | 覆盖率 | 中文名 | kind |');
+  lines.push('| term | 出现张数 | 覆盖率 | 中文名（重建后） | kind |');
   lines.push('| --- | --- | --- | --- | --- |');
   for (const r of rows) {
-    const name = r.status === 'cn' ? r.zh : '**缺**';
+    const name = r.statusAfter === 'cn' ? r.zhAfter : '**缺**';
     lines.push(`| \`${r.term}\` | ${r.photos} | ${pct(r.photos)} | ${name} | ${r.kind || '-'} |`);
   }
 }
@@ -224,7 +271,10 @@ const report = lines.join('\n');
 if (opt.out) {
   writeFileSync(opt.out, report, 'utf8');
   process.stdout.write(`已写入 ${opt.out}\n`);
-  process.stdout.write(`distinct term ${rows.length} · 有中文名 ${withZh} · 缺 ${missing.length}\n`);
+  process.stdout.write(
+    `distinct term ${rows.length} · 索引现状：有中文名 ${withZh} / 缺 ${missing.length}`
+    + ` · **重建后仍缺 ${stillMissing.length}**\n`,
+  );
 } else {
   process.stdout.write(report);
 }

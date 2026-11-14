@@ -43,6 +43,7 @@ import { LEXICON, LEXICON_KEYS } from './lexicon.generated.js';
 export { LEXICON, LEXICON_KEYS };
 
 function scanChunk(chunk, ctx) {
+  const before = ctx.explanation.length;
   let i = 0;
   while (i < chunk.length) {
     const key = LEXICON_KEYS.find((candidate) => chunk.startsWith(candidate, i));
@@ -58,6 +59,17 @@ function scanChunk(chunk, ctx) {
     }
     i += key.length;
   }
+  // 整块一个词都没认出来 → 整块进 unmatched。
+  //
+  // 以前这里是静默 `i += 1` 跳过：用户打「大象」，词表没有，terms 为空，
+  // 查询退化成「无条件」，结果是**返回全部照片**并且毫无提示——比返回 0 更
+  // 有害，因为它看起来像搜到了。现在把没认出来的原样交回去，由四态去说话。
+  //
+  // A chunk that yields zero matches is reported whole as unmatched. The old
+  // silent `i += 1` made an unknown word degrade to "no condition", i.e. return
+  // every photo with no hint — worse than returning nothing, because it looks
+  // like a successful search.
+  if (ctx.explanation.length === before) ctx.unmatched.push(chunk);
 }
 
 /**
@@ -97,14 +109,15 @@ export function parseQuery(raw, { page = 1, pageSize = 40 } = {}) {
 
   // 去掉语气词/连接词，再按最长前缀匹配词典
   // Strip filler words, then longest-prefix match against the lexicon
+  const unmatched = [];
   rest = rest.replace(/[的和与及了的\s,，、;；]+/g, ' ');
   for (const chunk of rest.match(/[\u4e00-\u9fa5a-zA-Z0-9]+/g) || []) {
-    scanChunk(chunk, { explanation, terms, filters });
+    scanChunk(chunk, { explanation, terms, filters, unmatched });
   }
 
   const safePage = Number.isInteger(page) && page >= 1 ? page : 1;
   const safeSize = Number.isInteger(pageSize) && pageSize >= 1 && pageSize <= 100 ? pageSize : 40;
-  return { terms, filters, explanation, page: safePage, pageSize: safeSize };
+  return { terms, filters, explanation, unmatched, page: safePage, pageSize: safeSize };
 }
 
 /** 导出成契约里的 search.query 形状 / Export as the contract's search.query shape */
@@ -252,18 +265,20 @@ function scoreItem(item, parse) {
     confidenceSum += 1;
   }
   for (const term of parse.terms) {
-    if (itemMatchesTerm(item, term)) {
-      matchCount += 1;
-      confidenceSum += confidenceFor(item, term);
-    }
+    // 多词是**且**不是**或**：任意一个词不命中，这张照片就不算命中。
+    // 原来的 `if (itemMatchesTerm(...))`（不命中就 continue）等于并集，
+    // 搜「湖水 汽车」会把 2 张湖水和 3 张汽车一起返回 5 张，看起来合理、
+    // 实际是错的——用户要的是「既像湖水又像汽车的那张」。
+    //
+    // Multiple terms are ANDed: a photo must carry every one of them. The old
+    // notify-only-on-hit loop produced a union, so "lake car" returned 2 lakes
+    // plus 3 cars and looked plausible while being wrong.
+    if (!itemMatchesTerm(item, term)) return null;
+    matchCount += 1;
+    confidenceSum += confidenceFor(item, term);
   }
-  // 只有时间条件时，符合时间即相关；否则至少命中一个词才算相关
-  // Time-only queries match every item of that period; otherwise at least one
-  // term/color must hit.
-  const needsSemantic = parse.terms.length > 0 || parse.filters.colors.length > 0;
-  if (needsSemantic && matchCount <= (parse.filters.year != null ? 1 : 0) + (parse.filters.month != null ? 1 : 0)) {
-    return null;
-  }
+  // 时间条件只出现时（无词无色），符合时间即相关，全部计入。
+  // Time-only queries match every item of that period.
   return { matchCount, confidenceSum };
 }
 
@@ -280,6 +295,49 @@ function pageResult(matched, page, pageSize, extra) {
 }
 
 /**
+ * 检索四态 / Search four-state（FR-03）。
+ *
+ * 为什么需要它：`unknown-term` 和 `no-match` 对用户是两件不同的事——
+ * 「这个词我不认识，换个说法」和「这个词我认识，但你没拍过」。以前两者都表现为
+ * 一个空白列表，而未知词更糟：它被静默丢掉后查询退化成「无条件」，
+ * 于是用户看到**全部照片**，以为自己搜到了。
+ *
+ * 判定顺序严格按 `plan.md` §4.3，先判空查询，再判降级，最后才谈命中。
+ *
+ * `unknown-term` and `no-match` are different to a user: "I don't know that
+ * word" versus "I know it, you just have no such photo". The order of checks
+ * follows plan.md §4.3 exactly.
+ *
+ * 命名说明：本函数返回的是**查询**状态，与 `state.search.status`（索引加载
+ * 生命周期：loading/ready/degraded）是两件事，所以字段叫 `queryStatus`。
+ * 共用一个字段会让「正在加载」被误判成「没听懂」。
+ */
+export const QUERY_STATUS = Object.freeze({
+  IDLE: 'idle',
+  OK: 'ok',
+  NO_MATCH: 'no-match',
+  UNKNOWN_TERM: 'unknown-term',
+  DEGRADED: 'degraded',
+});
+
+export function queryStatusOf({ query = '', parse = null, total = 0, hasIndex = true } = {}) {
+  if (!String(query || '').trim()) return QUERY_STATUS.IDLE;
+  if (!hasIndex) return QUERY_STATUS.DEGRADED;
+
+  const terms = Array.isArray(parse?.terms) ? parse.terms : [];
+  const colors = Array.isArray(parse?.filters?.colors) ? parse.filters.colors : [];
+  const unmatched = Array.isArray(parse?.unmatched) ? parse.unmatched : [];
+  const hasTime = parse?.filters?.year != null || parse?.filters?.month != null;
+
+  // 一个词都没认出来、又没有时间条件 → 不是「没搜到」，是「没听懂」
+  if (!terms.length && !colors.length && !hasTime && unmatched.length) {
+    return QUERY_STATUS.UNKNOWN_TERM;
+  }
+  if (total === 0 && (terms.length || colors.length)) return QUERY_STATUS.NO_MATCH;
+  return QUERY_STATUS.OK;
+}
+
+/**
  * 索引检索：本地打分、按「匹配数 → 置信和 → 年份 → id」排序、分页。
  * 返回的 `matched` 是与入参 photos 相同的对象引用，供现有渲染器直接使用。
  *
@@ -288,6 +346,18 @@ function pageResult(matched, page, pageSize, extra) {
  * existing renderer can consume them unchanged.
  */
 export function searchWithIndex(index, parse, photos, { page = 1, pageSize = 40 } = {}) {
+  // 没听懂时不能返回全量：那等于把「无法解读」伪装成「全部命中」。
+  // An uninterpretable query must not return everything, which would disguise
+  // "cannot parse" as "matches all".
+  const understood = (parse.terms?.length || 0) > 0
+    || (parse.filters?.colors?.length || 0) > 0
+    || parse.filters?.year != null || parse.filters?.month != null;
+  if (!understood) {
+    return pageResult([], page, pageSize, {
+      fromIndex: true, degraded: false, explanation: parse.explanation,
+    });
+  }
+
   const byId = new Map(photos.map((photo) => [photo.id, photo]));
   const scored = [];
   for (const item of index.items || []) {
@@ -326,7 +396,9 @@ export function searchFallback(photos, parse, { page = 1, pageSize = 40 } = {}) 
     if (words.length) {
       const haystack = [photo.album, photo.title, photo.caption, ...(photo.tags || [])]
         .join(' ').toLowerCase();
-      if (!words.some((word) => haystack.includes(word))) return false;
+      // 降级路径也必须 AND：多词时「有一个词出现在标题里」不等于匹配。
+      // The degraded path ANDs too: one word appearing is not a match.
+      if (!words.every((word) => haystack.includes(word))) return false;
     }
     return true;
   });
@@ -336,9 +408,15 @@ export function searchFallback(photos, parse, { page = 1, pageSize = 40 } = {}) 
 }
 
 /** 编排：索引可用走索引，否则降级 / Orchestrate: index path or fallback */
-export function runSearch({ index, parse, photos, indexOptions = {}, page = 1, pageSize = 40 } = {}) {
-  if (index && isIndexUsable(index, indexOptions)) {
-    return searchWithIndex(index, parse, photos, { page, pageSize });
-  }
-  return searchFallback(photos, parse, { page, pageSize });
+export function runSearch({
+  index, parse, photos, query = '', indexOptions = {}, page = 1, pageSize = 40,
+} = {}) {
+  const hasIndex = Boolean(index && isIndexUsable(index, indexOptions));
+  const result = hasIndex
+    ? searchWithIndex(index, parse, photos, { page, pageSize })
+    : searchFallback(photos, parse, { page, pageSize });
+  return {
+    ...result,
+    queryStatus: queryStatusOf({ query, parse, total: result.total, hasIndex }),
+  };
 }

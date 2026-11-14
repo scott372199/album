@@ -25,9 +25,9 @@
 | T-01 | 词表单一来源 + 生成与一致性门禁 | V6.0 | — | FR-13 | **done(代码)** |
 | T-02 | `zh` 回填下移到索引构建期 | V6.0 | T-01 | FR-04 | **done(代码)** |
 | T-03 | term 覆盖率审计 | V6.0 | T-02 | FR-04 | **done(代码)** |
-| T-04 | 词表扩容到 ≥380 | V6.0 | T-01、T-03 | FR-04 | **doing**（106 词候选待审） |
-| T-05 | 检索四态 + `unmatched` + AND | V6.0 | T-01 | FR-03 | pending |
-| T-06 | 服务端同步 + 双实现一致性单测 | V6.0 | T-05 | FR-03、FR-13 | pending |
+| T-04 | 词表扩容到 ≥380 | V6.0 | T-01、T-03 | FR-04 | **done(代码)** |
+| T-05 | 检索四态 + `unmatched` + AND | V6.0 | T-01 | FR-03 | **done(代码)** |
+| T-06 | 服务端同步 + 双实现一致性单测 | V6.0 | T-05 | FR-03、FR-13 | **done(代码)** |
 | T-07 | 建议词改为索引派生 | V6.0 | T-05 | FR-03 | pending |
 | T-08 | 增量渲染管线 | V6.0 | — | FR-02 | pending |
 | T-09 | IME 防抖 + 统一渲染入口 | V6.0 | T-08 | Q-01 | pending |
@@ -129,6 +129,20 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 - 前端 gzip 增量 ≤12 KB（`check-budget` 会给数字）。
 - 中文名不随构建漂移：连续两次 `npm run build`，产物 sha 相同。
 
+**实际结果（2026-11-14）**：
+
+| 判定项 | 目标 | 实测 | 结论 |
+| --- | --- | --- | --- |
+| 缺 `zh` 的 term | 0 | **0**（118 个 term 全覆盖，540 条标签出现零遗漏） | ✅ |
+| 每张中文可搜词 | ≥10 | 中位 **15**、平均 **15.9**；34 张中 **32 张 ≥10** | ⚠️ 见下 |
+| 前端 gzip 增量 | ≤12 KB | **+3.9 KB**（67.0 → 70.9，含 T-01~T-06 全部改动） | ✅ |
+| 构建可复现 | 两次 sha 相同 | 两次 `da87e022…` | ✅ |
+
+⚠️ **那 2 张不满 10 词的照片，原因不是词表**：它们各自只有 8 / 9 个 label，而「拿不到中文名的 label 数 = 0」。也就是说命名层已经 100% 覆盖，剩下的是**识别密度**不足——调低 `minConfidence` 或补一次识别才能解决，扩词表无济于事。这属于 §5-B6 的语料/识别限制，不在 T-04 的范围内。
+（另外：语料 47 张里只有 34 张有标签，另 13 张识别失败；这是 I-2 的预期行为，不阻塞发布。）
+
+**方法论修正**：`audit-terms.mjs` 的判定口径随 C-3 一起改了。原版读索引里存的 `zh`，但 `zh` 现在是**建索引期**才解析的，索引里的值会滞后。新版同时报「已发布索引现状」与「用当前词表重建后仍缺」——后者才是 T-04 的真实进度。这一栏从 106 直接变成 0，而索引现状仍是 106：**如果只看前者，会误判 T-04 完全没做**。
+
 ---
 
 ### T-05 检索四态 + `unmatched` + AND 〔FR-03〕
@@ -146,13 +160,37 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 
 **完成判定**（对应 `spec.md` FR-03 的验收表，离线跑）
 
-| 查询 | 期望 |
-| --- | --- |
-| `显示器` | `total=0`，`status='unknown-term'`，`unmatched` 含 `显示器` |
-| `摩托车` | `total=0`，`status='no-match'` |
-| `湖水` | `total=3`（既有语料） |
-| `湖水 汽车` | `total` ≤ 两单词命中数的较小值 |
-| `2025 年的湖水` | 时间条件与语义条件同时生效 |
+> ⚠️ **验收表已按 T-04 后的真实语料订正。** 原稿写在词表扩容之前，其中三行已与现实不符：
+> `显示器` 原期望 `unknown-term`，但 T-04 之后它已是已知词（`monitor`，命中 1 张）；
+> `湖水` 原期望 `total=3`，实测语料只有 2 张；`2025 年` 在语料里不存在（47 张全是 2026）。
+> 把这些改成「拿真实语料量出来的数」，而不是让代码去迁就一份猜的表格。
+
+| 查询 | 期望 | 实测 |
+| --- | --- | --- |
+| `大象` | `total=0`，`status='unknown-term'`，`unmatched` 含 `大象` | ✅ 47 → **0** |
+| `摩托车` | `total=0`，`status='no-match'`（词认识、无照片） | ✅ 0 |
+| `湖水` | `total=2`（既有语料） | ✅ 2 |
+| `湖水 汽车` | `total` ≤ 两单词命中数的较小值（2、3 → ≤2） | ✅ 5 → **0** |
+| `2026 年的湖水` | 时间条件与语义条件同时生效 | ✅ 年份+词均生效 |
+| `显示器` | `total=1`，`status='ok'`（T-04 后已是已知词） | ✅ 1 |
+
+---
+
+### T-05 实施记录 / Implementation notes
+
+**改动**：`~ src/web/js/search.js`、`~ src/web/js/main.js`、`~ src/web/js/search-ui.js`、`~ src/server/search/{query,index,fallback}.mjs`（与 T-06 同批）、`~ spec/v5/contracts/v5-contracts.json`、`~ src/server/test/v5-{search,contracts}.test.mjs`、`~ src/web/test/v5-search.test.mjs`、`+ src/web/test/v6-search-four-state.test.mjs`、`+ src/server/test/v6-parity.test.mjs`
+
+**两处与计划的偏差**（都是实施中发现的，理由记在这里）：
+
+1. **四态字段叫 `queryStatus`，不叫 `status`。**
+   plan §4.3 写的是「状态机在 `computeFiltered()` 里判」，但 `state.search.status` 已被**索引加载生命周期**占用（`loading / ready / degraded`），由 `statusText()` 消费、驱动「正在检索…」与「重试」。四态（`idle / ok / no-match / unknown-term / degraded`）驱动的是**空结果文案**，是两个不同的 UI 目标。共用一个字段会让「正在加载」被判成「没听懂」。所以用两个字段，各自有单一职责。
+
+2. **契约 `parseResult` 追加了 `unmatched`。**
+   FR-03 要求把未识别片段交回来，这是 `parseResult` 的形状变化，因此写进 `spec/v5/contracts/v5-contracts.json`，而不是停在测试里的字面量。顺手把 `v5-contracts.test.mjs` 的键集合断言改成**从契约派生**——原来手写的那份永远比契约慢一步，等于测试在维护自己的真值。追加字段是向后兼容的，`INDEX_VERSION` 不变（持久化的索引 shape 没动）。
+
+**另一个关键发现**：未知词的真实危害不是「返回 0」，而是**返回全部**。`scanChunk` 的静默 `i += 1` 让「大象」的 `terms` 为空，查询退化成「无条件」，47 张全回来。所以 `searchWithIndex` / `search()` 都加了守卫：**没听懂就返回空集**，不返回全量。
+
+**反向验证（T-06 要求）**：把服务端 `if (!matched) return null;` 改回 `continue;`，parity 测试 3 条全红；还原后全绿。确认测试真的咬住了单边漂移。
 
 ---
 
@@ -163,6 +201,11 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 **做法**：前端 `search.js` 与服务端 `query.mjs`/`index.mjs` 是**两套同源逻辑**（`parseQuery`、`scoreItem` 各两份）。V6.0 两处同批改，再用一致性测试把漂移钉死：同一份 fixture（≥200 条合成 item）+ 同一批查询，断言两侧 `total` 与 `items[].id` 序列**完全相等**。
 
 **完成判定**：parity 测试绿；**并做一次反向验证**——故意把一侧的 AND 改回 OR，测试必须变红（否则说明测试没咬住）。
+
+**实际结果（2026-11-14）**：`+ src/server/test/v6-parity.test.mjs`，3 条用例。fixture 用固定种子的线性同余生成 **200 条** item（保证任何机器上序列一致），20 条查询覆盖单词 / 多词 / 颜色 / 年月 / 组合 / 未知词。
+逐查询比对五层：`terms`、`filters.colors`、`year`、`month`、`unmatched`，再比 `total` 与 `items[].id` 序列。
+反向验证已做：单侧改回 OR → 3 条全红；还原 → 3 条全绿。
+另一条必须记下的语义：**部分未识别时忽略未知词、保留已识别词**（`大象 湖泊` → `terms=['lake']`、`unmatched=['大象']`、`status='ok'` 附「已忽略」提示），而不是整条查询作废。这是 plan §4.3 的规定，已单独用例钉住。
 
 ---
 

@@ -222,8 +222,17 @@ test('scoreItem：时间/颜色不匹配返回 null，命中数含语义词', ()
   ], { colors: ['red'], year: 2025, month: 7 });
   assert.equal(scoreItem(row, parseQuery('2026 年')), null);
   assert.equal(scoreItem(row, parseQuery('蓝色衬衫')), null);
-  const score = scoreItem(row, parseQuery('湖水 红色衬衫'));
-  assert.ok(score && score.matchCount >= 2);
+
+  // FR-03：多词是**且**。这一行只有 lake + red，没有 shirt，
+  // 所以「湖水 红色衬衫」必须淘汰；旧断言（matchCount >= 2）是并集语义。
+  // AND semantics: this row has lake and red but no shirt, so the query must
+  // reject it. The old `matchCount >= 2` assertion encoded a union.
+  assert.equal(scoreItem(row, parseQuery('湖水 红色衬衫')), null);
+
+  // 词与颜色都命中时才计分：lake + red 两个条件
+  const hit = scoreItem(row, parseQuery('湖水 红色'));
+  assert.ok(hit);
+  assert.equal(hit.matchCount, 2);
 });
 
 test('结果只含 publicFields；projectPublic 也只含白名单且无禁止字段', () => {

@@ -50,7 +50,9 @@ function computeFiltered() {
   if (!q) {
     return {
       items: scoped,
-      meta: { status: 'idle', parse: null, total: scoped.length, degraded: false, error: '' },
+      meta: {
+        status: 'idle', queryStatus: 'idle', parse: null, total: scoped.length, degraded: false, error: '',
+      },
     };
   }
   const parse = parseQuery(q);
@@ -58,6 +60,7 @@ function computeFiltered() {
     index: state.search.index,
     parse,
     photos: scoped,
+    query: q,
     indexOptions: { version: INDEX_VERSION },
     page: 1,
     pageSize: SEARCH_PAGE_SIZE,
@@ -67,7 +70,12 @@ function computeFiltered() {
     // The catalog does progressive rendering (client-side paging) itself.
     items: result.matched,
     meta: {
+      // status 是**索引加载**生命周期（loading/ready/degraded）；
+      // queryStatus 是**查询**四态（idle/ok/no-match/unknown-term/degraded）。
+      // 两者目标不同：前者驱动「正在检索…」，后者驱动空结果文案。
+      // status is the index-load lifecycle; queryStatus is the query four-state.
       status: state.search.status,
+      queryStatus: result.queryStatus,
       parse,
       total: result.total,
       degraded: result.degraded,
@@ -218,6 +226,7 @@ function refresh() {
   ctx.searchUI?.render({
     q: state.q,
     status: meta.status,
+    queryStatus: meta.queryStatus,
     parse: meta.parse,
     total: meta.total,
     degraded: meta.degraded,

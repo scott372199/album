@@ -233,10 +233,14 @@ test('search 结果符合契约 search.result，且只含 publicFields', () => {
 /* ---------------- 查询契约、索引契约、写路径归属 ---------------- */
 
 test('queryContract：examples / parseResult 形状 / ranking / fallback', () => {
+  // 键集合从**契约**派生，而不是在这里手写一份。手写的那份永远比契约慢一步，
+  // 加字段就要改测试——那等于测试在维护自己的真值，而不是校验契约。
+  // Derive the key set from the contract instead of hardcoding it: a literal
+  // here drifts behind the contract and makes the test its own source of truth.
+  const expectedKeys = Object.keys(raw.queryContract.parseResult).sort();
   for (const example of raw.queryContract.examples) {
     const parse = parseQuery(example);
-    assert.deepEqual(Object.keys(parse).sort(),
-      ['explanation', 'filters', 'page', 'pageSize', 'terms']);
+    assert.deepEqual(Object.keys(parse).sort(), expectedKeys);
     assert.deepEqual(Object.keys(parse.filters).sort(), ['colors', 'month', 'tags', 'year']);
   }
   assert.equal(RANKING, raw.queryContract.ranking);
