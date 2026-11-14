@@ -13,18 +13,30 @@
 
 import { el } from './ui.js';
 
-/** 契约里的示例查询 / Example queries from queryContract */
-export const EXAMPLE_QUERIES = [
-  '湖水', '山峰', '蓝天', '汽车', '摩托车', '红色衬衫',
-  '2025 年', '2025 年的蓝天和汽车',
-];
-
-/** 即时建议：按输入过滤示例词 / Instant suggestions: filter examples by input */
-export function suggestionsFor(input) {
+/**
+ * 即时建议：在**索引派生**出来的候选池里做纯过滤。
+ *
+ * 这里不再有示例词常量。旧实现里那份硬编码列表含「摩托车」——这批照片里
+ * 一张都没有，点一下就是空结果。候选池由 `deriveSuggestions(index)` 按实际
+ * 覆盖率给出（见 search.js），本函数只负责按输入筛。
+ *
+ * Pure filter over an index-derived pool. The old hardcoded example list
+ * offered words with zero photos in the corpus; the pool now comes from real
+ * coverage, so every suggestion leads somewhere.
+ */
+export function suggestionsFor(input, pool = []) {
+  const list = Array.isArray(pool) ? pool : [];
   const q = String(input || '').trim();
-  if (!q) return EXAMPLE_QUERIES.slice(0, 6);
-  const hits = EXAMPLE_QUERIES.filter((item) => item.includes(q) || q.includes(item));
-  return hits.length ? hits.slice(0, 6) : EXAMPLE_QUERIES.slice(0, 4);
+  if (!list.length) return [];
+  if (!q) return list.slice(0, 6);
+
+  // 排除与输入完全相同的词：用户已经打出来的东西不该再被「建议」一次
+  // Drop an exact match: suggesting back what the user already typed is noise.
+  const hits = list.filter((item) => item !== q && (item.includes(q) || q.includes(item)));
+  if (hits.length) return hits.slice(0, 6);
+
+  // 输入匹配不上任何候选时，退回前 4 个覆盖面较广的词，而不是空手
+  return list.filter((item) => item !== q).slice(0, 4);
 }
 
 /** 时间 chip：由 manifest 的公开年份派生 / Time chips from public manifest years */
@@ -110,14 +122,14 @@ export function initSearchUI({ onQuery, onRetry } = {}) {
   const wrap = el('search-wrap');
 
   let latest = {
-    q: '', status: 'idle', parse: null, total: 0,
-    degraded: false, years: [], error: '',
+    q: '', status: 'idle', queryStatus: 'idle', parse: null, total: 0,
+    degraded: false, years: [], error: '', suggestions: [],
   };
 
   function paintSuggestions(q) {
     if (!suggestions) return;
     suggestions.replaceChildren();
-    for (const item of suggestionsFor(q)) {
+    for (const item of suggestionsFor(q, latest.suggestions)) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'search-suggestion';

@@ -10,6 +10,7 @@ import { initUpload } from './upload.js';
 import { el, toast, formatSpan } from './ui.js';
 import {
   parseQuery, runSearch, indexUrl, isIndexUsable, sanitizeIndex, INDEX_VERSION,
+  deriveSuggestions,
 } from './search.js';
 import { initSearchUI } from './search-ui.js';
 import { initHero } from './hero.js';
@@ -108,9 +109,13 @@ async function loadIndex() {
   if (clean && isIndexUsable(clean, { version: INDEX_VERSION })) {
     state.search.index = clean;
     state.search.status = 'ready';
+    // 建议词只在索引就绪时算一次：3 万张照片逐次按键重算不可接受。
+    // Derive suggestions once per index load, not per keystroke.
+    state.search.suggestions = deriveSuggestions(clean, { limit: 12 });
   } else {
     state.search.status = 'degraded';
     state.search.error = '索引不可用';
+    state.search.suggestions = [];
   }
   refresh();
 }
@@ -232,6 +237,7 @@ function refresh() {
     degraded: meta.degraded,
     years: ctx.index.years,
     error: meta.error,
+    suggestions: state.search.suggestions,
   });
 
   if (state.view === 'album' && !state.album) return;

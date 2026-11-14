@@ -235,7 +235,13 @@ test('sanitizeIndex 丢弃禁止字段与重复 id', () => {
 /* ---------------- 搜索界面文案 / Search UI text ---------------- */
 
 test('建议、时间 chip、解释、空结果与错误状态文案安全', () => {
-  assert.ok(suggestionsFor('蓝').includes('蓝天'));
+  // T-07：候选池改由索引派生后传入，suggestionsFor 只做纯过滤。
+  // 这里喂一个固定池，验证「按输入筛选」这一层；候选池的派生逻辑见
+  // v6-suggestions.test.mjs。
+  const pool = ['蓝天', '蓝色', '湖水', '汽车'];
+  assert.ok(suggestionsFor('蓝', pool).includes('蓝天'));
+  assert.ok(!suggestionsFor('蓝天', pool).includes('蓝天'), '不重复建议用户已输入的词');
+  assert.deepEqual(suggestionsFor('', []), [], '没有候选池时不硬凑');
   assert.deepEqual(yearChips([2025, 2024]), [
     { label: '2025 年', query: '2025 年' }, { label: '2024 年', query: '2024 年' },
   ]);

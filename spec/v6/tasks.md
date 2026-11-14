@@ -28,7 +28,7 @@
 | T-04 | 词表扩容到 ≥380 | V6.0 | T-01、T-03 | FR-04 | **done(代码)** |
 | T-05 | 检索四态 + `unmatched` + AND | V6.0 | T-01 | FR-03 | **done(代码)** |
 | T-06 | 服务端同步 + 双实现一致性单测 | V6.0 | T-05 | FR-03、FR-13 | **done(代码)** |
-| T-07 | 建议词改为索引派生 | V6.0 | T-05 | FR-03 | pending |
+| T-07 | 建议词改为索引派生 | V6.0 | T-05 | FR-03 | **done(代码)** |
 | T-08 | 增量渲染管线 | V6.0 | — | FR-02 | pending |
 | T-09 | IME 防抖 + 统一渲染入口 | V6.0 | T-08 | Q-01 | pending |
 | T-10 | 页面骨架改造 | V6.0 | T-08、T-09 | FR-01、FR-05 | pending |
@@ -211,11 +211,23 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 
 ### T-07 建议词改为索引派生 〔FR-03〕
 
-**改动**：`~ src/web/js/search-ui.js`、`~ src/server/search/vocabulary.mjs`（导出建议词构造）、`~ src/web/test/v5-search.test.mjs`
+**改动**：`~ src/web/js/search.js`（新增 `deriveSuggestions`）、`~ src/web/js/search-ui.js`、`~ src/web/js/main.js`、`~ src/web/js/state.js`、`~ src/web/test/v5-search.test.mjs`、`+ src/web/test/v6-suggestions.test.mjs`
 
-**做法**：`deriveSuggestions(index, { limit: 10 })`——来源 `index.vocabulary` + `items[].labels[].term` 实际频次；按「覆盖率黄金区间 8%–60%」排序（太高=太泛，太低=长尾）；同义合并；排除已在查询里的词。`suggestionsFor(input, pool)` 退化为纯过滤。**删除 `EXAMPLE_QUERIES`。**
+**做法**：`deriveSuggestions(index, { limit: 10 })`——来源 `items[].labels[].term` 实际频次；按「覆盖率黄金区间 8%–60%」排序（太高=太泛，太低=长尾）；无中文名的 term 不入选；排除已在查询里的词。`suggestionsFor(input, pool)` 退化为纯过滤。**删除 `EXAMPLE_QUERIES`。**
+
+> 与计划的偏差：原计划在 `src/server/search/vocabulary.mjs` 里也导出一份建议词构造。**没做**——服务端从不产生建议词，多加一份没人调用的实现只会凭空多一个漂移面。建议词是纯客户端的 UI 装饰，派生逻辑留在 `search.js`，由 `v6-suggestions.test.mjs` 正面测试。
 
 **完成判定**：`grep -rn "EXAMPLE_QUERIES" src/` 为空；索引为空时不抛错、回退到年份 chip；同一个索引两次调用结果稳定（可复现）。
+
+**实际结果（2026-11-14）**：
+
+- `grep -rn "EXAMPLE_QUERIES" src/` → 空。✓
+- `+ src/web/test/v6-suggestions.test.mjs`，6 条用例，核心不变量是**「每条建议点进去都能搜到照片」**——合成 fixture 与真实语料各测一遍。
+- 真实语料派生结果：`棕色、黑色、头、脸、男孩、男性、小孩、蓝色、衬衫、绿色、红色、黄色`（12 条全部非空）。
+  旧硬编码列表里的 **`摩托车` 在这批照片里 0 张**——点一下就是空结果，用户会以为是自己用错。这就是必须派生的直接理由。
+- 覆盖率高/低两端都被剔除：`grey`(34/47=72%)、`person`(33/47=70%) 太泛，长尾单词太窄。
+
+⚠️ **一个诚实的负面结果**：我试过按「结果集重叠」做多样性去重，想让顶部的头/脸/男孩/男性/小孩 不指向同一批照片。**在真实语料上失败并已撤掉**：`brown` 出现在 34 张有标签照片中的 28 张，其余候选与它重叠 73%–88%，任何阈值都把 12 条候选筛成 1 条。这批语料本身就是单一人物照簇，真要分组得有语义信号（人脸聚类），而 V6 明确不做。结论写进了 `search.js` 的注释，避免以后有人再走一遍。
 
 ---
 

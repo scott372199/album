@@ -38,7 +38,7 @@ export const FORBIDDEN_FIELDS = [
  * The vocabulary is no longer hardcoded here: one JSON source, one generated
  * artifact per consumer, with a sync check in CI.
  */
-import { LEXICON, LEXICON_KEYS } from './lexicon.generated.js';
+import { LEXICON, LEXICON_KEYS, TERM_ZH } from './lexicon.generated.js';
 
 export { LEXICON, LEXICON_KEYS };
 
@@ -335,6 +335,65 @@ export function queryStatusOf({ query = '', parse = null, total = 0, hasIndex = 
   }
   if (total === 0 && (terms.length || colors.length)) return QUERY_STATUS.NO_MATCH;
   return QUERY_STATUS.OK;
+}
+
+/**
+ * 建议词由**索引派生**，不再写死一份示例列表（FR-03 / T-07）。
+ *
+ * 为什么必须派生：硬编码的示例词会推荐**语料里根本不存在的词**。旧列表里有
+ * 「摩托车」，而这批照片里一张都没有——用户点一下，得到空结果，还以为是自己
+ * 用错了。建议词的价值在于「点了就一定有东西看」。
+ *
+ * 排序用「覆盖率黄金区间 8%–60%」：覆盖率太高的词（比如灰色，几乎每张都有）
+ * 当建议等于没建议；太低的（只有 1 张）点开也是空的。区间内按覆盖率降序。
+ * 区间内一个都没有时退化为按频次排序，而不是硬凑够数量——凑出来的都是噪音。
+ *
+ * **试过但撤掉的**：按「结果集重叠」做多样性去重，想让头部几条不指向同一批
+ * 照片。真实语料上失败了——34 张有标签照片里 `brown` 出现在 28 张，其余候选
+ * 与它重叠 73%–88%，任何阈值都会把 12 条候选筛到只剩 1 条。这批语料本身就是
+ * 单一的人物照簇，要真正去重得有语义分组信号（人脸聚类），而那是 V6 明确
+ * 不做的。宁可给 12 条略冗余的建议，也不上线一个把列表塌成 1 条的启发式。
+ *
+ * Tried and reverted: diversity de-duplication by result-set overlap. On real
+ * data brown appears in 28 of 34 labelled photos and every other candidate
+ * overlaps it by 73–88%, so any threshold collapses 12 candidates to 1. The
+ * corpus is one big people cluster; real grouping needs face clustering, which
+ * V6 explicitly excludes.
+ */
+export function deriveSuggestions(index, { limit = 10, query = '' } = {}) {
+  const items = Array.isArray(index?.items) ? index.items : [];
+  const total = items.length;
+  if (!total) return [];
+
+  const freq = new Map();
+  for (const item of items) {
+    const seen = new Set();
+    for (const label of item.labels || []) {
+      const term = label?.term;
+      if (!term || seen.has(term)) continue;
+      seen.add(term);
+      freq.set(term, (freq.get(term) || 0) + 1);
+    }
+  }
+
+  const inQuery = new Set(query ? parseQuery(query).terms : []);
+  const MIN_COVERAGE = 0.08;
+  const MAX_COVERAGE = 0.6;
+
+  const rows = [];
+  for (const [term, n] of freq) {
+    if (inQuery.has(term)) continue;   // 已经在查询里的词不必再建议
+    const zh = TERM_ZH[term];
+    if (!zh || zh === term) continue;  // 没有中文名就不建议：推荐一个搜不了的词没意义
+    rows.push({ zh, n, coverage: n / total });
+  }
+
+  const band = rows.filter((r) => r.coverage >= MIN_COVERAGE && r.coverage <= MAX_COVERAGE);
+  const pool = band.length ? band : rows;
+  return pool
+    .sort((a, b) => b.coverage - a.coverage || b.n - a.n || a.zh.localeCompare(b.zh))
+    .slice(0, Math.max(0, limit))
+    .map((r) => r.zh);
 }
 
 /**
