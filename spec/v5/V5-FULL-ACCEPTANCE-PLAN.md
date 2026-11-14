@@ -143,7 +143,7 @@ external registrar before any `cx.chenyouyi.top` check can pass.*
     字段零越界、schema 与新鲜度均符合管理站 parser。
   - 护栏：`mgmt-lifecycle.yml` 移除写死的旧 digest 默认值，`up` 必须显式传 `sha256:<64hex>`，
     避免把缺少真实适配器的旧镜像拉起来。
-- ✅ **合并前 double check 抓到并修掉 4 个会伤及「真实运维数据」的缺陷**：
+- ✅ **合并前 double check 抓到并修掉 6 个缺陷**（前 4 个直接关系「真实运维数据」）：
   ① `metrics()` 原查询不带 `FunctionName` dimension，CloudWatch 返回空样本却被包装成
   `value=0` 的假数据行 → 现按 `MGMT_LAMBDA_FUNCTIONS` 逐函数带 dimension 查询，
   无样本直接降级，且修正 `Errors` 被错标为 milliseconds；新增 4 项零依赖单测。
@@ -151,6 +151,13 @@ external registrar before any `cx.chenyouyi.top` check can pass.*
   ③ `logs:FilterLogEvents` 的 IAM 资源 ARN 补 `:*` 形式，否则生产拉起后 Logs 域 403。
   ④ `cicd-snapshot.yml` 的 collect 原本被桶门控，关站态永远无法验证跨仓采集；
   现解耦为「始终采集、仅写入需桶存在」，并绑定 `production` 环境稳定 OIDC subject。
+  ⑤ `build-image.yml` 的 `pull_request.paths` 不含 `spec/**`，纯文档 PR 不触发 required
+  「单测 / unit tests」check，ruleset 永远等一个不存在的 check → 补 `spec/**`、`docs/**`、
+  `README.md` 为触发路径。
+  ⑥ `infra.yml` 的 `setup-terraform` wrapper 吞掉 `-detailed-exitcode` 的退出码 2，
+  有变更的层在 CI 摘要里被写成「无变更」→ 改为按 plan 输出文本判定，并把
+  `terraform show | head` 改为先落盘再 head 规避 SIGPIPE。分支九层只读 plan 与 main
+  基线逐层一致，确认本批改动关站态零差异、无隐藏 IAM 授权。
 - ⬜ **仍缺生产证据（代码就绪 ≠ 验收通过）**：#3 六域真实数据、#6 真实只读清单要在站点
   拉起后逐域核验；#2 生产故障注入、#5 三端浏览器记录、T-29~T-32 仍开放。
   `V5-ACCEPTANCE.md` 的判定**不因本批代码改动而改写**。
@@ -171,16 +178,22 @@ a CI-written S3 workflow snapshot so the management site never talks to GitHub a
 holds no long-lived token. The lifecycle workflow no longer carries a stale default
 image digest.
 
-A pre-merge double check caught and fixed four defects that would have undermined
-"real operational data": (1) `metrics()` queried CloudWatch without a `FunctionName`
-dimension and wrapped empty samples into fake `value=0` rows — it now queries per
-function with the dimension, degrades when there are no samples, and labels `Errors`
-as a count; four new dependency-free tests cover it; (2) the log lookback grew from
-120 to 1440 minutes; (3) the `logs:FilterLogEvents` IAM ARNs gained the `:*` form;
-(4) snapshot collection is no longer gated on the bucket, so cross-repo coverage is
-verifiable while the site is off, and the job binds `environment: production` to pin
-the OIDC subject. Production evidence for #3/#6, failure injection (#2),
-three-platform browser records (#5) and T-29~T-32 remain open;
+A pre-merge double check caught and fixed six defects, four of which would have
+undermined "real operational data": (1) `metrics()` queried CloudWatch without a
+`FunctionName` dimension and wrapped empty samples into fake `value=0` rows — it
+now queries per function with the dimension, degrades when there are no samples,
+and labels `Errors` as a count; four new dependency-free tests cover it; (2) the
+log lookback grew from 120 to 1440 minutes; (3) the `logs:FilterLogEvents` IAM
+ARNs gained the `:*` form; (4) snapshot collection is no longer gated on the
+bucket, so cross-repo coverage is verifiable while the site is off, and the job
+binds `environment: production` to pin the OIDC subject. (5) `build-image.yml`
+did not trigger the required unit-test check for docs-only PRs; `spec/**`,
+`docs/**` and `README.md` are now trigger paths. (6) The `setup-terraform`
+wrapper in `infra.yml` swallowed `-detailed-exitcode` and reported pending
+changes as "no changes"; detection now parses plan output text. A nine-layer
+branch plan matched the main baseline layer by layer, confirming zero off-state
+drift and no hidden IAM grants. Production evidence for #3/#6, failure injection
+(#2), three-platform browser records (#5) and T-29~T-32 remain open;
 `V5-ACCEPTANCE.md` is deliberately unchanged by this code batch.*
 
 ### 4.1 一键命令 / One-click commands
