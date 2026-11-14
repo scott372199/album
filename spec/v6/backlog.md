@@ -65,8 +65,27 @@ only about empty states: V6 must explicitly flag unrecognised terms, suggest val
 ones, never degrade to an unfiltered full list, and distinguish "no matches" from
 "term not in vocabulary".
 
+## B-06 六示例语料覆盖与验收口径 / Six-example corpus and acceptance wording
+
+**中文 / Chinese**
+2026-11-14 用户明确「留到 V6 再优化」：`V5-ACCEPTANCE.md` blocker #1 要求六个语义示例
+（含 `摩托车`、`红色衬衫`）都返回可解释结果，但私人相册里根本没有对应内容，属语料事实。
+V5 只保留「脱敏派生图产出识别标签 + 可解释查询」的证据，六示例全命中作为用户批准的
+例外记入 T-32。V6 需要同时处理：词表与实际标签的可见性（B-02）、未知词不返回全量（B-05）、
+以及验收措辞改为「对库内实际存在的概念可解释」而非要求固定六个词。不要为了凑验收
+往私人相册塞非个人照片。
+
+*English*
+On 2026-11-14 the user deferred this to V6. Blocker #1 asks for six fixed semantic
+examples, but the private album simply contains no motorcycle or red-shirt photos —
+a corpus fact. V5 keeps the redacted-derivative and explainable-query evidence and
+records the six-example gap as a user-approved exception at T-32. V6 should align
+vocabulary visibility (B-02), stop full-list false positives (B-05), and reword the
+acceptance criterion around concepts actually present in the library. Never pad the
+private album with unrelated stock photos just to pass a check.
+
 ---
 
-> 处理约定 / Convention：以上五条全部推迟到 V6 spec 阶段统一定义方案与优先级，
-> V5 不做任何改动。All five are deferred to the V6 spec phase; V5 makes no
+> 处理约定 / Convention：以上六条全部推迟到 V6 spec 阶段统一定义方案与优先级，
+> V5 不做任何改动。All six are deferred to the V6 spec phase; V5 makes no
 > changes for them.
