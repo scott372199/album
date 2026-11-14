@@ -41,7 +41,15 @@ const { normalizeRekognitionResponse } = await import('../src/server/recognition
 const { createIndex, INDEX_VERSION } = await import('../src/server/search/index.mjs');
 const { computeRev, indexObjectKey } = await import('../src/server/search/publish.mjs');
 
-const LABELS_KEY = 'data/search-labels.json';
+// 标签持久层必须与 processor/recognition.mjs 一致：一图一文件
+// data/labels/<id>.json。首次回填写过的单文档 data/search-labels.json 仅作
+// legacy 数据源，运行时自动迁移，迁移后不再读写。
+// Labels persist one file per photo in data/labels/<id>.json, matching
+// processor/recognition.mjs. The legacy single document is migrated once and
+// then no longer read or written.
+const LEGACY_LABELS_KEY = 'data/search-labels.json';
+const LABELS_PREFIX = 'data/labels/';
+const labelObjectKey = (id) => `${LABELS_PREFIX}${id}.json`;
 
 function arg(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
@@ -82,12 +90,42 @@ async function main() {
   const photos = (manifest.photos || []).filter((p) => p?.type !== 'video');
   console.log(`manifest rev=${version.rev}，待识别图片=${photos.length}（视频不识别）`);
 
-  // 2) 已有标签
-  let labelsDoc = { version: INDEX_VERSION, labels: {} };
+  // 2) 已有标签：枚举按图文件；legacy 单文档自动迁移（幂等，已有条目优先）
+  // 2) Existing labels: enumerate per-photo files; migrate the legacy single
+  //    document once (idempotent — an existing per-photo file always wins).
+  const labelsDoc = { version: INDEX_VERSION, labels: {} };
+  let migrated = 0;
+  for (const key of await store.listKeys(bucket, LABELS_PREFIX)) {
+    const entry = await store.readJson(bucket, key);
+    if (entry?.id && Array.isArray(entry.labels) && entry.labels.length) {
+      labelsDoc.labels[entry.id] = {
+        labels: entry.labels,
+        source: entry.source || 'rekognition',
+      };
+    }
+  }
   try {
-    const raw = await store.readJson(bucket, LABELS_KEY);
-    if (raw?.labels) labelsDoc = raw;
-  } catch { /* 首次运行为空 / first run starts empty */ }
+    const legacy = await store.readJson(bucket, LEGACY_LABELS_KEY);
+    for (const [id, value] of Object.entries(legacy?.labels || {})) {
+      if (labelsDoc.labels[id]?.labels?.length
+        || !Array.isArray(value?.labels) || !value.labels.length) continue;
+      const source = value.source || 'rekognition';
+      labelsDoc.labels[id] = { labels: value.labels, source };
+      if (!dryRun) {
+        await store.putJson(bucket, labelObjectKey(id), {
+          id,
+          labels: value.labels,
+          source,
+          updatedAt: new Date().toISOString(),
+          migratedFrom: LEGACY_LABELS_KEY,
+        }, { cacheControl: store.CACHE_IMMUTABLE });
+      }
+      migrated += 1;
+    }
+  } catch { /* 无 legacy 文档时忽略 / no legacy document is fine */ }
+  if (migrated) {
+    console.log(`legacy 标签迁移：${migrated} 张 → ${LABELS_PREFIX}<id>.json`);
+  }
 
   // 3) 逐张识别
   // Rekognition DetectLabels 仅支持 JPEG/PNG，不支持 WebP —— 所以本机先把
@@ -134,7 +172,16 @@ async function main() {
       const raw = await provider.detectLabels(input, jpegBuffer);
       // normalizeRekognitionResponse 返回的已经是规范化标签数组
       // normalizeRekognitionResponse already returns the normalized label array
-      labelsDoc.labels[photo.id] = { labels: normalizeLabels(raw), source: 'rekognition' };
+      const labels = normalizeLabels(raw);
+      if (!dryRun) {
+        await store.putJson(bucket, labelObjectKey(photo.id), {
+          id: photo.id,
+          labels,
+          source: 'rekognition',
+          updatedAt: new Date().toISOString(),
+        }, { cacheControl: store.CACHE_IMMUTABLE });
+      }
+      labelsDoc.labels[photo.id] = { labels, source: 'rekognition' };
       done += 1;
       if (done % 10 === 0 || done === pending.length) {
         console.log(`  进度 ${done}/${pending.length}`);
@@ -158,8 +205,7 @@ async function main() {
 
   if (!dryRun && pending.length) {
     await pool(pending, concurrency, one);
-    await store.putJson(bucket, LABELS_KEY, labelsDoc, { cacheControl: store.CACHE_NO_STORE });
-    console.log(`labels 文档已写：成功 ${done}，失败 ${failed}`);
+    console.log(`标签文件已写：成功 ${done}，失败 ${failed}`);
   } else if (dryRun) {
     console.log(`dry-run：跳过识别（将处理 ${pending.length} 张）`);
   }
