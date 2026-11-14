@@ -390,8 +390,15 @@ export function deriveSuggestions(index, { limit = 10, query = '' } = {}) {
 
   const band = rows.filter((r) => r.coverage >= MIN_COVERAGE && r.coverage <= MAX_COVERAGE);
   const pool = band.length ? band : rows;
+  // 兜底排序按 UTF-16 码元比较，不用 localeCompare：中文排序取决于运行时
+  // ICU 版本，macOS 与 Linux 会给出不同顺序（2026-11-14 T-01 已踩过一次，
+  // 那条让 main 的两条工作流同时变红）。这里要的是「同一份索引在任何平台
+  // 给出同一份建议列表」。
+  // Tie-break by UTF-16 code units, never localeCompare — ICU collation differs
+  // across platforms and would make the suggestion list platform-dependent.
+  const byCodePoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
   return pool
-    .sort((a, b) => b.coverage - a.coverage || b.n - a.n || a.zh.localeCompare(b.zh))
+    .sort((a, b) => b.coverage - a.coverage || b.n - a.n || byCodePoint(a.zh, b.zh))
     .slice(0, Math.max(0, limit))
     .map((r) => r.zh);
 }
