@@ -201,14 +201,16 @@ export async function listKeys(bucket, prefix, { maxKeys = 10000 } = {}) {
 }
 
 /**
- * 失效批次带上 correlation ID：CloudFront 的 CallerReference 会出现在
- * GetInvalidation 与 CloudTrail 里，于是 CDN 刷新也能并进同一次上传的追踪链。
+ * 失效批次带上 correlation ID：CallerReference 是只写入参，`GetInvalidation`
+ * 不会回传，但 CloudTrail 的 `CreateInvalidation` 事件会在 requestParameters /
+ * responseElements 里保留它，于是 CDN 刷新也能并进同一次上传的追踪链。
  * 尾部时间戳 + 随机串保证每次请求唯一，不会被 CloudFront 当成重复提交。
  *
- * The correlation ID travels in the CloudFront CallerReference (visible in
- * GetInvalidation / CloudTrail), joining the CDN refresh to the same upload
- * trace. A timestamp + random suffix keeps each request unique so CloudFront
- * does not deduplicate a legitimate retry.
+ * The correlation ID travels in the CloudFront CallerReference. It is write-only
+ * for `GetInvalidation`, but the CloudTrail `CreateInvalidation` event records it
+ * in requestParameters / responseElements, joining the CDN refresh to the same
+ * upload trace. A timestamp + random suffix keeps each request unique so
+ * CloudFront does not deduplicate a legitimate retry.
  */
 export async function invalidate(distributionId, paths, { correlationId = '' } = {}) {
   const response = await cf().send(new CreateInvalidationCommand({
