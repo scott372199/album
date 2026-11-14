@@ -1,0 +1,200 @@
+#!/usr/bin/env node
+/**
+ * T-03 · term 覆盖率审计 / Term coverage audit.
+ *
+ * 目的：词表要扩到 ≈380 个词，扩哪些不能靠猜。本脚本读**生产索引**，
+ * 统计每个被识别出来的 term 出现了多少张照片、当前有没有中文名。
+ * 输出只含 term 与计数，**不打印任何照片 id、路径或相册名**——
+ * 这份报告可以安全地贴进聊天或提交入库。
+ *
+ * Reads the production index and reports, per recognised term, how many photos
+ * carry it and whether a Chinese name exists. Output contains terms and counts
+ * only — never photo ids, paths or album names — so the report itself is safe
+ * to share or commit.
+ *
+ * 用法 / Usage:
+ *   node scripts/audit-terms.mjs                       # 自动在 data/ 里找索引
+ *   node scripts/audit-terms.mjs data/search-index.json
+ *   node scripts/audit-terms.mjs --out spec/v6/term-audit.md
+ *   node scripts/audit-terms.mjs --missing-only        # 只看缺中文名的
+ *   node scripts/audit-terms.mjs --min-photos 3        # 过滤长尾
+ */
+
+import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+const DATA_DIR = 'data';
+
+/* ---------- 参数 / Args ---------- */
+
+const argv = process.argv.slice(2);
+const opt = {
+  input: '',
+  out: '',
+  missingOnly: false,
+  minPhotos: 1,
+};
+
+for (let i = 0; i < argv.length; i += 1) {
+  const a = argv[i];
+  if (a === '--out') { opt.out = argv[i += 1] || ''; }
+  else if (a === '--missing-only') { opt.missingOnly = true; }
+  else if (a === '--min-photos') { opt.minPhotos = Math.max(1, Number(argv[i += 1]) || 1); }
+  else if (a === '--help' || a === '-h') { printHelp(); process.exit(0); }
+  else if (!a.startsWith('-')) { opt.input = a; }
+}
+
+function printHelp() {
+  process.stdout.write([
+    'node scripts/audit-terms.mjs [索引路径] [选项]',
+    '',
+    '  --out <file>        把 Markdown 报告写到文件（默认输出到终端）',
+    '  --missing-only      只列出缺中文名的 term',
+    '  --min-photos <n>    只统计至少出现在 n 张照片上的 term（默认 1）',
+    '',
+    '索引来源优先级：命令行参数 > data/search-index.json > data/ 下最新的 rev 版索引',
+    '',
+  ].join('\n'));
+}
+
+/* ---------- 定位索引 / Locate the index ---------- */
+
+function findIndex() {
+  if (opt.input) {
+    const p = resolve(opt.input);
+    if (!existsSync(p)) fail(`找不到指定的索引文件 / index not found: ${opt.input}`);
+    return p;
+  }
+  const fixed = join(DATA_DIR, 'search-index.json');
+  if (existsSync(fixed)) return resolve(fixed);
+
+  if (existsSync(DATA_DIR)) {
+    const revs = readdirSync(DATA_DIR)
+      .filter((f) => /^search-index\.[0-9a-f]{8,64}\.json$/i.test(f))
+      .map((f) => ({ path: join(DATA_DIR, f), mtime: statSync(join(DATA_DIR, f)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime);
+    if (revs.length) return resolve(revs[0].path);
+  }
+  return '';
+}
+
+function fail(msg) {
+  process.stderr.write(`\n${msg}\n\n`);
+  process.stderr.write([
+    '索引只在 S3 站点桶里，本仓库不含 data/。先从桶里取一份：',
+    '',
+    '  # 桶名 = Lambda album-processor 的环境变量 SITE_BUCKET',
+    '  aws s3 cp s3://<SITE_BUCKET>/data/search-index.json data/',
+    '',
+    '或直接打开 https://photos.chenyouyi.top/data/search-index.json 另存为 data/search-index.json。',
+    'data/ 已在 .gitignore 中，不会被提交。',
+    '',
+  ].join('\n'));
+  process.exit(1);
+}
+
+const indexPath = findIndex();
+if (!indexPath) fail('没有找到索引文件 / no index file found');
+
+/* ---------- 读索引 / Load ---------- */
+
+let index;
+try {
+  index = JSON.parse(readFileSync(indexPath, 'utf8'));
+} catch (err) {
+  fail(`索引不是合法 JSON / index is not valid JSON：${err.message}`);
+}
+
+const items = Array.isArray(index?.items) ? index.items : null;
+if (!items) fail('索引缺少 items 数组 / index has no items array');
+
+/* ---------- 统计 / Aggregate ---------- */
+
+const stats = new Map(); // term -> { photos:Set, zh:Set, kinds:Set, maxConf }
+let photosWithLabels = 0;
+
+for (const item of items) {
+  const labels = Array.isArray(item?.labels) ? item.labels : [];
+  if (labels.length) photosWithLabels += 1;
+  const seenInPhoto = new Set(); // 同一张里重复 term 只算一次
+  for (const label of labels) {
+    const term = typeof label?.term === 'string' ? label.term : '';
+    if (!term || seenInPhoto.has(term)) continue;
+    seenInPhoto.add(term);
+
+    if (!stats.has(term)) {
+      stats.set(term, { photos: new Set(), zh: new Set(), kinds: new Set(), maxConf: 0 });
+    }
+    const row = stats.get(term);
+    row.photos.add(item.id);
+    if (typeof label.zh === 'string' && label.zh) row.zh.add(label.zh);
+    if (typeof label.kind === 'string' && label.kind) row.kinds.add(label.kind);
+    const conf = Number(label.confidence);
+    if (Number.isFinite(conf)) row.maxConf = Math.max(row.maxConf, conf);
+  }
+}
+
+const rows = [...stats.entries()]
+  .map(([term, v]) => ({
+    term,
+    photos: v.photos.size,
+    zh: [...v.zh].join(' / '),
+    kind: [...v.kinds].join(', '),
+    maxConf: v.maxConf,
+  }))
+  .filter((r) => r.photos >= opt.minPhotos)
+  .filter((r) => (opt.missingOnly ? !r.zh : true))
+  .sort((a, b) => b.photos - a.photos || a.term.localeCompare(b.term));
+
+const withZh = rows.filter((r) => r.zh).length;
+const missing = rows.filter((r) => !r.zh);
+
+/* ---------- 输出 / Render ---------- */
+
+const pct = (n) => `${((n / Math.max(1, photosWithLabels)) * 100).toFixed(1)}%`;
+
+const lines = [];
+lines.push('# V6 词表覆盖率审计 / Term coverage audit');
+lines.push('');
+lines.push('> 由 `scripts/audit-terms.mjs` 生成。**只含识别词与计数，不含任何照片 id、路径或相册名。**');
+lines.push('');
+lines.push(`- 索引文件 / index：\`${indexPath.split(/[\\/]/).slice(-2).join('/')}\``);
+lines.push(`- 索引版本 / version：\`${index.version ?? '(未标注)'}\``);
+lines.push(`- 照片总数 / items：${items.length}`);
+lines.push(`- 有标签的照片：${photosWithLabels}（${pct(photosWithLabels)}）`);
+lines.push(`- distinct term：${rows.length}`);
+lines.push(`- **已有中文名：${withZh}；缺中文名：${missing.length}**`);
+if (opt.minPhotos > 1) lines.push(`- 过滤：只统计出现在 ≥${opt.minPhotos} 张照片上的 term`);
+lines.push('');
+lines.push('## 缺中文名的 term（按出现张数排序）/ Terms without a Chinese name');
+lines.push('');
+if (!missing.length) {
+  lines.push('无。全部已识别 term 都有中文名。');
+} else {
+  lines.push('| term | 出现张数 | 覆盖率 | kind | 最高置信度 |');
+  lines.push('| --- | --- | --- | --- | --- |');
+  for (const r of missing) {
+    lines.push(`| \`${r.term}\` | ${r.photos} | ${pct(r.photos)} | ${r.kind || '-'} | ${r.maxConf.toFixed(1)} |`);
+  }
+}
+if (!opt.missingOnly) {
+  lines.push('');
+  lines.push('## 全部 term / All terms');
+  lines.push('');
+  lines.push('| term | 出现张数 | 覆盖率 | 中文名 | kind |');
+  lines.push('| --- | --- | --- | --- | --- |');
+  for (const r of rows) {
+    lines.push(`| \`${r.term}\` | ${r.photos} | ${pct(r.photos)} | ${r.zh || '**缺**'} | ${r.kind || '-'} |`);
+  }
+}
+lines.push('');
+
+const report = lines.join('\n');
+
+if (opt.out) {
+  writeFileSync(opt.out, report, 'utf8');
+  process.stdout.write(`已写入 ${opt.out}\n`);
+  process.stdout.write(`distinct term ${rows.length} · 有中文名 ${withZh} · 缺 ${missing.length}\n`);
+} else {
+  process.stdout.write(report);
+}
