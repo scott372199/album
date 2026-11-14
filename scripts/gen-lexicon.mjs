@@ -87,11 +87,17 @@ if (problems.length) {
   process.exit(1);
 }
 
-// 键排序保证生成物可复现（rev 稳定）
-const keys = [...lex.keys()].sort((a, b) => (b.length - a.length) || a.localeCompare(b));
+// 键排序保证生成物可复现（rev 稳定）。
+// 不能用 localeCompare / Intl.Collator：中文排序取决于运行时 ICU 版本，
+// macOS 生成的产物在 Linux CI 上会被 `--check` 判为漂移（2026-11-14 实际事故）。
+// 改按 UTF-16 码元字典序比较——纯 JS 字符串比较，任何平台结果一致。
+// Sort by UTF-16 code units, never localeCompare: ICU collation differs between
+// macOS and the Linux runner, which made committed artifacts look stale in CI.
+const compareCodePoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+const keys = [...lex.keys()].sort((a, b) => (b.length - a.length) || compareCodePoint(a, b));
 const orderedLex = keys.map((k) => [k, lex.get(k)]);
 const colors = [...termKind.entries()].filter(([, k]) => k === 'color').map(([t]) => t)
-  .sort((a, b) => a.localeCompare(b));
+  .sort(compareCodePoint);
 
 const rev = createHash('sha256').update(raw, 'utf8').digest('hex').slice(0, 16);
 
@@ -118,19 +124,20 @@ lines.push('export const LEXICON = {');
 for (const [k, [term, kind]] of orderedLex) lines.push(`  ${q(k)}: [${q(term)}, ${q(kind)}],`);
 lines.push('};');
 lines.push('');
-lines.push('/** 最长优先，保证「蓝天白云」不会被「蓝天」截断 / longest match first */');
-lines.push('export const LEXICON_KEYS = Object.keys(LEXICON).sort((a, b) => b.length - a.length);');
+lines.push('/** 最长优先，保证「蓝天白云」不会被「蓝天」截断；同长按码点序固定 / longest first, code-point tie-break */');
+lines.push('export const LEXICON_KEYS = Object.keys(LEXICON).sort(');
+lines.push('  (a, b) => (b.length - a.length) || (a < b ? -1 : a > b ? 1 : 0));');
 lines.push('');
 lines.push('/** 规范词 -> 中文展示名 / canonical -> Chinese display name */');
 lines.push('export const TERM_ZH = {');
-for (const [term, zh] of [...termZh.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+for (const [term, zh] of [...termZh.entries()].sort((a, b) => compareCodePoint(a[0], b[0]))) {
   lines.push(`  ${q(term)}: ${q(zh)},`);
 }
 lines.push('};');
 lines.push('');
 lines.push('/** 规范词 -> 索引标签类别（object|scene|color）/ canonical -> label kind */');
 lines.push('export const TERM_KIND = {');
-for (const [term, kind] of [...termKind.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+for (const [term, kind] of [...termKind.entries()].sort((a, b) => compareCodePoint(a[0], b[0]))) {
   lines.push(`  ${q(term)}: ${q(kind)},`);
 }
 lines.push('};');

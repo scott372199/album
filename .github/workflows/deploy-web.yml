@@ -22,6 +22,8 @@ on:
       - 'src/web/**'
       - 'src/build/**'
       - 'src/server/**'
+      - 'src/shared/**'
+      - 'scripts/gen-lexicon.mjs'
       - 'site.json'
       - 'package.json'
       - 'package-lock.json'
