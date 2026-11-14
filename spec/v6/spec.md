@@ -1,8 +1,10 @@
 # 个人相册 · 第六版需求规范 / Personal Album · Version 6 Specification
 
 > Spec-Driven Development · 阶段 1 / 5（Specify） / Stage 1 / 5 (Specify)
-> 状态：**待确认** / Status: **Draft for confirmation**
+> 状态：**已确认** / Status: **Confirmed**
 > 日期 / Date: 2026-11-14
+> 确认 / Confirmed: 2026-11-14，O-01~O-07 全部采纳建议后确认，进入 Plan 阶段。
+> *Confirmed on 2026-11-14 after adopting all recommended resolutions for O-01~O-07; entering the Plan stage.*
 > 上游 / Baseline: `album@main` @ `4d4f521`（V5 已验收）；`album-android@main`（2026-11-12）。
 > *Upstream: album main at 4d4f521 (V5 accepted); album-android main (2026-11-12).*
 > 需求来源 / Source: [`spec/v6/backlog.md`](./backlog.md) + 2026-11-14 需求评审（D1–D6）。
@@ -63,6 +65,7 @@ V6 不动数据底座，只动三件事：**首页从「多个模块拼在一起
 | S-5 | 第 500 张后单次追加渲染 | 全量 `replaceChildren`，O(n) 重建 | 增量追加，long task ≤50ms |
 | S-6 | 浏览时外部请求（生成式） | 无 | **仍为 0** |
 | S-7 | 月度成本 | ≈¥0.003（V5 实测） | ≤¥15（不新增常驻资源） |
+| S-8 | JS+CSS gzip 体积 / 桌面 LCP | 无基线，无 CI 门禁 | ≤120KB / ≤2.5s，且**纳入 CI**（FR-14） |
 
 ---
 
@@ -158,7 +161,7 @@ EARS 记法：**当**（事件）/ **在 … 时**（状态）/ **若**（异常
 - 封面从成员照片中随机选取，**同一会话内稳定**，不得每次重绘都换。
 - 「最近更新」显示相对时间（如 `3 天前新增 12 张`）；无新增时只显示张数。
 - 全部取自既有 manifest，零新接口。
-- **若** manifest 内不存在逐条发布时间，本期**必须**降级为只显示张数，**不得**为此新增写入路径（引入写入路径需按不变量 3 单独评审，见 O-03）。
+- **若** manifest 内不存在逐条发布时间，本期**确定**降级为只显示张数（O-03 已定），**不得**为此新增写入路径；未来若要补，须按不变量 3 单独评审 prefix / IAM / 失败落点。
 
 **验收**：320px 宽下三项信息不截断；同一卡片重复渲染封面不变；无发布时间字段时不显示"最近更新"而非显示错误值。
 
@@ -202,7 +205,8 @@ EARS 记法：**当**（事件）/ **在 … 时**（状态）/ **若**（异常
 - **不改识别调用**：仍为 `DetectLabels`，`maxLabels: 30, minConfidence: 70`；**不上传任何图片**。
 - 新增**离线词表层**（`EN label → 中文主名 + 同义词[]`）；未覆盖标签**必须**至少保留英文可搜并进入覆盖率报告，**不得**静默丢弃。
 - 可搜词规模：从 13 提升到 ≥300（目标 ≈380）。
-- 词表**必须**单一来源，前端与服务端共用同一数据文件（见 §9 O-01 / FR-13）。
+- 词表**必须**单一来源，前端与服务端共用同一数据文件（**FR-13**，已纳入 V6.0 范围）。
+- 中文名**必须一次性审核入库**，**不得**在每次构建时由模型重新生成（O-02）；模型的产出只作为候选，人工过一遍后固化为资产。
 - 中文名**必须**落进标签对象（如 `labels[].zh`）；新增字段**必须**同步 `ITEM_FIELDS` 白名单与 `INDEX_VERSION`。
 
 **验收**
@@ -210,6 +214,7 @@ EARS 记法：**当**（事件）/ **在 … 时**（状态）/ **若**（异常
 - 覆盖率报告存在，未覆盖标签有明确清单。
 - 前端与服务端读同一词表文件，差异为 0。
 - 词表缺失或识别失败时，英文标签仍可搜（降级不失效）。
+- 同一 `rev` 下重复构建，词表内容与中文名零变化（O-02：一次性入库，不随构建漂移）。
 - 公开索引 JSON 中无白名单外字段（`validateIndexItem` 通过）。
 
 #### Q-01 输入法组合期防抖
@@ -283,6 +288,7 @@ EARS 记法：**当**（事件）/ **在 … 时**（状态）/ **若**（异常
 **在**设备离线时，系统**必须**能用缓存的 manifest 与近 3 个月缩略图完成浏览。
 
 - Service Worker **只**缓存 manifest + 近 3 个月 `thumb`（不含 `grid`/`orig`，控制体积）。
+- 缓存体积上限 **≤80MB**（O-05 已定）；超限时按「最近优先」淘汰，**不得**为凑满额度扩大缓存范围。
 - **不是 PWA**：不加 Web App Manifest、不加「添加到主屏幕」、不做安装引导（README 明确要求）。
 - **当** `rev` 变化时，系统**必须**使旧缓存失效，否则会看到已删除照片。
 
@@ -330,12 +336,38 @@ EARS 记法：**当**（事件）/ **在 … 时**（状态）/ **若**（异常
 **在**用户选择「跟随 / 浅色 / 深色」时，系统**必须**应用并持久化该选择。
 
 - 跟随 `prefers-color-scheme`；手动三档；存 `localStorage`。
-- **照片本身不得加滤镜、不得压暗、不得调色**（红线）。
+- **覆盖范围（O-07 已定）**：浏览页、灯箱、**照片墙**、**上传面板**、故事、年度页、空状态与错误态**全部**覆盖，**不得**只改首页而留下一半亮色残留。
+- **照片本身不得加滤镜、不得压暗、不得调色**（红线）。照片墙既有的夜间自动调暗是**场景行为**（亮度），与本项**主题**（配色）相互独立、都要保留；两者叠加时仍**不得**对照片像素施加滤镜。
 - `color-scheme` meta 与 `theme-color` **必须**同步切换（现状写死 `<meta name="color-scheme" content="light">`）。
 - 对比度：正文、年月标签、`mono` 小字均 ≥4.5:1，**必须实测**而非看图判断。
 - 前置工作：`style.css` 中分散的颜色字面量需先抽为变量，这是本项主要工作量。
 
-**验收**：三档切换后刷新保持；`color-scheme` meta 随档位变化；照片区域 CSS 无 `filter`/压暗 `opacity`；抽查 6 组前景/背景对比度全部 ≥4.5:1。
+**验收**：三档切换后刷新保持；`color-scheme` meta 随档位变化；照片区域 CSS 无 `filter`/压暗 `opacity`；抽查 6 组前景/背景对比度全部 ≥4.5:1；六处界面（浏览 / 灯箱 / 照片墙 / 上传 / 故事 / 年度页）逐屏核对无亮色残留。
+
+### 2.8 支撑件 / Supporting work（O-01 已定：纳入 V6）
+
+这两条不是用户可感知的功能，但 FR-03 的四态判定与 FR-04 的 380 词都建立在它们之上；不进本轮，等于把地基留给下一版。
+
+#### FR-13 词表单一来源
+
+**当**前端或服务端需要可搜词时，系统**必须**从同一份词表数据读取，**不得**在代码中硬编码。
+
+- 现状：`LEXICON` 在 `src/web/js/search.js`（13 词）与 `src/server/search/vocabulary.mjs`（服务端另一份）各存一份，必然漂移。
+- 单一来源形态：一份数据文件；前端在构建期内联，服务端直接读取；两侧**不得**各自维护同义关系。
+- 与 FR-04 的关系：FR-04 要把词量扩到 ≥300，若不同时收敛来源，等于**放大**漂移。
+
+**验收**：修改词表一处后两侧同时生效（差异检测 = 0）；代码中不存在第二份 `LEXICON` 字面量；CI 有一项断言检查两侧一致。
+
+#### FR-14 体积与性能预算进 CI
+
+**当**构建产出前端资产时，CI **必须**校验体积与首屏性能预算，超限使构建失败。
+
+- 预算：JS+CSS gzip ≤120KB；桌面 Lighthouse LCP ≤2.5s。
+- 基线由 FR-01 重建后的首页确立，**不得**沿用重建前的旧基线放水。
+- 超限**必须**失败并给出超出量与主要贡献模块，不只是告警。
+- 与 FR-04 的关系：词表内联会增大 bundle，需有预算兜底，否则"扩词"会悄悄吃掉首屏。
+
+**验收**：人为超限（例如临时引入 200KB 依赖）时 CI 失败并定位模块；正常构建在预算内通过；LCP 在 CI 环境可复现。
 
 ---
 
@@ -362,8 +394,10 @@ EARS 记法：**当**（事件）/ **在 … 时**（状态）/ **若**（异常
 
 **延后但不否决 / Deferred, not rejected**
 
-- **FR-11 C 相似分组**（连拍折叠 `+N`、更多类似）：方向已确认，但建议照片数 >1000 张再上，静态向量文件、不引向量库。
-- **FR-12 索引体积与分片**：index gzip ≤300KB，超限按年分片。当期需监控，不一定当期实现。
+- **FR-11 C 相似分组**（连拍折叠 `+N`、更多类似）：方向已确认，**O-06 已定：延后到照片数 >1000 张再上**；届时用静态向量文件，不引向量库。
+- **FR-12 索引体积与分片**：index gzip ≤300KB，超限按年分片。本期只需监控，不一定实现。
+
+**曾经的延后项，本轮已转为范围（O-01）**：FR-13 词表单一来源、FR-14 体积/性能预算进 CI，见 §2.8。
 
 ---
 
@@ -379,7 +413,7 @@ EARS 记法：**当**（事件）/ **在 … 时**（状态）/ **若**（异常
    *New metrics and logs must contain no credentials, tokens, phone numbers or original image content.*
 5. 兼容现有 Android bridge、APK 更新链和 WebView 降级行为。
    *Existing Android bridge, APK update flow and WebView fallback behavior remain compatible.*
-6. **粒度不变量（V6 新增）**：不引入"同日 / 同批次"所需的精确时间字段。任何"同一天"的体验诉求都不得以放宽本条为代价。
+6. **粒度不变量（V6 新增）**：不引入"同日 / 同批次"所需的精确时间字段。任何"同一天"的体验诉求都不得以放宽本条为代价。**（O-04 已定：接受"只能做到这个月"）**
    *No field that enables same-day grouping may be introduced; same-day experiences must not be bought by relaxing this invariant.*
 7. **生成式不变量（V6 新增）**：生成式能力只处理文本，不上传图片、不引入浏览时外部请求；生成失败必须降级而非失败。
    *Generative features handle text only — no image upload, no runtime external calls, and generation failure degrades instead of failing.*
@@ -415,8 +449,8 @@ EARS 记法：**当**（事件）/ **在 … 时**（状态）/ **若**（异常
 
 | 切片 | 内容 | 为什么这样切 |
 | --- | --- | --- |
-| **V6.0 地基（不可拆）** | FR-01、FR-02、FR-03、FR-04、FR-05、Q-01 | 搜索三件套必须同批上线：只做 FR-04 扩词而不同时修 FR-03，假阳性会从"搜不到"变成"搜错了"，比现状更糟。FR-02 的增量渲染是 Q-01 与长流的共同前置。 |
-| **V6.1 体验补齐** | P-01、P-02、P-03、U-04、U-05、FR-09、FR-10、U-08 | 都是"用起来顺手"的层，彼此独立、可并行；U-04 依赖颜色变量化改造，工作量集中在此。 |
+| **V6.0 地基（不可拆）** | FR-01、FR-02、FR-03、FR-04、FR-05、**FR-13、FR-14**、Q-01 | 搜索三件套必须同批上线：只做 FR-04 扩词而不同时修 FR-03，假阳性会从"搜不到"变成"搜错了"，比现状更糟。FR-13 是 FR-04 的前置（否则在放大漂移）；FR-14 必须在 FR-01 落地同批建立基线，否则首页重建后体积悄悄变重。FR-02 的增量渲染是 Q-01 与长流的共同前置。 |
+| **V6.1 体验补齐** | P-01、P-02、P-03、U-04、U-05、FR-09、FR-10、U-08 | 都是"用起来顺手"的层，彼此独立、可并行；U-04 依赖颜色变量化改造且按 O-07 覆盖六处界面，工作量集中在此。 |
 | **V6.2 情感与场景** | FR-06、FR-07、F-01、U-06、U-07、FR-08、F-02 | 依赖 V6.0 的首页结构与词表；FR-07 与 F-01 共享同一构建产物管线。 |
 | **跨仓库（独立）** | A-01 ~ A-05（`album-android`） | A-01 是崩溃修复，**不依赖任何前端改动，应优先单独发布**；A-02 需与 FR-10 协同设计桥契约。 |
 
@@ -438,8 +472,10 @@ EARS 记法：**当**（事件）/ **在 … 时**（状态）/ **若**（异常
   *Homepage: the stream is visible above the fold in both target viewports; ≤3 nav items; no featured/CTA blocks; static hero without animation under reduced motion.*
 - **搜索**：第五节表格五个查询全部符合期望；`EXAMPLE_QUERIES` 硬编码消失；中文输入法一次输入检索 ≤2 次。
   *Search: all five queries in the table behave as specified; hardcoded examples removed; at most two search calls per IME typing session.*
-- **性能**：第 500 张后单次追加 long task ≤50ms；容器节点单调递增；Lighthouse CLS ≤0.1。
-  *Performance: no append-long-task above 50 ms after photo 500; monotonically growing DOM; CLS ≤0.1.*
+- **性能**：第 500 张后单次追加 long task ≤50ms；容器节点单调递增；Lighthouse CLS ≤0.1；JS+CSS gzip ≤120KB 且由 CI 强制。
+  *Performance: no append-long-task above 50 ms after photo 500; monotonically growing DOM; CLS ≤0.1; JS+CSS gzip ≤120 KB enforced in CI.*
+- **支撑件**：改词表一处后前端与服务端同时生效、代码内无第二份 `LEXICON`；CI 在人为超限时失败并定位到模块。
+  *Supporting work: one edit to the lexicon changes both sides with no second LEXICON literal; CI fails and names the module when a budget is exceeded.*
 - **生成式**：断网下故事、策展、年度页全部可读；同一 `rev` 重复构建幂等；模型不可用时构建成功。浏览过程外部请求数 = 0（Network 面板核对）。
   *Generation: story, curation and year page all readable offline; rebuilds are idempotent per rev; build succeeds without the model; zero external requests while browsing.*
 - **隐私**：公开产物通过既有 metadata/redaction 检查；索引 JSON 无白名单外字段；日志与指标扫描无敏感字段；公开 JSON 内不存在拍摄时刻。
@@ -451,30 +487,33 @@ EARS 记法：**当**（事件）/ **在 … 时**（状态）/ **若**（异常
 
 ---
 
-## 9. 待你确认的决策 / Decisions to confirm
+## 9. 已确认决策 / Confirmed decisions
 
-| # | 决策 | 我的建议 | 影响 |
+2026-11-14：O-01 ~ O-07 **全部采纳建议**，本 Spec 无未决项。
+
+| # | 决策点 | 结论 | 落点 |
 | --- | --- | --- | --- |
-| O-01 | FR-13 词表单一来源、FR-14 体积/性能预算进 CI 是否作为**支撑件**纳入 V6 | **纳入**。FR-03 的四态与 FR-04 的 380 词都依赖唯一词表；不设预算，首页重建后体积会悄悄变重 | 增加约 1 个任务量级 |
-| O-02 | FR-04 的中文名是「一次性审核入库」还是「每次构建生成」 | **一次性审核入库**。词表是资产，不该随构建漂移；模型只用于初筛候选 | 决定词表是否需要人工过一遍 |
-| O-03 | P-02「最近更新」在 manifest 无发布时间时的处理 | **降级为只显示张数**，不为它新增写入路径 | 少一个写路径，弱一点信息 |
-| O-04 | FR-09 的粒度红线 | **接受"只能做到这个月"**，不放宽不变量 6 | 拒绝「这天还拍了 N 张」 |
-| O-05 | F-02 离线缓存体积上限 | 建议 **≤80MB**（近 3 个月 `thumb`，不缓存 `grid`/`orig`） | 决定 SW 缓存策略 |
-| O-06 | FR-11 C 相似分组是否随 V6 交付 | **延后**到照片 >1000 张；方向已记录不丢 | 本版少一项大工程 |
-| O-07 | U-04 暗色模式是否覆盖照片墙与上传面板 | **覆盖**（墙已有夜间自动调暗，说明夜间是真实场景） | 稍增工作量 |
+| O-01 | FR-13 词表单一来源 / FR-14 体积与性能预算，是否作为**支撑件**纳入 V6 | **纳入**，进 V6.0 地基 | §2.8、§6 |
+| O-02 | FR-04 的中文名「一次性审核入库」还是「每次构建生成」 | **一次性审核入库**；模型只出候选，人工过一遍后固化为资产 | §2.3 FR-04 |
+| O-03 | P-02「最近更新」在 manifest 无发布时间时的处理 | **降级为只显示张数**，不为它新增写入路径 | §2.2 P-02 |
+| O-04 | FR-09 的粒度红线 | **接受"只能做到这个月"**，不放宽不变量 6 | §4 不变量 6、§2.6 FR-09 |
+| O-05 | F-02 离线缓存体积上限 | **≤80MB**，超限按「最近优先」淘汰 | §2.5 F-02 |
+| O-06 | FR-11 C 相似分组是否随 V6 交付 | **延后**到照片数 >1000 张；方向保留不丢 | §3 延后项 |
+| O-07 | U-04 暗色模式的覆盖范围 | **覆盖六处界面**（含照片墙、上传面板），不留亮色残留 | §2.7 U-04 |
 
 ---
 
 ## 10. 下一步 / Next step
 
-你确认本 Spec（或逐条改动 O-01 ~ O-07）后，我进入 **Plan** 阶段，产出：
+本 Spec 已于 2026-11-14 确认（O-01~O-07 全部采纳建议）。**Plan** 阶段产出：
 
 1. 首页方案 C 的组件拆分与状态机（含 `main.js` 的 tab/筛选缺陷修复方案）；
-2. 搜索三件套的数据流：词表单一来源、四态判定、AND 语义、建议词生成算法；
+2. 搜索三件套的数据流：词表单一来源（FR-13）、四态判定、AND 语义、建议词生成算法；
 3. 增量渲染改造方案（`gallery.js`），与 Q-01 防抖共用渲染入口的具体接口；
 4. 三个构建期生成产物（lexicon / curation / story）的管线、幂等性、失败降级；
 5. 契约变更清单（`INDEX_VERSION`、`ITEM_FIELDS`、manifest 字段）与原样回滚路径；
-6. 分期依赖图与成本模型；
-7. 验收矩阵草表（条目 → 证据 → 判定人）。
+6. 词表收敛路径与 CI 门禁设计（FR-13 / FR-14 的落地方式、基线取值、超限时的失败信息）；
+7. 分期依赖图与成本模型；
+8. 验收矩阵草表（条目 → 证据 → 判定人）。
 
-*After confirmation, the Plan stage will deliver the component split and state machine for homepage option C, the search data flow (single-source lexicon, four-state reasoning, AND semantics, suggestion algorithm), the incremental rendering refactor, the three build-time generation pipelines, the contract change list with rollback, the slice dependency graph and cost model, and a draft acceptance matrix.*
+*This spec was confirmed on 2026-11-14 with all of O-01~O-07 adopted. The Plan stage will deliver the homepage component split and state machine, the search data flow including lexicon consolidation, the incremental rendering refactor, the three build-time generation pipelines, the contract change list with rollback, the CI budget gate design, the slice dependency graph and cost model, and a draft acceptance matrix.*
