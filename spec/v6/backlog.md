@@ -48,8 +48,25 @@ Clicking the top nav items (相册 / Timeline / Albums / Story / Wall / Search)
 feels poor (exact interactions to be surveyed in V6: view-switch context loss,
 active-state indication, back behaviour, etc.).
 
+## B-05 词表外关键词静默返回全量 / Out-of-vocabulary terms return everything
+
+**中文 / Chinese**
+2026-11-14 端到端实测发现：搜索「显示器」（词表外）返回 `total=48`，即当前索引内全部
+照片，且 `fromIndex=true, degraded=false`，界面上看起来像「搜中了」，实则没有做任何
+语义过滤。B-02 的「词表不透明」不只是空结果体验问题，还会制造假阳性。V6 需要：
+未知词显式提示「未收录」并给出可搜词建议；未知词不得退化为全量返回；空结果与
+未收录词要区分开。
+
+*English*
+The 2026-11-14 end-to-end run showed that an out-of-vocabulary query (`显示器`)
+returned `total=48` — the entire index — with `fromIndex=true, degraded=false`,
+i.e. a silent false positive rather than a filtered result. B-02 is therefore not
+only about empty states: V6 must explicitly flag unrecognised terms, suggest valid
+ones, never degrade to an unfiltered full list, and distinguish "no matches" from
+"term not in vocabulary".
+
 ---
 
-> 处理约定 / Convention：以上四条全部推迟到 V6 spec 阶段统一定义方案与优先级，
-> V5 不做任何改动。All four are deferred to the V6 spec phase; V5 makes no
+> 处理约定 / Convention：以上五条全部推迟到 V6 spec 阶段统一定义方案与优先级，
+> V5 不做任何改动。All five are deferred to the V6 spec phase; V5 makes no
 > changes for them.
