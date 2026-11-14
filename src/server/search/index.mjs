@@ -227,18 +227,21 @@ export function scoreItem(item, parse) {
   for (const term of parse.terms) {
     const matched = (item.labels || []).some((label) => label.term === term || label.zh === term)
       || (item.tags || []).includes(term);
-    if (!matched) continue;
+    // 多词是**且**不是**或**（FR-03）：任一词未命中即淘汰。
+    // 原来的 `if (!matched) continue` 得到的是并集，「湖水 汽车」会把
+    // 2 张湖水和 3 张汽车一并返回，看着合理却是错的。
+    //
+    // Multiple terms are ANDed. The old `continue` produced a union, so a
+    // two-word query returned the two result sets glued together.
+    if (!matched) return null;
     matchCount += 1;
     const confidences = (item.labels || [])
       .filter((label) => label.term === term || label.zh === term)
       .map((label) => label.confidence);
     confidenceSum += confidences.length ? Math.max(...confidences) : 0;
   }
-  const timeHits = (parse.filters.year != null ? 1 : 0) + (parse.filters.month != null ? 1 : 0);
-  const needsSemantic = parse.terms.length > 0 || parse.filters.colors.length > 0;
-  // 只有时间条件时符合时间即相关；否则至少命中一个词/颜色
-  // Time-only queries match the period; otherwise at least one semantic hit.
-  if (needsSemantic && matchCount <= timeHits) return null;
+  // 时间条件与词/颜色条件都已在上面的循环里逐条淘汰，走到这里即命中。
+  // Time and semantic conditions are already enforced above; surviving means a hit.
   return { matchCount, confidenceSum };
 }
 
@@ -302,6 +305,17 @@ export function search(index, parse, manifest, { page = 1, pageSize = 40 } = {})
   const conditionCount = (parse.filters.year != null ? 1 : 0)
     + (parse.filters.month != null ? 1 : 0)
     + parse.filters.colors.length + parse.terms.length;
+
+  // 没听懂时返回空集，不返回全量——否则「无法解读」会被伪装成「全部命中」。
+  // 与前端 searchWithIndex 的守卫同源，一致性测试会盯住这条。
+  // An uninterpretable query returns nothing, not everything, mirroring the web
+  // guard; the parity test keeps the two in lockstep.
+  const understood = parse.terms.length > 0 || parse.filters.colors.length > 0
+    || parse.filters.year != null || parse.filters.month != null;
+  if (!understood) {
+    return { items: [], page: p, pageSize: s, total: 0 };
+  }
+
   const scored = [];
   for (const item of index?.items || []) {
     const photo = byId.get(item.id);

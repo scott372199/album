@@ -479,7 +479,10 @@
         }
       ],
       "page": 1,
-      "pageSize": 40
+      "pageSize": 40,
+      "unmatched": [
+        "string"
+      ]
     },
     "ranking": "match count desc, confidence sum desc, year desc, id asc",
     "fallback": "manifest-only filtering when the index is unavailable"

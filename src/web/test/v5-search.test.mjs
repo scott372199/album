@@ -146,14 +146,33 @@ test('分页与确定性排序（匹配数 → 置信和 → 年份 → id）', 
     ],
   };
   const photos = [photo('a'), photo('b'), photo('c', 2024)];
-  const result = searchWithIndex(index, parseQuery('蓝天和汽车'), photos, { page: 1, pageSize: 2 });
+
+  // 单词查询：a 与 b 都有 car，按置信和 0.8 > 0.6 排；c 没有，被淘汰
+  const result = searchWithIndex(index, parseQuery('汽车'), photos, { page: 1, pageSize: 2 });
   assert.equal(result.fromIndex, true);
   assert.equal(result.degraded, false);
-  assert.equal(result.total, 3);
-  assert.deepEqual(result.items.map((p) => p.id), ['a', 'b']); // a 命中两个词排最前
-  assert.deepEqual(result.matched.map((p) => p.id), ['a', 'b', 'c']);
+  assert.equal(result.total, 2);
+  assert.deepEqual(result.items.map((p) => p.id), ['a', 'b']);
+  assert.deepEqual(result.matched.map((p) => p.id), ['a', 'b']);
   // 结果是同一批 photo 对象引用，供现有渲染器复用
   assert.equal(result.items[0], photos[0]);
+});
+
+test('多词查询是「且」：只有一个条目同时命中两项', () => {
+  // FR-03 的语义反例。旧实现返回并集 3 条（a、b、c），看起来合理却是错的。
+  // AND semantics: only `a` carries both terms. The old union returned all 3.
+  const index = {
+    version: INDEX_VERSION,
+    items: [
+      item('a', [{ term: 'blue sky', zh: '蓝天', kind: 'scene', confidence: 0.9 }, { term: 'car', zh: '汽车', kind: 'object', confidence: 0.8 }]),
+      item('b', [{ term: 'car', zh: '汽车', kind: 'object', confidence: 0.6 }], { year: 2025 }),
+      item('c', [{ term: 'blue sky', zh: '蓝天', kind: 'scene', confidence: 0.5 }], { year: 2024 }),
+    ],
+  };
+  const photos = [photo('a'), photo('b'), photo('c', 2024)];
+  const result = searchWithIndex(index, parseQuery('蓝天和汽车'), photos, { page: 1, pageSize: 10 });
+  assert.equal(result.total, 1);
+  assert.deepEqual(result.matched.map((p) => p.id), ['a']);
 });
 
 test('索引不可用或过期时降级为 manifest 本地筛选', () => {

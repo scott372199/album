@@ -32,6 +32,7 @@ export function validatePagination(page, pageSize) {
 }
 
 function scanChunk(chunk, ctx) {
+  const before = ctx.explanation.length;
   let i = 0;
   while (i < chunk.length) {
     const key = LEXICON_KEYS.find((candidate) => chunk.startsWith(candidate, i));
@@ -47,6 +48,11 @@ function scanChunk(chunk, ctx) {
     }
     i += key.length;
   }
+  // 整块零命中 → 整块进 unmatched，与前端 search.js 同源同语义。
+  // 静默跳过会让未知词把查询降级成「无条件」，返回全部照片。
+  // A fully-unmatched chunk is reported whole, mirroring the web implementation.
+  // Silently skipping it would degrade an unknown word to "no condition".
+  if (ctx.explanation.length === before) ctx.unmatched.push(chunk);
 }
 
 /**
@@ -98,13 +104,14 @@ export function parseQuery(raw, { page = 1, pageSize = DEFAULT_PAGE_SIZE } = {})
 
   // 去掉语气/连接词，再按最长前缀匹配词表
   // Strip filler words, then longest-prefix match against the lexicon
+  const unmatched = [];
   rest = rest.replace(/[的和与及了的\s,，、;；]+/g, ' ');
   for (const chunk of rest.match(/[\u4e00-\u9fa5a-zA-Z0-9]+/g) || []) {
-    scanChunk(chunk, { explanation, terms, filters });
+    scanChunk(chunk, { explanation, terms, filters, unmatched });
   }
   filters.tags = filters.tags.slice(0, TAGS_MAX);
 
-  return { terms, filters, explanation, ...validatePagination(page, pageSize) };
+  return { terms, filters, explanation, unmatched, ...validatePagination(page, pageSize) };
 }
 
 /**

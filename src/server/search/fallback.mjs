@@ -32,7 +32,9 @@ export function fallbackSearch(parse, manifest, { page = 1, pageSize = 40 } = {}
     if (words.length) {
       const haystack = [photo.album, photo.title, photo.caption, ...(photo.tags || [])]
         .join(' ').toLowerCase();
-      if (!words.some((word) => haystack.includes(word))) return false;
+      // 降级路径同样 AND（FR-03）：多词时命中一个不算命中。
+      // The degraded path ANDs as well.
+      if (!words.every((word) => haystack.includes(word))) return false;
     }
     return true;
   }).sort((a, b) => (
