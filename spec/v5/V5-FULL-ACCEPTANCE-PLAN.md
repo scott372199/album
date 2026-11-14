@@ -120,19 +120,25 @@ external registrar before any `cx.chenyouyi.top` check can pass.*
 **中文 / Chinese**
 
 - ✅ P0.5 一键 up/down：PR #10 已合并，`mgmt-lifecycle.yml` 已注册 active，run 数为 0（从未点火）。
-- ✅ `#4 corr_… 贯穿（代码侧）`：`个人相册` 仓库已完成，设计、离线证据与仍缺的生产取证
-  见 `V5-ACCEPTANCE.md` 的「blocker #4 correlation ID 代码就绪」一节。**此项不点火、不计费**，
-  待 PR 合并产出新镜像后，换生产镜像并做一次真实上传取证才算关闭。
+- ✅ **`#4 corr_… 贯穿` 已关闭**：PR #9 → 镜像 `bd9d1229aef8` → PR #11 → main apply run
+  `43580970538`（两个 Lambda 换镜像）→ 真实上传 `corr_bb6f8616101611d0` 在两个 CloudWatch
+  日志组贯穿 8 个阶段，CloudTrail 的 `CreateInvalidation` 也带同一 ID → 按基线清理完毕。
+  完整证据见 `V5-ACCEPTANCE.md` 的「blocker #4 生产取证完成，判定关闭」一节。
+- ✅ `FixtureData` 的 `planned` → `unknown`（fixture 侧，blocker #6）：album-mgmt PR #2 已合并，
+  含 `FixtureStatusTest`；**真实只读清单适配器仍待做**，#6 未关闭。
+- ✅ album-mgmt PR 不再向生产 ECR 推镜像（`container.yml` 的 5 个 publish 步骤加 PR gate）。
 - ⬜ 真实适配器 + 最小权限 task role + CI 只读快照 + `cloud` profile（album-mgmt / album-infra）。
-- ⬜ `FixtureData` 的 `planned` → `unknown` / 真实清单（blocker #6）。
 - ⬜ #2 生产故障注入证据、#5 三端浏览器记录、T-31 安全评审。
 
 *English*
-P0.5 one-click up/down is merged, registered and has never been triggered. The code
-side of blocker #4 is done in the `album` repo (see `V5-ACCEPTANCE.md`); it needs no
-infrastructure and no cost, but stays open until a new image is deployed and a real
-upload produces a single-ID production trace. Real adapters, the least-privilege task
-role, the CI read-only snapshot, the `planned` fix, failure-injection and browser
+P0.5 one-click up/down is merged, registered and has never been triggered. **Blocker #4
+is closed**: PR #9 built image `bd9d1229aef8`, PR #11 plus main apply run `43580970538`
+deployed it to both Lambdas, and a real upload with `corr_bb6f8616101611d0` produced a
+single-ID trace across both CloudWatch log groups and the CloudFront CallerReference,
+followed by a byte-identical baseline restore. The fixture-side `planned → unknown` fix
+landed in album-mgmt PR #2, but blocker #6 still needs the real read-only inventory
+adapter. PRs no longer push images to the production ECR. Real adapters, the
+least-privilege task role, the CI read-only snapshot, failure-injection and browser
 evidence and the T-31 review remain open.*
 
 ### 4.1 一键命令 / One-click commands
