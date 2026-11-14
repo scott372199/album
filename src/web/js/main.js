@@ -15,6 +15,7 @@ import {
   parseQuery, runSearch, indexUrl, isIndexUsable, sanitizeIndex, INDEX_VERSION,
 } from './search.js';
 import { initSearchUI } from './search-ui.js';
+import { wanderOrder } from './wander.js';
 import {
   ANCHOR_KEY, serializeAnchor, parseAnchor, nearestAnchor,
 } from './anchor.js';
@@ -30,6 +31,7 @@ const ctx = {
   scrollBeforeMode: 0,
   hero: null,
   searchUI: null,
+  wanderBase: null,
 };
 
 function manifestRev(url) {
@@ -458,6 +460,26 @@ function launchWall(push = true) {
   if (push) syncUrl(true);
 }
 
+/**
+ * 随机漫游：把随机序列**当作灯箱的列表**，左右键就自然沿着这条序列走，
+ * 不需要给灯箱加一条并行的「随机模式」——那种做法迟早和页码 / URL 打架。
+ * 关灯箱时把 state.filtered 还回去（见 initLightbox 的 onClose）。
+ */
+function enterWander() {
+  const photos = ctx.index.photos;
+  if (!photos.length) return;
+  const order = wanderOrder(photos, {
+    nowYear: new Date().getFullYear(),
+    seed: Date.now() >>> 0,
+    limit: 20,
+  });
+  if (!order.length) return;
+  ctx.wanderBase = state.filtered;
+  state.filtered = order;
+  openLightbox(order, 0);
+  syncUrl(false);
+}
+
 /* ---------- 事件 ---------- */
 
 function wire() {
@@ -503,6 +525,7 @@ function wire() {
 
   el('open-story').addEventListener('click', () => enterStoryMode());
   el('story-cta-button').addEventListener('click', () => enterStoryMode());
+  el('open-wander').addEventListener('click', () => enterWander());
   el('open-wall').addEventListener('click', () => launchWall());
   el('wall-cta-button').addEventListener('click', () => launchWall());
 
@@ -632,6 +655,12 @@ async function boot() {
     onNavigate: () => syncUrl(false),
     onClose: () => {
       state.lightbox.index = -1;
+      // 漫游期间 state.filtered 被换成了随机序列，关掉要还回去，
+      // 否则之后点瓦片的下标会和 state.filtered 对不上
+      if (ctx.wanderBase) {
+        state.filtered = ctx.wanderBase;
+        ctx.wanderBase = null;
+      }
       syncUrl(false);
     },
   });
