@@ -580,4 +580,17 @@ await okAsync('分片上传的两端约定一致', async () => {
   assert.ok(client.includes('partNumber'), '合并请求需要 partNumber');
 });
 
+await okAsync('Docker 构建上下文包含 V5 契约（.dockerignore 未整体排除 spec/）', async () => {
+  const ignore = await readFile(path.join(ROOT, '.dockerignore'), 'utf8');
+  const lines = ignore.split('\n').map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'));
+  // Dockerfile 的 COPY 源必须在构建上下文里；整体排除 spec/ 会让 build 直接失败。
+  // The Dockerfile COPY source must be in the build context; excluding spec/
+  // wholesale breaks the build outright.
+  assert.ok(!lines.includes('spec'), '.dockerignore 不能整体排除 spec/');
+  const dockerfile = await readFile(path.join(ROOT, 'docker/Dockerfile'), 'utf8');
+  assert.match(dockerfile, /COPY spec\/v5\/contracts\/v5-contracts\.json/);
+  await access(path.join(ROOT, 'spec/v5/contracts/v5-contracts.json'));
+});
+
 console.log(`--- 全部通过：${checks} 项断言 ---`);

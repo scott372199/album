@@ -9,7 +9,15 @@ node_modules
 **/node_modules
 photos
 dist
-spec
+# 不能整体排除 spec/：Dockerfile 要 COPY spec/v5/contracts/v5-contracts.json，
+# 一旦排除，构建上下文里就没有契约文件，docker build 会直接失败。
+# *.md 已排除所有文档，spec/ 下只剩少量 JSON 在上下文里；只有被显式
+# COPY 的文件才会进入镜像层。
+# Do not exclude spec/ wholesale: the Dockerfile COPYs the V5 contract JSON,
+# and excluding it would break docker build. *.md already drops the docs;
+# only a few JSONs remain in the context, and only explicitly COPYed files
+# ever land in an image layer.
+**/.DS_Store
 android
 scripts
 *.md

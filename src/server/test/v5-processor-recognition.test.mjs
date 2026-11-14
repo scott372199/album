@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, copyFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import {
   recognitionEnabled, recognizeGrid, detectLabelsWithRetry,
@@ -268,6 +272,31 @@ test('publishRecognition：标签文件超过上限时跳过重建，不抛错',
   });
   assert.equal(result.skipped, 'cap');
   assert.equal(result.rev, null);
+});
+
+test('Lambda 镜像布局下契约仍能加载（仓库根候选失败 → ../spec 兜底）', async () => {
+  // 冒烟调用曾报 ENOENT /spec/v5/contracts/v5-contracts.json：
+  // 镜像没有仓库根目录。此测试复刻 /var/task/v5 + /var/task/spec 布局。
+  // A smoke invoke once failed with ENOENT /spec/v5/contracts/... because the
+  // image has no repo root. Reproduce the /var/task/v5 + /var/task/spec layout.
+  const root = await mkdtemp(path.join(tmpdir(), 'album-contract-'));
+  try {
+    await mkdir(path.join(root, 'v5'), { recursive: true });
+    await mkdir(path.join(root, 'spec/v5/contracts'), { recursive: true });
+    await copyFile(
+      path.join('src/server/v5/correlation.mjs'),
+      path.join(root, 'v5/correlation.mjs'),
+    );
+    await copyFile(
+      path.join('spec/v5/contracts/v5-contracts.json'),
+      path.join(root, 'spec/v5/contracts/v5-contracts.json'),
+    );
+    const mod = await import(pathToFileURL(path.join(root, 'v5/correlation.mjs')).href);
+    assert.ok(mod.CONTRACT.publicFields.length > 0);
+    assert.ok(Array.isArray(mod.CONTRACT.forbiddenFields));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('结构化日志字段守卫：内存日志不含 raw 响应键', async () => {
