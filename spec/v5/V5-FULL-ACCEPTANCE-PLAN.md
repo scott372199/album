@@ -2,13 +2,18 @@
 
 > 2026-11-14。用户选定「按 `V5-ACCEPTANCE.md` 全矩阵验收」，即不缩范围、不降口径。
 > 本文是执行顺序与决策记录，不替代验收矩阵；判定仍只看 `V5-ACCEPTANCE.md`。
-> **决策已定，当前阶段不点火、不产生持续计费**：先把代码与一键能力做就绪，
-> 拉起由用户发话，用户验收后再一键销毁。
+> **当前状态：已按用户授权点火成功**：管理站四层在线（`30-compute` 26 个资源 +
+> 常驻 CloudFront 分发 `E2VQ7PHXOKOIVY`），`/actuator/health` 返回 `UP`。
+> 等待用户把 CNAME 指向 `d7shs93wdjmbm.cloudfront.net` 后开始逐域验收；
+> 验收后再一键销毁。判定仍只看 `V5-ACCEPTANCE.md`，代码就绪与站点上线都不等于验收通过。
 >
 > *On 2026-11-14 the user chose full-matrix acceptance. This is the execution order
-> and decision record; the acceptance matrix remains the only gate. **Decisions are
-> made and nothing is switched on yet**: code and one-click lifecycle come first,
-> bring-up waits for the user's go-ahead, and teardown follows acceptance.*
+> and decision record; the acceptance matrix remains the only gate. **The site has now
+> been brought up with the user's authorisation**: all four management layers are live
+> (26 resources in 30-compute plus the persistent CloudFront distribution
+> `E2VQ7PHXOKOIVY`), and `/actuator/health` returns `UP`. Domain-by-domain acceptance
+> starts once the user points the CNAME at `d7shs93wdjmbm.cloudfront.net`; one-click
+> teardown follows acceptance. Code readiness and a live site are not acceptance.*
 
 ## 1. 目标 / Goal
 
@@ -127,7 +132,7 @@ external registrar before any `cx.chenyouyi.top` check can pass.*
 - ✅ `FixtureData` 的 `planned` → `unknown`（fixture 侧，blocker #6）：album-mgmt PR #2 已合并，
   含 `FixtureStatusTest`；**真实只读清单适配器仍待做**，#6 未关闭。
 - ✅ album-mgmt PR 不再向生产 ECR 推镜像（`container.yml` 的 5 个 publish 步骤加 PR gate）。
-- ✅ **P1-code 剩余代码已就绪（待合并、未点火、不计费）**：
+- ✅ **P1-code 剩余代码已合并入库（三个 PR 均已 merge；站点随后已点火，见 §4.2）**：
   - `album-mgmt`：`SdkAwsReadGateway` 真实只读映射覆盖 Resources / Logs / Metrics / Billing /
     CI-CD / Security 六域；`cloud` profile 注入真实 SDK clients（Cost Explorer / CloudFront 走
     us-east-1）；`AwsReadAdapterSupport` 统一限流、递归脱敏、诚实降级与契约结构化日志；
@@ -158,9 +163,9 @@ external registrar before any `cx.chenyouyi.top` check can pass.*
   有变更的层在 CI 摘要里被写成「无变更」→ 改为按 plan 输出文本判定，并把
   `terraform show | head` 改为先落盘再 head 规避 SIGPIPE。分支九层只读 plan 与 main
   基线逐层一致，确认本批改动关站态零差异、无隐藏 IAM 授权。
-- ⬜ **仍缺生产证据（代码就绪 ≠ 验收通过）**：#3 六域真实数据、#6 真实只读清单要在站点
-  拉起后逐域核验；#2 生产故障注入、#5 三端浏览器记录、T-29~T-32 仍开放。
-  `V5-ACCEPTANCE.md` 的判定**不因本批代码改动而改写**。
+- ⬜ **仍缺生产证据（代码就绪 ≠ 验收通过）**：站点已于 2026-11-14 点火成功（§4.2），
+  但 #3 六域真实数据、#6 真实只读清单仍需在浏览器逐域核验；#2 生产故障注入、
+  #5 三端浏览器记录、T-29~T-32 仍开放。`V5-ACCEPTANCE.md` 的判定**不因站点上线而改写**。
 
 *English*
 P0.5 one-click up/down is merged, registered and has never been triggered. **Blocker #4
@@ -222,18 +227,29 @@ gh workflow run mgmt-lifecycle.yml --repo scott372199/album-infra \
 ```
 
 也可在 GitHub Actions 页面选 `up` / `down` 并把动作名再输一次作为二次确认。
-`up` 完成后从 job summary 取新 CloudFront 域名，由用户改 CNAME；`down` 只销毁运行时。
-工作流本身已在离线侧验证：YAML 解析、内嵌 shell 的 `bash -n`、
-`scripts/check.mjs` 91 项、`terraform fmt -check` 全过，**且从未触发过任何 apply**。
+**首次拉起的一次性前置顺序**：若 DNSPod 的 `cx.chenyouyi.top` CNAME 仍指向已删除的
+旧分发，CloudFront 会以 `CNAMEAlreadyExists` 拒绝创建新分发。必须先暂停/删除该 CNAME
+→ 触发 `up` 创建分发 → 把 CNAME 指向新分发域名。自 PR #17 起分发常驻（关站只置
+`enabled=false`、alias 不释放），所以这套 DNS 操作一生只做一次，之后 `down` / `up`
+都不再需要动 DNS。
+工作流已在离线侧与真实点火两侧验证：YAML 解析、内嵌 shell 的 `bash -n`、
+`scripts/check.mjs` 96 项、`terraform fmt -check` 全过，且第 7 次 `action=up`
+已完整 apply 四层成功（见 §4.2）。
 快照 workflow 不设定时任务，但 `infra` / `mgmt-lifecycle` 在 main 上跑完会自动触发
 一次：关站态只读 `head-bucket` 后仍采集三仓 runs 做校验，桶不存在就**不写任何对象、
 不创建任何资源**，因此三仓覆盖可在开站前确认。验收前若快照超过 180 分钟阈值，
 手动 dispatch `cicd-snapshot.yml` 刷新一次即可。Logs 域窗口为 24 小时，若验收时该域
 显示 `unavailable`，需按既有 E2E 流程做一次真实上传取证（含基线清理）以产生结构化日志。
 
-*The same actions can be triggered from the Actions UI. Offline verification of the
-workflows (YAML parse, `bash -n` on embedded scripts, 91 structural assertions,
-`terraform fmt -check`) passed; no apply has ever been triggered. The snapshot
+*The same actions can be triggered from the Actions UI. **One-time prerequisite on
+first bring-up**: if the DNSPod CNAME for `cx.chenyouyi.top` still points at the
+deleted old distribution, CloudFront rejects creation with `CNAMEAlreadyExists`.
+Suspend/delete that CNAME first, trigger `up`, then point the CNAME at the new
+distribution. Since PR #17 the distribution persists (off only sets `enabled=false`
+and keeps the alias), so this DNS work is done exactly once; later down/up cycles
+need no DNS change. The workflows passed offline verification (YAML parse, `bash -n`
+on embedded scripts, 96 structural assertions, `terraform fmt -check`) and the
+seventh `action=up` applied all four layers successfully (§4.2). The snapshot
 workflow has no schedule, but a completed `infra` or `mgmt-lifecycle` run on main
 triggers it: while the site is off it still collects all three repositories for a
 coverage check, yet writes **no object and creates no resource** when the bucket is
@@ -241,6 +257,45 @@ absent. Dispatch it once before acceptance if the snapshot is older than the
 180-minute threshold. The Logs domain uses a 24h window; if it reports
 `unavailable` during acceptance, run the existing E2E upload evidence flow
 (including baseline restoration) to produce structured log events.*
+
+### 4.2 点火实操记录 / Ignition log
+
+**中文 / Chinese**
+
+七次 `action=up`（`43597110203`、`43597476969`、`43598171391`、`43598540589`、
+`43600884375`、`43601533802`、`43603205911`）；前六次逐层暴露了五个「从未点火就
+发现不了」的缺陷：
+
+| 中文 / Chinese | English |
+| --- | --- |
+| ① 裸 `sha256:<digest>` 被直接当成 ECS image → 读 `00-bootstrap` 的 `repository_url` 拼成 `repo@sha256:…`（PR #14） | ① A bare digest was passed as the ECS image; join it with the bootstrap `repository_url` (PR #14) |
+| ② 模块级 `depends_on` 把 `data.aws_subnets` 推迟到 apply 期，`Invalid for_each argument` → 删掉冗余 gate 与依赖边（PR #15） | ② A module-level `depends_on` deferred `data.aws_subnets` to apply time; remove the redundant gate and dependency edge (PR #15) |
+| ③ apply 角色缺 `s3:Get*` / ECS / EFS / ELB / EC2 / `CreateServiceLinkedRole` → 补 statement 并本地 apply（PR #15） | ③ The apply role lacked runtime IAM permissions; add the statements and apply them (PR #15) |
+| ④ provider 6.x 读证书调 `acm:GetCertificate` 被拒 → `ACMRead` 补 ACM 只读三族（PR #16） | ④ Provider 6.x calls `acm:GetCertificate`; extend `ACMRead` with read-only ACM actions (PR #16) |
+| ⑤ `CNAMEAlreadyExists`，且分发随关站销毁导致每次重建都重演 → 分发常驻、`enabled` 跟随开关、用户一次性改 CNAME（PR #17） | ⑤ `CNAMEAlreadyExists` recurred because the distribution was destroyed on shutdown; make it persistent and change the CNAME once (PR #17) |
+
+第 7 次点火（`43603205911`，4m26s）四层结果：`00-bootstrap` 0 / `10-storage` 0 /
+`30-compute` 0 changes（26 个资源已在线）/ `20-edge` **1 added**。
+新分发 `E2VQ7PHXOKOIVY` = `d7shs93wdjmbm.cloudfront.net`，alias
+`cx.chenyouyi.top`，Deployed / Enabled。`cloud` profile 在容器日志中确认生效，
+`/actuator/health` 返回 `{"status":"UP"}`。
+
+验收登录用演示账户 `admin` / `album-mgmt-demo`（云端未注入 `MGMT_DEMO_*` 覆盖）。
+**T-31 安全待办**：公网暴露默认弱口令，且日志已出现公网扫描器探测
+`META-INF/.../pom.properties` 的 WARN；验收前不擅自更改口令，否则用户无法登录。
+
+*English*
+
+Seven `action=up` runs; the first six exposed five defects that only a real
+ignition could reveal (see the bilingual table above). Run seven (`43603205911`,
+4m26s) applied all four layers: 0 / 0 / 0 changes and **1 added** in 20-edge.
+The new distribution `E2VQ7PHXOKOIVY` (`d7shs93wdjmbm.cloudfront.net`) carries the
+`cx.chenyouyi.top` alias and is Deployed / Enabled; container logs confirm the
+`cloud` profile and `/actuator/health` returns `{"status":"UP"}`. Acceptance login
+uses the demo account `admin` / `album-mgmt-demo` (no cloud override). **T-31
+security follow-up**: a default weak password is exposed publicly and the logs
+already show internet scanners probing `META-INF/.../pom.properties`; the password
+is deliberately left unchanged until acceptance so the user can still sign in.*
 
 ## 5. 验收触发条件 / Acceptance trigger
 
