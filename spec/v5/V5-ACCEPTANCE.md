@@ -91,17 +91,56 @@ pointer and index restored byte-identically (matching ETags), object-key sets ma
 the 69/128 baseline, and the CDN invalidation completed with the public index back on
 its original rev.
 
+## 2026-11-14 blocker #4 correlation ID 代码就绪（仍未关闭）/ Code ready, blocker still open
+
+**中文 / Chinese**
+
+代码层已把同一个 `corr_[0-9a-f]{16}` 串起来，但**尚未合并、尚未换生产镜像、尚未跑生产取证**，
+因此 blocker #4 仍判为开放，本矩阵不得据此改写结论。
+
+- **ID 来源**：`corr_` + 内容寻址对象 key 的 sha256 前 16 位。key 由上传内容哈希决定，
+  所以重试、S3 事件回放、`/upload-complete` 只有 key、以及旧对象缺元数据四种情况都算出同一个 ID，
+  不需要前端改动，也不触发新的 CORS 预检头。
+- **传播点 / Propagation**：`/upload-url` 写入 `x-amz-meta-correlation-id`（单次 PUT 由客户端带签名头，
+  分片由 `CreateMultipartUpload` 固定元数据）→ `store.head()` 恢复 → `process.*` 结构化日志 →
+  `commitManifest` 的 `publish` 阶段 → `buildRecognitionInput` → `index.published` →
+  CloudFront `CallerReference`。`/upload-complete` 由 key 重算同一个 ID。
+- **日志形状**：走 `buildLogEvent`，必填 `event / correlationId / stage / outcome / durationMs`，
+  stage 覆盖 `upload / processor / publish / recognition / index / invalidation`；
+  `trace()` 对字段错误只留 warn，日志本身绝不让上传失败。
+- **离线证据 / Offline evidence**：`npm test` 186/186；`npm run verify` 40 项（新增第 40 项链路防回归断言）；
+  `npm run check:repo` 126 文件；`npm run build` 通过；用假凭证做真实预签名冒烟，
+  `X-Amz-SignedHeaders` 含 `x-amz-meta-correlation-id`、元数据未被提到查询串、
+  processor 从元数据恢复出同一个 ID；`/var/task` 布局下 auth 与 processor 整条依赖链导入通过。
+- **仍缺 / Still missing**：新镜像部署到两个 Lambda 后，用一次真实上传在两个 CloudWatch 日志组里
+  按同一个 `correlationId` 查出上述各阶段，并把测试对象按既有基线清理干净。
+
+*English*
+The code now carries one `corr_[0-9a-f]{16}` ID end to end, but it is **not merged,
+not deployed and not evidenced in production**, so blocker #4 remains open. The ID is
+deterministic from the content-addressed object key, which lets retries, S3 event
+replays, the merge endpoint (key only) and legacy objects without metadata resolve to
+the same value without any client or CORS change. It travels through presigned S3
+metadata, processor structured logs, manifest publication, recognition input, index
+publishing and the CloudFront CallerReference. Offline evidence: 186/186 unit tests,
+40 repo assertions (including a new anti-regression chain check), 126-file repo scan,
+a successful build, a real presign smoke with dummy credentials, and a full
+`/var/task`-layout import of both handler chains. A real upload on the new image,
+a single-ID CloudWatch trace across both log groups, and baseline cleanup are still
+required before this blocker can close.*
+
 ## Release blockers
 
 2026-11-14 进度 / *Progress as of 2026-11-14*：#1 前半段（脱敏派生图产出识别标签 +
 可解释查询）已有生产索引、实机验收与真实上传三重证据，但「六个示例全部命中」未达成；
-#4 的上传 → 处理 → 发布 → 索引 → 搜索链路已实测跑通，**但 correlation ID 未贯穿，
-仍判为开放**。#2 有代码级 best-effort 降级与单测，但缺生产故障注入证据；#3 #6 属管理站，
+#4 的上传 → 处理 → 发布 → 索引 → 搜索链路已实测跑通，correlation ID 的贯穿代码已就绪但
+**未部署、未取证，仍判为开放**（见上一节）。#2 有代码级 best-effort 降级与单测，但缺生产故障注入证据；#3 #6 属管理站，
 用户已决定保持关站（`mgmt_enabled=false`），暂不拉起；#5 的 V5 前端三端/reduced-motion
 记录未见。
 *Blocker #1 is partially met (production labels, explainable queries and a real-upload
 run), but full six-example coverage is unmet; #4's pipeline ran end-to-end yet its
-correlation-ID requirement is still open; #2 has code and unit tests but no production
+correlation-ID requirement has code ready but no deployment or production evidence,
+so it is still open; #2 has code and unit tests but no production
 failure-injection evidence; #3 and #6 depend on the management site, which the user
 has chosen to keep switched off; #5 has no recorded V5 browser checks.*
 

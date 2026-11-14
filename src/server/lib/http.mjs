@@ -15,10 +15,18 @@ const JSON_HEADERS = {
   'cache-control': 'no-store',
 };
 
-export function json(statusCode, body) {
+/**
+ * extraHeaders 目前只用于把服务端的 correlation ID 回给调用方（排查时能对上
+ * CloudWatch 日志）。每次都构造新对象，绝不改写共享的 JSON_HEADERS。
+ *
+ * extraHeaders exists to return the server's correlation ID to the caller so
+ * it can be matched against CloudWatch logs. A fresh object is built every
+ * time; the shared JSON_HEADERS is never mutated.
+ */
+export function json(statusCode, body, extraHeaders = {}) {
   return {
     statusCode,
-    headers: JSON_HEADERS,
+    headers: { ...JSON_HEADERS, ...extraHeaders },
     body: JSON.stringify(body),
   };
 }

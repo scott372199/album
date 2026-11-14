@@ -99,6 +99,44 @@ export function safeObjectKeyDigest(key) {
   return createHash('sha256').update(key, 'utf8').digest('hex').slice(0, 16);
 }
 
+/**
+ * 恢复一次上传的 correlation ID：优先读预签名时写进 S3 对象元数据的
+ * x-amz-meta-correlation-id，缺失或非法时退到对象 key 的确定性摘要。
+ *
+ * key 是内容寻址的（`incoming/<sha256 前 16 位><ext>`），所以这个兜底不是
+ * 「随便造一个」：同一对象在重试、事件回放、或者旧版本对象没有元数据时，
+ * 都会得到同一个 ID，日志才接得起来。元数据从不原样信任，先过格式校验。
+ *
+ * Recover an upload's correlation ID: prefer the S3 metadata written at
+ * presign time, then fall back to a deterministic digest of the
+ * content-addressed key. Retries, event replays and legacy objects without
+ * metadata therefore all resolve to the same ID. Metadata is never trusted
+ * verbatim; it must pass the format check first.
+ */
+export function correlationIdFor({ key, metadata } = {}) {
+  const raw = metadata && typeof metadata === 'object'
+    ? metadata['correlation-id'] ?? metadata['x-amz-meta-correlation-id']
+    : undefined;
+  const candidate = typeof raw === 'string' ? raw.trim() : '';
+  if (isValidCorrelationId(candidate)) return candidate;
+  const digest = safeObjectKeyDigest(key);
+  return digest ? `corr_${digest}` : generateCorrelationId();
+}
+
+/**
+ * CloudFront 失效批次的 CallerReference 带上 correlation ID。
+ * 放在这里（而不是 store.mjs）是为了离线可测：store.mjs 顶层就 import
+ * AWS SDK，零依赖单测不能碰它。
+ *
+ * CallerReference for a CloudFront invalidation batch, carrying the
+ * correlation ID. It lives here rather than in store.mjs so the zero-install
+ * tests can exercise it: store.mjs imports the AWS SDK at module load.
+ */
+export function invalidationCallerReference(correlationId = '') {
+  const prefix = String(correlationId || 'none').replace(/[^0-9a-zA-Z_-]/g, '').slice(0, 32);
+  return `album-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 /** 递归找出禁止字段路径 / Recursively find forbidden-field paths. */
 export function findForbidden(value, prefix = '', found = []) {
   if (!value || typeof value !== 'object') return found;
@@ -167,6 +205,30 @@ export function emitLog(fields, sink = console.log) {
 /** 生产默认 logger：一行一个 JSON / Production default: one JSON per line. */
 export function createConsoleLogger() {
   return { emit: (fields) => emitLog(fields, console.log), events: null };
+}
+
+/**
+ * 输出一条契约形状的结构化日志（emitLog 的防故障包装）。
+ *
+ * 日志是取证手段，不是业务步骤：字段名写错、stage 不在契约里，都不该反过来
+ * 让一次上传失败。格式错误只留一条 warn，主流程继续。
+ *
+ * Emit one contract-shaped structured log line. Logging is evidence, not a
+ * business step — a malformed field must never fail the upload it describes;
+ * the error is reduced to a warn line and the main flow continues.
+ */
+export function trace(fields = {}, sink = console.log) {
+  try {
+    return emitLog(fields, sink);
+  } catch (err) {
+    console.warn(JSON.stringify({
+      level: 'warn',
+      msg: 'trace.invalid',
+      error: err?.name || 'Error',
+      detail: String(err?.message ?? err).slice(0, 200),
+    }));
+    return null;
+  }
 }
 
 /** 离线测试替身：把事件收集到内存 / Offline test double: collect events in memory. */

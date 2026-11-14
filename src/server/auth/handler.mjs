@@ -1,6 +1,7 @@
 import { env, envInt } from '../lib/config.mjs';
 import { json, readJson, bearerToken, routeKey } from '../lib/http.mjs';
 import { log, maskPhone, errorFields } from '../lib/log.mjs';
+import { correlationIdFor, safeObjectKeyDigest, trace } from '../v5/correlation.mjs';
 import { loadSecrets } from '../lib/params.mjs';
 import { verifySharedKey, DUMMY_HASH } from '../lib/scrypt.mjs';
 import { signToken, verifyToken, subjectFor } from '../lib/token.mjs';
@@ -106,6 +107,7 @@ async function authorize(event) {
 }
 
 async function uploadUrl(event) {
+  const startedAt = Date.now();
   const claims = await authorize(event);
   if (!claims) return json(401, { error: 'unauthorized' });
 
@@ -124,7 +126,26 @@ async function uploadUrl(event) {
   }
 
   log.info('upload.presigned', { count: result.items.length });
-  return json(200, { items: result.items });
+  // 一个对象一条 upload 阶段事件：ID 与写进 x-amz-meta-correlation-id 的值
+  // 完全一致，processor 之后的所有阶段都沿用它。
+  // One upload-stage event per object; its ID is exactly the value written to
+  // x-amz-meta-correlation-id and reused by every later processor stage.
+  for (const item of result.items) {
+    trace({
+      event: 'upload.presigned',
+      correlationId: item.correlationId,
+      stage: 'upload',
+      outcome: 'success',
+      durationMs: Date.now() - startedAt,
+      objectKeyDigest: safeObjectKeyDigest(item.key),
+    });
+  }
+  // 多文件批次各有各的 ID，此时不设单值响应头，避免误导。
+  // A batch has one ID per object, so no single-valued response header.
+  const headers = result.items.length === 1
+    ? { 'x-correlation-id': result.items[0].correlationId }
+    : {};
+  return json(200, { items: result.items }, headers);
 }
 
 /**
@@ -136,6 +157,7 @@ async function uploadUrl(event) {
  * creates the object in the source bucket, unlike merely signing URLs.
  */
 async function uploadComplete(event) {
+  const startedAt = Date.now();
   const claims = await authorize(event);
   if (!claims) return json(401, { error: 'unauthorized' });
 
@@ -148,8 +170,21 @@ async function uploadComplete(event) {
     return json(400, { error: result.error });
   }
 
-  log.info('upload.completed', { key: result.key, parts: result.parts });
-  return json(200, { ok: true });
+  // 只有 key 也能算出与签发时同一个 ID（见 rules.mjs 的 key 派生规则），
+  // 所以分片合并这一步不会把追踪链断开。
+  // The key alone yields the same ID as presign (see the key derivation in
+  // rules.mjs), so merging a multipart upload does not break the trace.
+  const correlationId = correlationIdFor({ key: result.key });
+  log.info('upload.completed', { key: result.key, parts: result.parts, correlationId });
+  trace({
+    event: 'upload.completed',
+    correlationId,
+    stage: 'upload',
+    outcome: 'success',
+    durationMs: Date.now() - startedAt,
+    objectKeyDigest: safeObjectKeyDigest(result.key),
+  });
+  return json(200, { ok: true }, { 'x-correlation-id': correlationId });
 }
 
 async function dispatch(event) {

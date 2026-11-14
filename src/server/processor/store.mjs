@@ -7,6 +7,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
 import { isPreconditionFailed } from '../lib/retry.mjs';
+import { invalidationCallerReference } from '../v5/correlation.mjs';
 
 export { isPreconditionFailed };
 
@@ -199,11 +200,21 @@ export async function listKeys(bucket, prefix, { maxKeys = 10000 } = {}) {
   return keys;
 }
 
-export async function invalidate(distributionId, paths) {
+/**
+ * 失效批次带上 correlation ID：CloudFront 的 CallerReference 会出现在
+ * GetInvalidation 与 CloudTrail 里，于是 CDN 刷新也能并进同一次上传的追踪链。
+ * 尾部时间戳 + 随机串保证每次请求唯一，不会被 CloudFront 当成重复提交。
+ *
+ * The correlation ID travels in the CloudFront CallerReference (visible in
+ * GetInvalidation / CloudTrail), joining the CDN refresh to the same upload
+ * trace. A timestamp + random suffix keeps each request unique so CloudFront
+ * does not deduplicate a legitimate retry.
+ */
+export async function invalidate(distributionId, paths, { correlationId = '' } = {}) {
   const response = await cf().send(new CreateInvalidationCommand({
     DistributionId: distributionId,
     InvalidationBatch: {
-      CallerReference: `album-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      CallerReference: invalidationCallerReference(correlationId),
       Paths: { Quantity: paths.length, Items: paths },
     },
   }));

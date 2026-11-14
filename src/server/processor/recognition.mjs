@@ -55,6 +55,9 @@ import { backoffMs } from '../lib/retry.mjs';
 import { buildRecognitionInput } from '../recognition/input.mjs';
 import { normalizeLabels } from '../recognition/provider.mjs';
 import { normalizeRekognitionResponse } from '../recognition/rekognition.mjs';
+import {
+  correlationIdFor, isValidCorrelationId, trace,
+} from '../v5/correlation.mjs';
 import { createIndex } from '../search/index.mjs';
 import { computeRev, indexObjectKey } from '../search/publish.mjs';
 
@@ -148,10 +151,26 @@ function detectParams(jpegBuffer) {
 export async function recognizeGrid({
   assetId,
   gridBuffer,
+  correlationId = '',
   callDetectLabels = defaultCallDetectLabels,
   convertToJpeg = defaultConvertToJpeg,
 } = {}) {
-  if (!recognitionEnabled()) return null;
+  const startedAt = Date.now();
+  // 契约格式不合法时不信调用方；按脱敏派生图 key 确定性派生一个，
+  // 让单独调用（回填、单测）也总能拿到合法 ID。
+  // A bad caller-supplied ID is never trusted; derive one from the redacted
+  // derivative key so standalone calls still get a valid ID.
+  const corr = isValidCorrelationId(correlationId)
+    ? correlationId
+    : correlationIdFor({ key: `photos/${assetId}/grid.webp` });
+
+  if (!recognitionEnabled()) {
+    trace({
+      event: 'recognition.skipped', correlationId: corr, stage: 'recognition',
+      outcome: 'skipped', durationMs: Date.now() - startedAt, assetId,
+    });
+    return null;
+  }
   if (!Buffer.isBuffer(gridBuffer) || gridBuffer.length === 0) {
     throw new TypeError('gridBuffer 必须是非空 Buffer / gridBuffer must be a non-empty Buffer');
   }
@@ -160,15 +179,28 @@ export async function recognizeGrid({
   const jpegBuffer = await convertToJpeg(gridBuffer);
 
   const contentHash = createHash('sha256').update(gridBuffer).digest('hex');
+  // 识别输入携带 correlationId：异步 SQS 方案里它会是 queue attribute，
+  // 本期同步识别则是同一个字段随调用传入。
+  // The recognition input carries the correlationId: it would be a queue
+  // attribute in the deferred SQS design; here it is passed in-process.
   const input = buildRecognitionInput({
     assetId,
     contentHash,
     sourceAsset: `photos/${assetId}/grid.webp`,
-    correlationId: `corr_${contentHash.slice(0, 16)}`,
+    correlationId: corr,
   });
 
   const raw = await detectLabelsWithRetry(callDetectLabels, detectParams(jpegBuffer));
   const labels = normalizeRekognitionResponse(raw);
+  trace({
+    event: labels.length ? 'recognition.completed' : 'recognition.empty',
+    correlationId: input.correlationId,
+    stage: 'recognition',
+    outcome: labels.length ? 'success' : 'unlabeled',
+    durationMs: Date.now() - startedAt,
+    assetId,
+    provider: 'aws-rekognition',
+  });
   if (!labels.length) return null;
   return { labels, source: 'rekognition' };
 }
@@ -230,8 +262,13 @@ export async function publishRecognition({
   siteBucket,
   assetId,
   recognition = null,
+  correlationId = '',
   io = null,
 } = {}) {
+  const startedAt = Date.now();
+  const corr = isValidCorrelationId(correlationId)
+    ? correlationId
+    : correlationIdFor({ key: `photos/${assetId}/grid.webp` });
   const { store: ioStore } = io || await defaultIo();
   if (recognition?.labels?.length && assetId) {
     await writeLabelsFile(siteBucket, assetId, recognition, { store: ioStore });
@@ -242,12 +279,20 @@ export async function publishRecognition({
   const manifestKey = version?.manifest || env('MANIFEST_KEY', 'data/manifest.json');
   const manifest = await ioStore.readJson(siteBucket, manifestKey);
   if (!manifest?.photos?.length) {
+    trace({
+      event: 'index.skipped', correlationId: corr, stage: 'index',
+      outcome: 'skipped', durationMs: Date.now() - startedAt, assetId,
+    });
     return { rev: null, items: 0, recognized: 0 };
   }
 
   const labelKeys = await ioStore.listKeys(siteBucket, LABELS_PREFIX);
   if (labelKeys.length > LABEL_REBUILD_CAP) {
-    log.warn('index.rebuild_skipped_cap', { labelFiles: labelKeys.length, cap: LABEL_REBUILD_CAP });
+    log.warn('index.rebuild_skipped_cap', { labelFiles: labelKeys.length, cap: LABEL_REBUILD_CAP, correlationId: corr });
+    trace({
+      event: 'index.skipped', correlationId: corr, stage: 'index',
+      outcome: 'skipped', durationMs: Date.now() - startedAt, assetId,
+    });
     return { rev: null, items: 0, recognized: 0, skipped: 'cap' };
   }
 
@@ -275,5 +320,9 @@ export async function publishRecognition({
     cacheControl: ioStore.CACHE_NO_STORE,
   });
 
+  trace({
+    event: 'index.published', correlationId: corr, stage: 'index',
+    outcome: 'success', durationMs: Date.now() - startedAt, assetId,
+  });
   return { rev, items: index.items.length, recognized: items.length };
 }

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { env } from '../lib/config.mjs';
 import { log, errorFields } from '../lib/log.mjs';
 import { backoffMs } from '../lib/retry.mjs';
+import { correlationIdFor, safeObjectKeyDigest, trace } from '../v5/correlation.mjs';
 import * as store from './store.mjs';
 import { processImage } from './image.mjs';
 import { processVideo } from './video.mjs';
@@ -109,8 +110,9 @@ async function readVersionAndManifest(siteBucket) {
  * pointer carries `If-Match: <etag>`, a loser gets 412, and it re-reads, re-merges
  * and retries.
  */
-async function commitManifest(siteBucket, record) {
+async function commitManifest(siteBucket, record, correlationId) {
   const versionKey = env('VERSION_KEY', 'data/version.json');
+  const startedAt = Date.now();
 
   for (let attempt = 1; attempt <= MANIFEST_ATTEMPTS; attempt += 1) {
     const { version, manifest } = await readVersionAndManifest(siteBucket);
@@ -135,11 +137,20 @@ async function commitManifest(siteBucket, record) {
         ifMatch: version?.etag || null,
         ifNoneMatch: version ? null : '*',
       });
+      trace({
+        event: 'manifest.published',
+        correlationId,
+        stage: 'publish',
+        outcome: 'success',
+        durationMs: Date.now() - startedAt,
+        assetId: record.id,
+        attempt,
+      });
       return { rev, manifestKey, counts, attempts: attempt };
     } catch (err) {
       if (!store.isPreconditionFailed(err)) throw err;
       // 别人先写了一步，重读再合并。抖动一下，避免两个实例同步重试又撞上。
-      log.info('manifest.contended', { attempt, rev });
+      log.info('manifest.contended', { attempt, rev, correlationId });
       await sleep(backoffMs(attempt, MANIFEST_RETRY_MS));
     }
   }
@@ -171,15 +182,38 @@ async function processObject({ bucket, key }) {
 
   const siteBucket = env('SITE_BUCKET');
   const meta = await store.head(bucket, key);
+  // 与 /upload-url 写进 x-amz-meta-correlation-id 的值同源；元数据缺失时按
+  // 内容寻址 key 确定性重算，一次上传从头到尾只有一个 ID。
+  // Same source as the x-amz-meta-correlation-id written at presign time;
+  // a missing metadata falls back to the deterministic key digest, so one
+  // upload keeps a single ID end to end.
+  const fallbackCorrelationId = correlationIdFor({ key });
+  const objectKeyDigest = safeObjectKeyDigest(key);
   if (!meta) {
     // 事件比对象先到、或对象已被别处删除，都不该重试
-    log.warn('process.source_missing', { key });
+    log.warn('process.source_missing', { key, correlationId: fallbackCorrelationId });
+    trace({
+      event: 'process.source_missing', correlationId: fallbackCorrelationId,
+      stage: 'processor', outcome: 'skipped', durationMs: 0, objectKeyDigest,
+    });
     return { skipped: true };
   }
 
+  const correlationId = correlationIdFor({ key, metadata: meta.metadata });
+  const startedAt = Date.now();
+  trace({
+    event: 'process.started', correlationId, stage: 'processor',
+    outcome: 'started', durationMs: 0, objectKeyDigest,
+  });
+
   const kind = kindOf(meta.contentType, key);
   if (!kind) {
-    log.error('process.unsupported', { key, contentType: meta.contentType });
+    log.error('process.unsupported', { key, contentType: meta.contentType, correlationId });
+    trace({
+      event: 'process.unsupported', correlationId, stage: 'processor',
+      outcome: 'failed', durationMs: Date.now() - startedAt, objectKeyDigest,
+      errorClass: 'unsupported-content-type',
+    });
     throw new Error(`不支持的类型 / unsupported content type: ${meta.contentType}`);
   }
 
@@ -205,6 +239,7 @@ async function processObject({ bucket, key }) {
       // 客户端上报的哈希与实际字节不符：以实际字节为准，只留一条告警
       log.warn('process.hash_mismatch', {
         key,
+        correlationId,
         claimed: meta.metadata.sha256.slice(0, 12),
         actual: sha.slice(0, 12),
       });
@@ -215,7 +250,11 @@ async function processObject({ bucket, key }) {
     const known = current.photos.some((photo) => photo && photo.id === id);
 
     if (known && await artifactsExist(siteBucket, id, kind)) {
-      log.info('process.duplicate', { id });
+      log.info('process.duplicate', { id, correlationId });
+      trace({
+        event: 'process.duplicate', correlationId, stage: 'processor',
+        outcome: 'skipped', durationMs: Date.now() - startedAt, assetId: id,
+      });
       await store.remove(bucket, key);
       return { id, skipped: true };
     }
@@ -233,7 +272,7 @@ async function processObject({ bucket, key }) {
 
       if (video.degraded) {
         // 降级：只剩封面，按静图入库，保证页面上仍能看到这一条
-        log.warn('process.video_degraded', { id, reason: video.reason });
+        log.warn('process.video_degraded', { id, reason: video.reason, correlationId });
         const image = await processImage(video.poster);
         await writeArtifacts(siteBucket, id, image.buffers);
         record = imageRecord({
@@ -249,7 +288,7 @@ async function processObject({ bucket, key }) {
       }
     }
 
-    const { rev } = await commitManifest(siteBucket, record);
+    const { rev } = await commitManifest(siteBucket, record, correlationId);
     const versionKey = env('VERSION_KEY', 'data/version.json');
 
     // 识别 + 索引发布：best-effort，任何失败只留日志，绝不阻塞照片上线
@@ -258,27 +297,40 @@ async function processObject({ bucket, key }) {
     // Recognition + index publish: best-effort, failures only log and never
     // block publication (FR-02, hard invariant 2). With recognition=null the
     // index still rebuilds so the photo enters as a source=manifest entry.
-    const startedAt = Date.now();
+    const recognitionStartedAt = Date.now();
     let recognition = null;
     if (gridBuffer) {
       try {
-        recognition = await recognizeGrid({ assetId: id, gridBuffer });
+        recognition = await recognizeGrid({ assetId: id, gridBuffer, correlationId });
       } catch (err) {
-        log.warn('process.recognition_failed', { id, ...errorFields(err) });
+        log.warn('process.recognition_failed', { id, correlationId, ...errorFields(err) });
+        trace({
+          event: 'recognition.failed', correlationId, stage: 'recognition',
+          outcome: 'failed', durationMs: Date.now() - recognitionStartedAt,
+          assetId: id, provider: 'aws-rekognition', errorClass: err?.name || 'Error',
+        });
       }
     }
     let published = { rev: null, items: 0, recognized: 0 };
     try {
-      published = await publishRecognition({ siteBucket, assetId: id, recognition });
+      published = await publishRecognition({
+        siteBucket, assetId: id, recognition, correlationId,
+      });
     } catch (err) {
-      log.warn('process.index_publish_failed', { id, ...errorFields(err) });
+      log.warn('process.index_publish_failed', { id, correlationId, ...errorFields(err) });
+      trace({
+        event: 'index.failed', correlationId, stage: 'index',
+        outcome: 'failed', durationMs: Date.now() - recognitionStartedAt,
+        assetId: id, errorClass: err?.name || 'Error',
+      });
     }
     log.info('process.recognition', {
       id,
+      correlationId,
       outcome: recognition ? 'recognized' : 'unlabeled',
       rev: published.rev ? published.rev.slice(0, 12) : null,
       recognized: published.recognized ?? 0,
-      durationMs: Date.now() - startedAt,
+      durationMs: Date.now() - recognitionStartedAt,
     });
 
     // 失效失败不该让整次处理重来：version.json 本身就是 no-store，
@@ -286,10 +338,22 @@ async function processObject({ bucket, key }) {
     try {
       const distributionId = env('DISTRIBUTION_ID', '');
       if (distributionId) {
-        await store.invalidate(distributionId, [`/${versionKey}`, '/data/search-index*']);
+        const invalidationStartedAt = Date.now();
+        await store.invalidate(distributionId, [`/${versionKey}`, '/data/search-index*'], {
+          correlationId,
+        });
+        trace({
+          event: 'invalidation.created', correlationId, stage: 'invalidation',
+          outcome: 'success', durationMs: Date.now() - invalidationStartedAt,
+          assetId: id,
+        });
       }
     } catch (err) {
-      log.warn('process.invalidate_failed', errorFields(err));
+      log.warn('process.invalidate_failed', { correlationId, ...errorFields(err) });
+      trace({
+        event: 'invalidation.failed', correlationId, stage: 'invalidation',
+        outcome: 'failed', durationMs: 0, errorClass: err?.name || 'Error',
+      });
     }
 
     // P02：产物与清单都写成功之后才删源图。反序 = 一旦中途失败，素材就没了。
@@ -297,13 +361,26 @@ async function processObject({ bucket, key }) {
 
     log.info('process.done', {
       id,
+      correlationId,
       kind: record.type,
       album,
       year: record.year,
       month: record.month,
       rev,
+      durationMs: Date.now() - startedAt,
+    });
+    trace({
+      event: 'process.done', correlationId, stage: 'processor',
+      outcome: 'success', durationMs: Date.now() - startedAt, assetId: id,
     });
     return { id, rev };
+  } catch (err) {
+    // 把 ID 挂在异常上：handler 的失败日志直接用同一个 ID，
+    // 不重新按 key 兜底（万一将来调用方传了合法的覆盖值也不会断链）。
+    // Attach the ID to the thrown error so the handler's failure log reuses
+    // it rather than recomputing a possibly different fallback.
+    if (err && typeof err === 'object') err.correlationId ??= correlationId;
+    throw err;
   } finally {
     await rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
@@ -380,7 +457,14 @@ export async function handler(event) {
       done.push(await processObject({ bucket, key }));
     } catch (err) {
       // 抛出 → 异步重试 2 次 → 仍失败进死信队列；源图留在源桶等生命周期兜底
-      log.error('process.failed', { key, ...errorFields(err) });
+      const correlationId = err?.correlationId || correlationIdFor({ key });
+      log.error('process.failed', { key, correlationId, ...errorFields(err) });
+      trace({
+        event: 'process.failed', correlationId, stage: 'processor',
+        outcome: 'failed', durationMs: 0,
+        objectKeyDigest: safeObjectKeyDigest(key),
+        errorClass: err?.name || 'Error',
+      });
       throw err;
     }
   }
