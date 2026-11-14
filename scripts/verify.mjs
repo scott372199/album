@@ -646,6 +646,13 @@ await okAsync('中文词表只有一份来源：src/shared/lexicon.json', async 
   // 这里锁住的是「单一来源」的本质：一份 JSON + 一个生成器 + 两份逐字节相同的产物。
   const gen = (await readSrc(path.join(ROOT, 'scripts/gen-lexicon.mjs')));
   assert.ok(gen.includes('src/shared/lexicon.json'), '生成器必须读取唯一来源');
+  // 2026-11-14：localeCompare 的中文排序在本机 macOS 与 Linux CI 上不同，
+  // 提交的本机产物被 CI 判为漂移。生成顺序必须由码点比较决定。
+  // ICU collation differs by platform; macOS artifacts were rejected by Linux CI.
+  // 只匹配真实调用：注释里解释过这个坑，不能因为提到名字就误判。
+  // Match invocations only; the explanatory comments mention the names.
+  assert.ok(!/\.localeCompare\s*\(|new\s+Intl\.Collator\b/.test(gen),
+    '生成器禁止平台相关排序（localeCompare / Collator），否则 CI 恒红');
 
   const source = JSON.parse(await readSrc(path.join(ROOT, 'src/shared/lexicon.json')));
   assert.ok(Array.isArray(source.terms) && source.terms.length >= 100,
@@ -673,6 +680,22 @@ await okAsync('中文词表只有一份来源：src/shared/lexicon.json', async 
   const vocab = await readSrc(path.join(ROOT, 'src/server/search/vocabulary.mjs'));
   assert.ok(!/^const TERM_ZH\s*=\s*\{/m.test(vocab),
     'vocabulary.mjs 里出现了第二份 TERM_ZH 字面量，应改为 import 生成物');
+});
+
+await okAsync('词表来源与生成器变更会触发 CI 与前端发布 / Lexicon changes trigger CI and web deploy', async () => {
+  // 2026-11-14：修 main 恒红时发现两个 workflow 的 paths 都不含词表 JSON 与生成器，
+  // 只改 src/shared/lexicon.json 会静默跳过 required check 和前端部署。
+  // Both workflows must watch the JSON source and the generator, otherwise a
+  // lexicon-only edit silently skips the required check and the web deploy.
+  const workflows = [
+    '.github/workflows/build-image.yml',
+    '.github/workflows/deploy-web.yml',
+  ];
+  for (const file of workflows) {
+    const wf = await readSrc(path.join(ROOT, file));
+    assert.ok(wf.includes('src/shared/**'), `${file} 缺少 src/shared/** 触发路径`);
+    assert.ok(wf.includes('scripts/gen-lexicon.mjs'), `${file} 缺少生成器触发路径`);
+  }
 });
 
 console.log(`--- 全部通过：${checks} 项断言 ---`);

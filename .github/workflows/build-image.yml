@@ -13,6 +13,8 @@ on:
     branches: [main]
     paths:
       - 'src/server/**'
+      - 'src/shared/**'
+      - 'scripts/gen-lexicon.mjs'
       - 'docker/**'
       - '.dockerignore'
       - '.github/workflows/build-image.yml'
@@ -25,6 +27,8 @@ on:
       - 'src/server/**'
       - 'src/build/**'
       - 'src/web/**'
+      - 'src/shared/**'
+      - 'scripts/gen-lexicon.mjs'
       - 'package.json'
       - 'package-lock.json'
       # 纯文档 PR 也必须触发「单测 / unit tests」这个 required check；
