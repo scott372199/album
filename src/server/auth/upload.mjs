@@ -74,6 +74,7 @@ async function presignSingle(bucket, entry, expiresIn) {
 
   return {
     key: entry.key,
+    correlationId: entry.correlationId,
     url,
     method: 'PUT',
     headers: {
@@ -128,6 +129,7 @@ async function presignParts(bucket, entry, expiresIn) {
 
   return {
     key: entry.key,
+    correlationId: entry.correlationId,
     multipart: true,
     uploadId,
     partSize: plan.partSize,

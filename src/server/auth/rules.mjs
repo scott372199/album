@@ -5,6 +5,7 @@
  * Pure validation for upload requests, unit-testable branch by branch. Every
  * rule here maps to a real failure mode rather than ceremony.
  */
+import { correlationIdFor, isValidCorrelationId } from '../v5/correlation.mjs';
 
 export const TYPES = {
   '.jpg': { contentType: 'image/jpeg', kind: 'image' },
@@ -153,7 +154,9 @@ export function parseComplete(body, prefix = 'incoming/') {
  * Rejects the whole batch on any violation: a partial success makes client-side
  * retry logic hard to reason about, and retrying costs one tap.
  */
-export function planFiles(files, { maxFiles, maxImage, maxVideo, prefix, album }) {
+export function planFiles(files, {
+  maxFiles, maxImage, maxVideo, prefix, album, correlationId = '',
+}) {
   const list = Array.isArray(files) ? files : [];
   if (!list.length) return { error: 'no_files' };
   if (list.length > maxFiles) return { error: 'too_many_files', max: maxFiles };
@@ -184,8 +187,26 @@ export function planFiles(files, { maxFiles, maxImage, maxVideo, prefix, album }
     if (seen.has(key)) continue;
     seen.add(key);
 
+    // 全链路追踪 ID。默认由内容寻址 key 确定性派生，于是：
+    //   - 同一对象重试 / 事件回放拿到同一个 ID；
+    //   - /upload-complete 只有 key 也能算出同一个 ID；
+    //   - processor 即使读不到元数据也能兜底重算。
+    // 调用方可传入一个合法的 corr_… 覆盖（例如未来客户端自带追踪 ID）。
+    // 预签名层把所有 x-amz-meta-* 纳入签名；分片时元数据在
+    // CreateMultipartUpload 固定，客户端两侧都无需改动。
+    //
+    // End-to-end correlation ID, deterministic from the content-addressed key
+    // by default, so retries, the merge endpoint and a processor with missing
+    // metadata all resolve to one ID. A valid corr_… may be supplied to
+    // override it. The presigner signs every x-amz-meta-* header and multipart
+    // fixes metadata at create time, so neither client path needs changes.
+    const itemCorrelationId = isValidCorrelationId(correlationId)
+      ? correlationId
+      : correlationIdFor({ key });
+
     items.push({
       key,
+      correlationId: itemCorrelationId,
       // 体积决定「单次 PUT」还是「分片」，所以必须带出来
       size,
       contentType: spec.contentType,
@@ -193,6 +214,7 @@ export function planFiles(files, { maxFiles, maxImage, maxVideo, prefix, album }
         album: Buffer.from(sanitizeAlbum(album), 'utf8').toString('base64url'),
         'taken-at': normalizeTakenAt(file.takenAt),
         sha256,
+        'correlation-id': itemCorrelationId,
       },
     });
   }

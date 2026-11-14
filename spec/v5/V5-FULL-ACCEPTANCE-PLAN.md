@@ -115,6 +115,26 @@ external registrar before any `cx.chenyouyi.top` check can pass.*
 | P4 | 跑全部验收命令、出验收记录 | — | **用户签字验收** / sign-off |
 | P5 | 验收后触发 `action=down` 一键关站；确认账单回落 | album-infra | 用户确认销毁范围 / confirm scope |
 
+### 4.0 P1-code 进度 / Progress
+
+**中文 / Chinese**
+
+- ✅ P0.5 一键 up/down：PR #10 已合并，`mgmt-lifecycle.yml` 已注册 active，run 数为 0（从未点火）。
+- ✅ `#4 corr_… 贯穿（代码侧）`：`个人相册` 仓库已完成，设计、离线证据与仍缺的生产取证
+  见 `V5-ACCEPTANCE.md` 的「blocker #4 correlation ID 代码就绪」一节。**此项不点火、不计费**，
+  待 PR 合并产出新镜像后，换生产镜像并做一次真实上传取证才算关闭。
+- ⬜ 真实适配器 + 最小权限 task role + CI 只读快照 + `cloud` profile（album-mgmt / album-infra）。
+- ⬜ `FixtureData` 的 `planned` → `unknown` / 真实清单（blocker #6）。
+- ⬜ #2 生产故障注入证据、#5 三端浏览器记录、T-31 安全评审。
+
+*English*
+P0.5 one-click up/down is merged, registered and has never been triggered. The code
+side of blocker #4 is done in the `album` repo (see `V5-ACCEPTANCE.md`); it needs no
+infrastructure and no cost, but stays open until a new image is deployed and a real
+upload produces a single-ID production trace. Real adapters, the least-privilege task
+role, the CI read-only snapshot, the `planned` fix, failure-injection and browser
+evidence and the T-31 review remain open.*
+
 ### 4.1 一键命令 / One-click commands
 
 ```bash

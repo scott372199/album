@@ -56,6 +56,11 @@ test('planFiles 给出的元数据键与签名头一一对应', () => {
   );
   assert.deepEqual(
     signableHeaderNames(entry.contentType, metadata),
-    ['content-type', 'x-amz-meta-album', 'x-amz-meta-sha256'],
+    ['content-type', 'x-amz-meta-album', 'x-amz-meta-sha256', 'x-amz-meta-correlation-id'],
   );
+  // correlation-id 必须同时进签名范围与 S3 元数据，否则客户端发出去的
+  // 自定义头会被判成「未签名头」回 403。
+  // The correlation-id header must be signed AND present on the object.
+  assert.equal(entry.metadata['correlation-id'], entry.correlationId);
+  assert.match(entry.correlationId, /^corr_[0-9a-f]{16}$/);
 });

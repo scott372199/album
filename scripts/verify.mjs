@@ -593,4 +593,43 @@ await okAsync('Docker 构建上下文包含 V5 契约（.dockerignore 未整体�
   await access(path.join(ROOT, 'spec/v5/contracts/v5-contracts.json'));
 });
 
+await okAsync('correlation ID 贯穿上传 → 处理 → 发布 → 索引 → CDN 失效', async () => {
+  // 这是 V5 release blocker #4 的静态护栏：跨文件的链路靠约定串起来，
+  // 少写一处不会有任何单测失败，但 CloudWatch 里就接不成一个 ID。
+  // Static guard for V5 blocker #4: this chain spans several files, so a
+  // missing hop fails no unit test yet breaks the CloudWatch trace.
+  const read = (rel) => readFile(path.join(ROOT, rel), 'utf8');
+  const correlation = await read('src/server/v5/correlation.mjs');
+  const rules = await read('src/server/auth/rules.mjs');
+  const auth = await read('src/server/auth/handler.mjs');
+  const proc = await read('src/server/processor/handler.mjs');
+  const recognition = await read('src/server/processor/recognition.mjs');
+  const store = await read('src/server/processor/store.mjs');
+  const upload = await read('src/server/auth/upload.mjs');
+
+  for (const name of ['correlationIdFor', 'trace', 'invalidationCallerReference']) {
+    assert.ok(correlation.includes(`export function ${name}`), `correlation.mjs 应导出 ${name}`);
+  }
+  assert.ok(rules.includes("'correlation-id': itemCorrelationId"), '预签名元数据必须写入 correlation-id');
+  assert.ok(upload.includes('correlationId: entry.correlationId'), '签发响应必须带出 correlationId');
+  assert.ok(auth.includes("event: 'upload.presigned'"), 'auth 必须发 upload 阶段结构化日志');
+  assert.ok(auth.includes("event: 'upload.completed'"), '分片合并必须续上同一个 ID');
+  assert.ok(proc.includes('correlationIdFor({ key, metadata: meta.metadata })'),
+    'processor 必须从 S3 元数据恢复 ID');
+  assert.ok(proc.includes('commitManifest(siteBucket, record, correlationId)'),
+    '清单发布阶段必须带 ID');
+  assert.ok(proc.includes("event: 'manifest.published'"), '必须有 publish 阶段日志');
+  assert.ok(recognition.includes('correlationId: corr'), '识别输入必须带 ID');
+  assert.ok(recognition.includes("event: 'index.published'"), '必须有 index 阶段日志');
+  assert.ok(store.includes('invalidationCallerReference(correlationId)'),
+    'CloudFront CallerReference 必须带 ID');
+  assert.ok(/invalidate\([^)]*\{[\s\S]{0,60}correlationId/.test(proc),
+    '失效调用必须传入 correlationId');
+  assert.match(
+    correlation,
+    /metadata\['correlation-id'\][\s\S]{0,300}isValidCorrelationId\(candidate\)/,
+    '元数据 ID 必须先过格式校验才使用',
+  );
+});
+
 console.log(`--- 全部通过：${checks} 项断言 ---`);
