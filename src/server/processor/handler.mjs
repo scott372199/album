@@ -12,6 +12,7 @@ import {
 import {
   sha256, decodeKey, decodeAlbum, kindOf, parseIso, resolveYearMonth, tagsFor,
 } from './derive.mjs';
+import { recognizeGrid, publishRecognition } from './recognition.mjs';
 
 /**
  * 处理函数：源桶 `incoming/` 下的新对象 → 站点桶的产物 + 清单条目 → 删源图。
@@ -220,10 +221,12 @@ async function processObject({ bucket, key }) {
     }
 
     let record;
+    let gridBuffer = null; // 脱敏派生图：识别输入（T-08），视频无 grid 不识别
     if (kind === 'image') {
       const image = await processImage(buffer);
       await writeArtifacts(siteBucket, id, image.buffers);
       record = imageRecord({ id, album, image, meta });
+      gridBuffer = image.buffers['grid.webp'] || null;
     } else {
       const clipPath = path.join(workDir, 'clip.mp4');
       const video = await processVideo({ srcPath: sourceFile, tmpDir: workDir, clipPath });
@@ -236,6 +239,7 @@ async function processObject({ bucket, key }) {
         record = imageRecord({
           id, album, image, meta, videoShotAt: video.videoShotAt,
         });
+        gridBuffer = image.buffers['grid.webp'] || null;
       } else {
         await writeArtifacts(siteBucket, id, {
           'clip.mp4': video.clip,
@@ -248,11 +252,42 @@ async function processObject({ bucket, key }) {
     const { rev } = await commitManifest(siteBucket, record);
     const versionKey = env('VERSION_KEY', 'data/version.json');
 
+    // 识别 + 索引发布：best-effort，任何失败只留日志，绝不阻塞照片上线
+    // （FR-02、硬性不变量 2）。recognition=null 时索引仍重建，
+    // 新照片以 source=manifest 条目入索引，基础筛选可用。
+    // Recognition + index publish: best-effort, failures only log and never
+    // block publication (FR-02, hard invariant 2). With recognition=null the
+    // index still rebuilds so the photo enters as a source=manifest entry.
+    const startedAt = Date.now();
+    let recognition = null;
+    if (gridBuffer) {
+      try {
+        recognition = await recognizeGrid({ assetId: id, gridBuffer });
+      } catch (err) {
+        log.warn('process.recognition_failed', { id, ...errorFields(err) });
+      }
+    }
+    let published = { rev: null, items: 0, recognized: 0 };
+    try {
+      published = await publishRecognition({ siteBucket, assetId: id, recognition });
+    } catch (err) {
+      log.warn('process.index_publish_failed', { id, ...errorFields(err) });
+    }
+    log.info('process.recognition', {
+      id,
+      outcome: recognition ? 'recognized' : 'unlabeled',
+      rev: published.rev ? published.rev.slice(0, 12) : null,
+      recognized: published.recognized ?? 0,
+      durationMs: Date.now() - startedAt,
+    });
+
     // 失效失败不该让整次处理重来：version.json 本身就是 no-store，
     // 最坏情况是极少数边缘节点多缓存几秒。
     try {
       const distributionId = env('DISTRIBUTION_ID', '');
-      if (distributionId) await store.invalidate(distributionId, [`/${versionKey}`]);
+      if (distributionId) {
+        await store.invalidate(distributionId, [`/${versionKey}`, '/data/search-index*']);
+      }
     } catch (err) {
       log.warn('process.invalidate_failed', errorFields(err));
     }

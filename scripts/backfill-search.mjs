@@ -20,8 +20,9 @@
  * 本脚本只能由仓库主人本机执行（使用本机 IAM 凭证，非 Lambda 角色）。
  *
  * 用法 / Usage:
- *   node scripts/backfill-search.mjs [--bucket chenyouyi] [--distribution E2UWEFMOKOQEES]
- *       [--region ap-southeast-1] [--dry-run]
+ *   ALBUM_SITE_BUCKET=<站点桶> ALBUM_DISTRIBUTION_ID=<分发ID> \
+ *     node scripts/backfill-search.mjs [--region ap-southeast-1] [--dry-run]
+ *   （桶名与分发 ID 也可用 --bucket / --distribution 覆盖）
  */
 import { createHash } from 'node:crypto';
 import process from 'node:process';
@@ -48,8 +49,12 @@ function arg(name, fallback) {
 }
 const hasFlag = (name) => process.argv.includes(`--${name}`);
 
-const bucket = arg('bucket', 'chenyouyi');
-const distributionId = arg('distribution', 'E2UWEFMOKOQEES');
+const bucket = arg('bucket', process.env.ALBUM_SITE_BUCKET || '');
+const distributionId = arg('distribution', process.env.ALBUM_DISTRIBUTION_ID || '');
+if (!bucket || !distributionId) {
+  console.error('缺少 ALBUM_SITE_BUCKET / ALBUM_DISTRIBUTION_ID（或 --bucket / --distribution）');
+  process.exit(1);
+}
 const dryRun = hasFlag('dry-run');
 const concurrency = Number(arg('concurrency', '3'));
 

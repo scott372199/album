@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { once } from 'node:events';
 import {
-  S3Client, GetObjectCommand, HeadObjectCommand, PutObjectCommand, DeleteObjectCommand,
+  S3Client, GetObjectCommand, HeadObjectCommand, PutObjectCommand,
+  DeleteObjectCommand, ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
 import { isPreconditionFailed } from '../lib/retry.mjs';
@@ -171,6 +172,31 @@ export async function readJson(bucket, key) {
 
 export async function remove(bucket, key) {
   await s3().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+}
+
+/**
+ * 分页列出某前缀下的所有 key（ListObjectsV2 自动翻页）。
+ * maxKeys 是防御性上限：超过即停，避免一次失控调用把内存吃满。
+ *
+ * Lists every key under a prefix with automatic pagination. maxKeys is a
+ * defensive cap: stop rather than balloon memory on a runaway call.
+ */
+export async function listKeys(bucket, prefix, { maxKeys = 10000 } = {}) {
+  const keys = [];
+  let token;
+  do {
+    const response = await s3().send(new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+      ContinuationToken: token,
+    }));
+    for (const item of response.Contents || []) {
+      if (item?.Key) keys.push(item.Key);
+      if (keys.length >= maxKeys) return keys;
+    }
+    token = response.IsTruncated ? response.NextContinuationToken : null;
+  } while (token);
+  return keys;
 }
 
 export async function invalidate(distributionId, paths) {
