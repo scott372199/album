@@ -280,9 +280,28 @@ absent. Dispatch it once before acceptance if the snapshot is older than the
 `cx.chenyouyi.top`，Deployed / Enabled。`cloud` profile 在容器日志中确认生效，
 `/actuator/health` 返回 `{"status":"UP"}`。
 
-验收登录用演示账户 `admin` / `album-mgmt-demo`（云端未注入 `MGMT_DEMO_*` 覆盖）。
-**T-31 安全待办**：公网暴露默认弱口令，且日志已出现公网扫描器探测
-`META-INF/.../pom.properties` 的 WARN；验收前不擅自更改口令，否则用户无法登录。
+用户随后把 `cx` CNAME 指向 `d7shs93wdjmbm.cloudfront.net`，权威 NS 与递归解析
+均生效，`https://cx.chenyouyi.top/actuator/health` 返回 `UP`。
+
+**登录凭据已加固（album-infra PR #18，第 8 次点火 `43606180654`）**：原先 README
+公开的演示共享口令、默认 scrypt pepper 与留空的 `MGMT_JWT_SECRET` 全部替换为随机
+强值，经 GitHub secret → `TF_VAR` → SSM SecureString → ECS `secret{}` 按 ARN 注入；
+执行角色补最小权限 SSM 读取策略，`check.mjs` 第 97 条断言禁止公开默认值与明文环境变量。
+**口令只在对话中单独告知用户，不写入任何仓库或文档**；验收账户为 `admin`。
+部署收敛后复验：旧口令 401、新口令 200（role=admin）。
+
+**踩坑**：ECS Express 滚动部署约 9 分钟内新旧 task 并存，此时测登录会得到
+「旧口令 200、新口令 401」的假阴性；必须等 `describe-service-deployments` 变
+`SUCCESSFUL`、只剩一个 activeConfiguration 再验。
+
+**七域预检**（新口令登录、直连 origin）：`resources` aws/6、状态 `active`（#6 不再误报
+`planned`）、`logs` aws/15、`billing` aws/1、`cicd/workflows` aws/24、
+`security` aws/5 `enforced`、`audit` fixture/8（本服务自身状态）；`metrics` 因 24h 内
+无 Lambda 调用样本诚实降级为 `unavailable`，按既有 E2E 上传取证流程可产生指标。
+
+**T-31 剩余待办**：日志已见公网扫描器探测 `META-INF/.../pom.properties`；且 ECS
+Express 的 origin 域名可绕过 CloudFront 公网直连（预检即借此完成 POST 登录验证），
+需评估是否加 Origin 自定义头或源站访问控制。
 
 *English*
 
@@ -291,11 +310,32 @@ ignition could reveal (see the bilingual table above). Run seven (`43603205911`,
 4m26s) applied all four layers: 0 / 0 / 0 changes and **1 added** in 20-edge.
 The new distribution `E2VQ7PHXOKOIVY` (`d7shs93wdjmbm.cloudfront.net`) carries the
 `cx.chenyouyi.top` alias and is Deployed / Enabled; container logs confirm the
-`cloud` profile and `/actuator/health` returns `{"status":"UP"}`. Acceptance login
-uses the demo account `admin` / `album-mgmt-demo` (no cloud override). **T-31
-security follow-up**: a default weak password is exposed publicly and the logs
-already show internet scanners probing `META-INF/.../pom.properties`; the password
-is deliberately left unchanged until acceptance so the user can still sign in.*
+`cloud` profile and `/actuator/health` returns `{"status":"UP"}` after the user
+pointed the CNAME at the new domain.
+
+**Credentials were hardened (PR #18, eighth ignition `43606180654`)**: the public
+demo shared key, default scrypt pepper and empty `MGMT_JWT_SECRET` were replaced
+with random strong values flowing from GitHub secrets through `TF_VAR` into SSM
+SecureString parameters and into the container via ECS `secret{}` ARNs. A
+least-privilege SSM read policy was added to the execution role and assertion #97
+forbids public defaults and plaintext environment variables. **The password is
+shared with the user only in conversation, never in a repository or document**;
+the acceptance account is `admin`. After the deployment converged, the old
+password returns 401 and the new one 200 (role=admin).
+
+**Pitfall**: ECS Express rolling deployments keep old and new tasks side by side
+for about nine minutes; testing login during that window produces a false negative
+(old 200 / new 401). Wait until `describe-service-deployments` reports
+`SUCCESSFUL` and only one active configuration remains.
+
+A seven-domain pre-flight with the new password (direct to the origin) returned
+`aws` sources for resources (6, status `active`, no more false `planned`), logs
+(15), billing (1), CI/CD (24) and security (5, `enforced`); audit is `fixture`/8 by
+design, and metrics honestly reports `unavailable` because there are no Lambda
+invocations in the 24h window. **Remaining T-31 work**: internet scanners are
+already probing `META-INF/.../pom.properties`, and the ECS Express origin can be
+reached directly from the internet, bypassing CloudFront — consider a custom
+origin header or origin access control.*
 
 ## 5. 验收触发条件 / Acceptance trigger
 
