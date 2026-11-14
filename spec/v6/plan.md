@@ -1,8 +1,10 @@
 # 个人相册 · 第六版实施方案 / Personal Album · Version 6 Plan
 
 > Spec-Driven Development · 阶段 2 / 5（Plan） / Stage 2 / 5 (Plan)
-> 状态：**待确认** / Status: **Draft for confirmation**
+> 状态：**已确认** / Status: **Confirmed**
 > 日期 / Date: 2026-11-14
+> 确认 / Confirmed: 2026-11-14，C-1 ~ C-6 六处技术修正全部采纳；已回写 `spec.md` §11。
+> *Confirmed 2026-11-14: all six corrections adopted and written back to spec.md §11.*
 > 上游 / Upstream: [`spec.md`](./spec.md)（**已确认**，23 条需求 + 10 条硬性不变量）
 > 基线 / Baseline: `album@main` @ `a09314e`
 > 本文只回答「怎么做」。做什么、验收口径、不做什么，一律以 `spec.md` 为准，本文不重复、不改写。
@@ -47,9 +49,9 @@
 
 ## 3. 对 Spec 的 6 处技术修正 / Corrections to the spec
 
-读完代码后发现 spec 的假设有 5 处需要调整，1 处是 spec 自身前后冲突。**全部需要你点头，我不擅自改已确认的 Spec。**
+读完代码后发现 spec 的假设有 5 处需要调整，1 处是 spec 自身前后冲突。**2026-11-14 全部采纳，并已回写进 `spec.md` §11 修订记录。**
 
-| # | Spec 原文 | 实测 | 建议修正 | 影响 |
+| # | Spec 原文 | 实测 | 结论（已采纳） | 影响 |
 | --- | --- | --- | --- | --- |
 | **C-1** | §5「新增 `labels[].zh`，`INDEX_VERSION` bump」 | `LABEL_FIELDS = ['term','zh','kind','confidence']` 已含 `zh`；`rekognition.mjs:105` 已在填 `zh: ZH_LABEL_DICT[term] \|\| zhForTerm(term)`；前端 `sanitizeIndex` 已读 `zh` | **不需要 bump，不改 `ITEM_FIELDS`**。契约保持 `v5.1.0`，只是 `zh` 的覆盖率从 17 个词扩到 ≈380 | 少一次版本迁移，V5 索引可直接被 V6 读 |
 | **C-2** | §5「新增 `weakLabels`（55–75 只做检索）」 | `DETECT_PARAMS.minConfidence = 70`，55–70 区间的标签根本不会产出 | **取消两级标签**，单层 `labels` 够用 | 省掉一次字段扩容与召回逻辑，FR-04 的验收不变 |
@@ -296,4 +298,4 @@ Spec §8 的每一条都要有可执行的证据，落法如下：
 
 ## 10. 下一步 / Next step
 
-你确认本文（尤其 §3 的 6 处修正、C-5 的上传入口移位）后，我写 `spec/v6/tasks.md`：按 §7 的依赖图给出 28 个任务的执行顺序、每个任务的改动文件清单、以及「完成」的判定（记住：`tasks.md` 打勾只代表代码入库，验收只看 §9 的矩阵）。
+本文已于 2026-11-14 确认（C-1~C-6 全部采纳）。任务分解见 [`tasks.md`](./tasks.md)：28 个任务、依赖图、每条的可执行判定命令、以及 4 项阻塞（其中 B1 是唯一的外部依赖——需要一次只读拉取生产索引样本，否则 T-03/T-04 的词表只能靠猜）。
