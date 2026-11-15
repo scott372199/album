@@ -17,16 +17,10 @@
 
   <nav class="site-nav" aria-label="主导航">
     <div class="nav-inner">
-      <a class="brand" href="#top">__TITLE__</a>
-      <div class="tabs" role="tablist" aria-label="视图">
-        <button type="button" class="tab is-active" data-view="timeline" role="tab" aria-selected="true">时间轴</button>
-        <button type="button" class="tab" data-view="album" role="tab" aria-selected="false">相册</button>
-      </div>
+      <!-- 品牌是按钮不是链接：删掉「时间轴」tab 之后，它是回时间流的唯一出口 -->
+      <button type="button" class="brand" id="brand">__TITLE__</button>
       <div class="nav-actions">
-        <button type="button" class="nav-action" id="open-story">故事</button>
-        <button type="button" class="nav-action" id="open-wall">照片墙</button>
-        <button type="button" class="nav-action" id="open-wander">随便翻翻</button>
-        <button type="button" class="nav-action" id="open-upload" hidden>上传</button>
+        <button type="button" class="nav-action" id="nav-albums">相册</button>
         <div class="nav-search-wrap" id="search-wrap">
           <label class="nav-search">
             <span class="sr-only">搜索照片</span>
@@ -69,14 +63,6 @@
   </header>
 
   <main>
-    <section class="featured" id="featured" hidden aria-label="精选">
-      <div class="section-head">
-        <p class="section-kicker">SELECTED</p>
-        <h2 class="section-title">精选</h2>
-      </div>
-      <div class="featured-stream" id="featured-stream"></div>
-    </section>
-
     <section class="catalog" id="catalog">
       <div class="section-head section-head--row">
         <div>
@@ -129,24 +115,6 @@
       <div class="album-grid" id="album-grid"></div>
     </section>
 
-    <section class="cta section--dark" id="story-cta">
-      <div class="cta-inner">
-        <p class="section-kicker section-kicker--dark">STORY</p>
-        <h2 class="cta-title">让它自己讲一遍。</h2>
-        <p class="cta-text">按年份分成章节，配上缓慢的推近与转场，像手机相册里的「回忆」。</p>
-        <button type="button" class="cta-button" id="story-cta-button">播放故事</button>
-      </div>
-    </section>
-
-    <section class="cta section--dark" id="wall-cta">
-      <div class="cta-inner">
-        <p class="section-kicker section-kicker--dark">PHOTO WALL</p>
-        <h2 class="cta-title">放在桌上，让它一直放。</h2>
-        <p class="cta-text">全屏轮播、屏幕常亮、夜里自动变暗。适合插着电的平板。</p>
-        <button type="button" class="cta-button" id="wall-cta-button">进入照片墙</button>
-      </div>
-    </section>
-
     <section class="stats section--dark" aria-label="统计">
       <div class="stats-inner">
         <div class="stat"><strong id="stat-photos">0</strong><span>张照片</span></div>
@@ -157,6 +125,12 @@
   </main>
 
   <footer class="site-footer section--dark">
+    <!-- 这些入口原来在导航里或大块 CTA 里；导航瘦到三项后，它们落到页脚 -->
+    <div class="footer-actions" id="footer-actions">
+      <button type="button" class="footer-action" id="open-wall">照片墙</button>
+      <button type="button" class="footer-action" id="open-wander">随便翻翻</button>
+      <button type="button" class="footer-action" id="open-upload" hidden>上传</button>
+    </div>
     <p id="footer-meta"></p>
     <p class="footer-note">照片与视频已剥离定位与设备信息</p>
   </footer>

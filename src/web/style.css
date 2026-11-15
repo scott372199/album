@@ -149,7 +149,12 @@ h1, h2, h3, p { margin: 0; }
   gap: 30px;
 }
 
+/* 品牌是按钮：清掉按钮默认样式，视觉与原来的链接完全一致 */
 .brand {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.02em;
@@ -157,23 +162,13 @@ h1, h2, h3, p { margin: 0; }
   text-decoration: none;
   white-space: nowrap;
   flex: 0 0 auto;
-}
-
-.tabs { display: flex; gap: 22px; flex: 0 0 auto; }
-
-.tab {
-  padding: 4px 0;
-  border: 0;
-  border-bottom: 1.5px solid transparent;
-  background: none;
-  font-size: 13px;
-  letter-spacing: 0.01em;
-  color: var(--ink-2);
   cursor: pointer;
-  transition: color 0.24s var(--ease), border-color 0.24s var(--ease);
 }
-.tab:hover { color: var(--ink); }
-.tab.is-active { color: var(--ink); border-bottom-color: var(--ink); }
+
+.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.nav-action[aria-pressed="true"] { color: var(--ink); }
+
+
 
 .nav-actions {
   margin-left: auto;
@@ -246,6 +241,9 @@ h1, h2, h3, p { margin: 0; }
   position: relative;
   background: var(--paper);
 }
+
+/* 搜索态要藏掉 hero；显式写一条，不依赖浏览器对 [hidden] 的默认样式 */
+.hero[hidden] { display: none; }
 
 .hero-stage {
   position: relative;
@@ -1990,3 +1988,49 @@ body.is-empty .hero-cta { display: none; }
 .anchor-reset[hidden] { display: none; }
 .anchor-reset:hover { border-color: var(--ink); }
 .anchor-reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- 年份故事入口 / 页脚入口（T-10） ---------- */
+
+.year-story {
+  display: block;
+  margin: 26px auto 0;
+  padding: 9px 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: color 0.24s var(--ease), border-color 0.24s var(--ease);
+}
+
+.year-story:hover { color: var(--ink); border-color: var(--ink); }
+.year-story:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 22px;
+  margin-bottom: 22px;
+}
+
+.footer-actions[hidden] { display: none; }
+
+.footer-action {
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--night-ink);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.24s var(--ease);
+}
+
+.footer-action:hover { opacity: 1; }
+.footer-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }

@@ -3,7 +3,7 @@ import {
   normalizeDensity, DENSITY_KEY,
 } from './state.js';
 import { loadManifest, buildIndex, resolveManifest, loadSearchIndex } from './data.js';
-import { createCatalog, renderFeatured, renderAlbums } from './gallery.js';
+import { createCatalog, renderAlbums } from './gallery.js';
 import { initLightbox, openLightbox, closeLightbox, isLightboxOpen } from './lightbox.js';
 import { initStory, openStory, closeStory, isStoryOpen } from './story.js';
 import { initWall, enterWall, exitWall, isWallOpen } from './wall.js';
@@ -233,27 +233,12 @@ function renderStats() {
   el('footer-meta').textContent = `${photos.length} 张 · ${albums.length} 个相册 · ${formatSpan(photos)}`;
 }
 
-function featuredPhotos() {
-  const { photos } = ctx.index;
-  const picked = photos.filter((photo) => photo.featured);
-  // 标记不足 3 条时用最新照片补齐，避免「精选」只剩一张
-  if (picked.length >= 3) return picked.slice(0, 4);
-  const used = new Set(picked.map((photo) => photo.id));
-  const filler = photos.filter((photo) => !used.has(photo.id));
-  return [...picked, ...filler].slice(0, Math.min(3, photos.length));
-}
-
 function renderSite() {
   // 数据驱动的多章节 hero：无配置自动生成，首屏同步可见。
   // Data-driven multi-section hero: auto-generated when unconfigured, first
   // paint is synchronous so the hero is never blank.
   ctx.hero = initHero(state.data, ctx.index.byId);
   renderStats();
-
-  const featured = featuredPhotos();
-  const host = el('featured-stream');
-  const hasFeatured = renderFeatured(host, featured, { onOpen: (photo) => openById(photo.id) });
-  el('featured').hidden = !hasFeatured;
 
   renderAlbums(el('album-grid'), ctx.index.albums, {
     photos: ctx.index.photos,
@@ -297,29 +282,40 @@ function syncControlValues() {
 
 /* ---------- 渲染 ---------- */
 
+/**
+ * 视图切换 / View switch.
+ *
+ * 页面长相由三件事同时决定：视图（时间流 / 相册）、是否在搜索、是否停在相册根目录。
+ * 搜索态把 hero 与页脚入口藏起来，让结果直接顶到导航下面——搜索时用户只想看结果，
+ * 不想先滚过一屏大图。
+ *
+ * The page's shape is decided by three things at once: the view, whether a search
+ * is active, and whether we are at the album root.
+ */
 function applyView() {
   const isAlbumRoot = state.view === 'album' && !state.album;
+  const searching = state.mode === 'search';
+
   el('albums-section').hidden = !isAlbumRoot;
   el('catalog').hidden = isAlbumRoot;
   el('back').hidden = !(state.view === 'album' && state.album);
-  el('catalog-title').textContent = state.album || '全部照片';
+  el('catalog-title').textContent = searching ? '搜索结果' : (state.album || '全部照片');
 
-  for (const tab of document.querySelectorAll('.tab')) {
-    const active = tab.dataset.view === state.view;
-    tab.classList.toggle('is-active', active);
-    tab.setAttribute('aria-selected', String(active));
-  }
+  el('top').hidden = searching || isAlbumRoot;
+  el('footer-actions').hidden = searching;
 
-  if (isAlbumRoot) {
-    el('featured').hidden = true;
-    return;
-  }
-  el('featured').hidden = !featuredPhotos().length;
+  const albums = el('nav-albums');
+  albums.setAttribute('aria-pressed', String(state.view === 'album'));
+  albums.classList.toggle('is-active', state.view === 'album' && !searching);
 }
 
 function refresh() {
   const { items, meta } = computeFiltered();
   state.filtered = items;
+  // 搜索态复用既有的 mode 键，不新增 hash 键；故事 / 照片墙覆盖层优先，不抢它们的 mode
+  if (state.mode !== 'story' && state.mode !== 'wall') {
+    state.mode = String(state.q || '').trim() ? 'search' : null;
+  }
   const hasFilter = Boolean(state.tag || state.year || state.month || state.q);
   el('photo-count').textContent = hasFilter
     ? `${state.filtered.length} / ${ctx.index.photos.length} 张`
@@ -391,7 +387,8 @@ async function applyFromHash({ initial = false } = {}) {
   } else if (state.mode === 'wall' && !isWallOpen()) {
     refresh();
     launchWall();
-  } else if (!state.mode) {
+  } else if (!state.mode || state.mode === 'search') {
+    // 搜索态也算「没有覆盖层」：它只是把 hero 藏起来，仍然要重新筛选 + 渲染
     if (isStoryOpen()) closeStory();
     if (isWallOpen()) exitWall();
     refresh();
@@ -421,9 +418,19 @@ function startStory(scope) {
   openStory(scope, { pace: state.pace, onClose: leaveMode });
 }
 
-function enterStoryMode(push = true) {
-  const scope = state.filtered.length ? state.filtered : ctx.index.photos;
-  if (!scope.length) return;
+/**
+ * 进故事模式。`year` 给定时只播这一年——这是删掉「故事」tab 之后，
+ * 故事唯一的入口，所以它必须能接受一个范围，而不是永远播全部。
+ */
+function enterStoryMode({ year = null, push = true } = {}) {
+  const all = ctx.index.photos;
+  const scope = year
+    ? all.filter((photo) => photo.year === Number(year))
+    : (state.filtered.length ? state.filtered : all);
+  if (!scope.length) {
+    if (year) toast(`${year} 年没有照片`);
+    return;
+  }
   ctx.scrollBeforeMode = window.scrollY;
   startStory(scope);
   if (push) syncUrl(true);
@@ -483,14 +490,22 @@ function enterWander() {
 /* ---------- 事件 ---------- */
 
 function wire() {
-  for (const tab of document.querySelectorAll('.tab')) {
-    tab.addEventListener('click', () => {
-      state.view = tab.dataset.view;
-      if (state.view === 'timeline') state.album = '';
-      refresh();
-      syncUrl(true);
-    });
-  }
+  // 品牌 = 回时间流：删掉「时间轴」tab 之后，进了相册根目录没有别的路可回来
+  el('brand').addEventListener('click', () => {
+    state.view = 'timeline';
+    state.album = '';
+    state.q = '';
+    refresh();
+    syncUrl(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  el('nav-albums').addEventListener('click', () => {
+    state.view = state.view === 'album' ? 'timeline' : 'album';
+    if (state.view === 'timeline') state.album = '';
+    refresh();
+    syncUrl(true);
+  });
 
   el('back').addEventListener('click', () => {
     state.album = '';
@@ -523,11 +538,14 @@ function wire() {
     ctx.catalog.setDensity(value);
   });
 
-  el('open-story').addEventListener('click', () => enterStoryMode());
-  el('story-cta-button').addEventListener('click', () => enterStoryMode());
+  // 每年分组末尾的「用故事播放这一年」：事件委托，免得每建一个年份就挂一个监听
+  el('content').addEventListener('click', (event) => {
+    const button = event.target.closest?.('[data-story-year]');
+    if (!button) return;
+    enterStoryMode({ year: Number(button.dataset.storyYear) });
+  });
   el('open-wander').addEventListener('click', () => enterWander());
   el('open-wall').addEventListener('click', () => launchWall());
-  el('wall-cta-button').addEventListener('click', () => launchWall());
 
   const more = new IntersectionObserver((entries) => {
     if (!entries.some((entry) => entry.isIntersecting)) return;

@@ -65,7 +65,8 @@ export function parseHashString(raw, snapshot) {
   const view = params.get('view');
   if (view === 'album' || view === 'timeline') snapshot.view = view;
   const mode = params.get('mode');
-  if (mode === 'story' || mode === 'wall') snapshot.mode = mode;
+  // 'search' 复用既有 mode 键：搜索态是视图状态，不是新的一层覆盖物，也不新增 hash 键
+  if (mode === 'story' || mode === 'wall' || mode === 'search') snapshot.mode = mode;
   const pace = params.get('pace');
   if (pace === 'slow' || pace === 'normal' || pace === 'fast') snapshot.pace = pace;
 

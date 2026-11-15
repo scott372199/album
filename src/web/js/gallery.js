@@ -310,6 +310,15 @@ function createYearSection(plan, { byId, onOpen }) {
   }
 
   section.appendChild(rowsHost);
+
+  // 删掉「故事」tab 之后，故事只从年份分组进入——所以按钮必须带上年份
+  const storyButton = document.createElement('button');
+  storyButton.type = 'button';
+  storyButton.className = 'year-story';
+  storyButton.dataset.storyYear = String(plan.year);
+  storyButton.textContent = `用故事播放 ${plan.year} 年`;
+  section.appendChild(storyButton);
+
   return section;
 }
 
