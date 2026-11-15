@@ -38,6 +38,8 @@ import {
 } from './upload-state.js';
 
 const MAX_BATCH = 20;
+/** 两个选择器：照片与视频分开，各自走对应的系统选择器（见 index.html 注释） */
+const PICKER_IDS = ['upload-files', 'upload-videos'];
 /** 3 次重试的等待时间（毫秒），总补偿 ≈ 13 秒，压在预签名 15 分钟有效期之内 */
 const RETRY_DELAYS = [1200, 3500, 8000];
 const TOKEN_KEY = 'album.token';
@@ -808,12 +810,17 @@ async function goSee() {
 
 /* ---------------- 装配 ---------------- */
 
+/** 清空两个选择器。只能在 canResetPicker 为真时调用：它会让 File 引用作废。 */
+function resetPickers() {
+  for (const id of PICKER_IDS) el(id).value = '';
+}
+
 function open() {
   el('upload').hidden = false;
   document.body.classList.add('is-uploading');
   // 面板重开时才是清空选择器的安全时机：此时没有批次在跑、也没有留着重试的条目，
   // 清掉之后「再选同一批文件」也能重新触发 change。
-  if (canResetPicker({ busy: state.busy, failed: state.failed })) el('upload-files').value = '';
+  if (canResetPicker({ busy: state.busy, failed: state.failed })) resetPickers();
   if (tokenValid(state.token)) showPicker();
   else showLogin('');
 }
@@ -866,12 +873,16 @@ export function initUpload({ getLibrary } = {}) {
     el('upload-suggest').hidden = true;
   });
 
-  el('upload-files').addEventListener('change', (event) => {
-    // 不能在这里清空 input：`value = ''` 会让 Chromium 立刻作废这批 File 的引用，
-    // 之后每次读取都抛 NotReadableError（线上选 22 张只成功 3 张就是这个）。
+  // 两个选择器共用一个处理器。注意处理器里**不能**清空 input：
+  // `value = ''` 会让 Chromium 立刻作废这批 File 的引用，之后每次读取都抛
+  // NotReadableError（线上选 22 张只成功 3 张就是这么来的）。清空交给 resetPickers。
+  const onPick = (event) => {
     const files = [...(event.target.files || [])];
     if (files.length) uploadFiles(files);
-  });
+  };
+
+  el('upload-files').addEventListener('change', onPick);
+  el('upload-videos').addEventListener('change', onPick);
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !el('upload').hidden) close();
   });

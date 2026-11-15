@@ -77,3 +77,24 @@ test('首屏图仍在模板里，且没有被改成脚本注入', () => {
   assert.match(html, /<img[^>]+id="hero-media"[^>]+src="data\/hero\.webp"/, '首屏图必须是静态的，LCP 不等脚本');
   assert.match(html, /class="hero"[^>]*id="top"|id="top"[^>]*class="hero"/, 'hero 容器 id 必须是 top（applyView 靠它隐藏）');
 });
+
+test('照片与视频是两个入口，各自只给一种 accept', () => {
+  // accept 同时给 image/* 和 video/* 时，Android Chrome 会退回文件管理器，
+  // 相册名一个都不显示（线上验收「找不到自定义相册」）；单类型才走系统相册选择器。
+  const photo = html.match(/<input id="upload-files"[^>]*>/);
+  const video = html.match(/<input id="upload-videos"[^>]*>/);
+  assert.ok(photo, '缺少照片选择器');
+  assert.ok(video, '缺少视频选择器');
+
+  assert.match(photo[0], /accept="image\/\*"/, '照片入口只能接受 image/*');
+  assert.match(video[0], /accept="video\/\*"/, '视频入口只能接受 video/*');
+
+  for (const input of [photo[0], video[0]]) {
+    assert.match(input, /multiple/, '两个入口都要支持多选');
+    assert.match(input, /hidden/, '真身必须隐藏，点的是外面那个 label');
+  }
+
+  // 两个 label 并排，一次最多 20 个的提示只出现一次
+  assert.equal(html.includes('class="upload-pick-row"'), true, '两个入口要并排在一行里');
+  assert.equal(countOf('一次最多 20 个'), 1);
+});

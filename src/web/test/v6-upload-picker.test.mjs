@@ -71,13 +71,13 @@ test('canResetPicker：闲且没有待重试条目时才允许清', () => {
   assert.equal(canResetPicker({}), true);
 });
 
-test('源码守卫：change 处理器里不许同步清空选择器', async () => {
+test('源码守卫：选择器的 change 处理器里不许同步清空', async () => {
   const source = await readFile(new URL('../js/upload.js', import.meta.url), 'utf8');
-  const start = source.indexOf("el('upload-files').addEventListener('change'");
-  assert.ok(start > 0, '找不到 change 监听，用例需要跟着代码更新');
-  const end = source.indexOf('});', start);
+  const start = source.indexOf('const onPick = (event) =>');
+  assert.ok(start > 0, '找不到 onPick，用例需要跟着代码更新');
+  const end = source.indexOf('\n  };', start);
   const handler = source.slice(start, end);
-  // 注释里会提到这条规则本身（"input.value = ''"），先剔掉整行注释再扫
+  // 注释里会提到这条规则本身（"value = ''"），先剔掉整行注释再扫
   const code = handler
     .split('\n')
     .filter((line) => !line.trim().startsWith('//'))
@@ -88,5 +88,29 @@ test('源码守卫：change 处理器里不许同步清空选择器', async () =
     false,
     '清空 input 会作废 File 引用（线上事故根因），清空只能走 canResetPicker',
   );
-  assert.ok(handler.includes('uploadFiles(files)'), '处理器仍然要把文件交给 uploadFiles');
+  assert.ok(code.includes('uploadFiles(files)'), '处理器仍然要把文件交给 uploadFiles');
+});
+
+test('源码守卫：两个选择器都绑到同一个 onPick，且清空只发生在 resetPickers 里', async () => {
+  const source = await readFile(new URL('../js/upload.js', import.meta.url), 'utf8');
+
+  for (const id of ['upload-files', 'upload-videos']) {
+    assert.ok(
+      source.includes(`el('${id}').addEventListener('change', onPick)`),
+      `${id} 必须绑到 onPick，否则那个入口点了没反应`,
+    );
+  }
+
+  // 清空只能发生在 resetPickers 的循环里：不许对着某个 id 硬写
+  const hardCoded = source
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => !line.startsWith('//'))
+    .filter((line) => /(upload-files|upload-videos)'\)\.value\s*=\s*''/.test(line));
+  assert.deepEqual(hardCoded, [], '不要对着某个选择器 id 硬写清空，统一走 resetPickers');
+  assert.match(
+    source,
+    /for \(const id of PICKER_IDS\) el\(id\)\.value = '';/,
+    'resetPickers 必须遍历 PICKER_IDS，新增入口时才不会漏',
+  );
 });
