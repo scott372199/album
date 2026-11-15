@@ -723,6 +723,23 @@ function goBack() {
   return true;
 }
 
+/**
+ * 离线可读（V6 T-28）。只在 https 下注册：file:// 与非 localhost 的明文 http
+ * 都不是安全上下文，注册会直接抛错；本地预览也不该被一个 SW 缓存住，否则改完
+ * 刷新看不到效果。失败一律静默——离线是加分项，不能挡住正常浏览。
+ *
+ * Registers only on https (a secure context), silently. Offline support is a
+ * bonus and must never block normal browsing; the local preview stays SW-free so
+ * a reload always shows the latest build.
+ */
+function registerOffline() {
+  if (!('serviceWorker' in navigator)) return;
+  if (location.protocol !== 'https:') return;
+  navigator.serviceWorker.register('sw.js', { scope: './' }).catch(() => {
+    /* 注册失败就当作没有离线能力，不打扰用户 */
+  });
+}
+
 /* ---------- 启动 ---------- */
 
 async function boot() {
@@ -797,6 +814,7 @@ async function boot() {
 
   fillFilters();
   renderSite();
+  registerOffline();
 
   // 年度页（T-24）：三个出口都回时间流，只是带的筛选不同——
   // 点月份带 year+month，点标签变成搜索，点「看这一年的照片」只带 year。

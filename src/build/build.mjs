@@ -377,6 +377,13 @@ async function main() {
     .replaceAll('__APP__', app.src);
   await writeFile(path.join(DIST, 'index.html'), html);
 
+  // Service Worker（V6 T-28）：必须落在桶根，作用域才是整站——
+  // 放进 assets/ 只能控制 assets/ 下的请求，导航请求根本轮不到它。
+  // 文件名不带哈希（浏览器更新 SW 时会绕开 HTTP 缓存），所以发布时按不缓存处理。
+  // The service worker must sit at the bucket root to get site-wide scope; a
+  // hashed name is unnecessary because SW update checks bypass the HTTP cache.
+  await copyFile(path.join(WEB, 'sw.js'), path.join(DIST, 'sw.js'));
+
   // 首屏静态图（V6 T-11）：HTML 里写死的固定名 data/hero.webp。
   // 选图逻辑复用 hero-data.js 的注册表——manifest.heroSections 的第一个章节
   // 就是首屏那张；配置为空时它退回 manifest.hero，与 resolveHero 同源。

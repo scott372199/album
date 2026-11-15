@@ -179,6 +179,7 @@ function show(index) {
   const r = cache();
 
   r.image.hidden = false;
+  r.image.dataset.fallback = '';
   r.video.hidden = true;
   r.video.pause();
   r.video.removeAttribute('src');
@@ -290,6 +291,21 @@ export function initLightbox(hooksIn = {}) {
   });
 
   r.image.addEventListener('dblclick', () => setZoom(state.lightbox.zoom > 1 ? 1 : 2));
+
+  /**
+   * 离线降级（T-28）：Service Worker 只缓存 thumb，view 拿不到时这里会走到。
+   * 退到缩略图并**说明原因**——默默显示一张模糊的小图，用户会以为是画质坏了。
+   * `dataset.fallback` 先写再看：缩略图也失败时不会无限重试。
+   */
+  r.image.addEventListener('error', () => {
+    const photo = current();
+    if (!photo || r.image.dataset.fallback === photo.id) return;
+    const thumb = photo.thumb || photo.poster || '';
+    if (!thumb) return;
+    r.image.dataset.fallback = photo.id;
+    r.image.src = thumb;
+    r.meta.textContent = `${r.meta.textContent} · 离线，只有缩略图`;
+  });
 
   // 缩放后的拖动平移
   let dragging = null;

@@ -625,11 +625,31 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 
 ---
 
-### T-28 离线可读 〔F-02〕
+### T-28 离线可读 〔F-02〕 **done(代码，待真机验收)**
 
 **改动**：`+ src/web/sw.js`、`~ src/build/build.mjs`（注册）
 **做法**：只缓存 manifest + 近 3 个月 `thumb`；上限 ≤80 MB，超限「最近优先」淘汰；**不是 PWA**（不加 Web App Manifest、不做安装引导）；缓存 key 带 `rev`，`activate` 清非当前 rev。
 **完成判定**：断网后近 3 个月可浏览缩略图并开灯箱（大图缺失有降级提示）；`rev` 变更后已删照片 100% 不再出现（抽查）；未注册 SW 的浏览器行为不变。
+
+**实施结果**
+
+| 判据 | 实测 |
+| --- | --- |
+| 断网后近 3 个月可浏览缩略图 | ✅ 只缓存 `thumb.webp`；`activate` 时按清单预热近三个月（本月 + 前两个月） |
+| 大图缺失有降级提示 | ✅ 灯箱 `error` → 退到 `thumb`，说明行追加「离线，只有缩略图」 |
+| `rev` 变更后已删照片不再出现 | ✅ 缓存名带 rev，`activate` 清掉其它 rev 整套；清单本身网络优先，删掉的照片连条目都不在了 |
+| 上限 ≤80 MB、最近优先淘汰 | ✅ 超 80 MB 从最老插入的删到 85%；单测构造 90 MB 场景断言只删最老那条、最新那条必须留 |
+| 未注册 SW 的浏览器行为不变 | ✅ 只在 https 下注册，失败静默；SW 对跨域请求（预签名上传）一律放过 |
+
+**这张卡要动共享契约，需要你点头**：`.github/workflows/deploy-web.yml` 原来只发布 `assets/` 与 `index.html`，`sw.js` 根本不会被上传。而 Service Worker **必须落在桶根**才有全站作用域——放进 `assets/sw.js` 只能控制 `/assets/` 下的请求，导航请求轮不到它，离线就是空的。所以加了一段「上传 sw.js 到桶根 + 失效 `/sw.js`」（`no-cache, must-revalidate`）。这是本任务唯一碰发布流程的改动，请一并审。
+
+**为什么不是 PWA**：没有 Web App Manifest、没有 `beforeinstallprompt`、没有推送。单测直接断言源码里不许出现这几个词——离线能力和「装成应用」是两件事，混在一起就会有人开始问为什么没有图标。
+
+**为什么只缓存 thumb**：一张 `view.webp` 是 200–400 KB，一段 `clip.mp4` 能到 20 MB。缓存它们等于拿用户的存储做赌注，而离线场景真正需要的是「能翻、能认出来是哪张」。大图缺失时灯箱自己降级并说明，而不是显示一张糊图让人以为画质坏了。
+
+**测试怎么做到的**：`v6-offline.test.mjs` 用 `vm` 给一个假 `self` / `caches` / `fetch`，**直接加载要上线的那份 `sw.js`**，断言 `strategyFor` 的分流、`recentThumbs` 的取舍、`evict` 的淘汰顺序、`cacheName` 带 rev。写一份镜像实现来测只会测到镜像。
+
+**新增**：`+ src/web/sw.js`（约 250 行，含一个只给测试用的 `self.__albumSw` 钩子）、`+ src/web/test/v6-offline.test.mjs`（12 条）、`~ build.mjs`（产出 `dist/sw.js`）、`~ main.js`（https 下注册，失败静默）、`~ lightbox.js`（大图失败降级 + 提示）、`~ .github/workflows/deploy-web.yml`（**需审核**）。产物 111.0 → 116.1 KB gzip（26 个文件，预算 120 KB；SW 也计入了体积，没有开后门）。
 
 ---
 
