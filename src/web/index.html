@@ -43,20 +43,13 @@
       <button type="button" class="brand" id="brand">__TITLE__</button>
       <div class="nav-actions">
         <button type="button" class="nav-action" id="nav-albums">相册</button>
-        <div class="nav-search-wrap" id="search-wrap">
-          <label class="nav-search">
-            <span class="sr-only">搜索照片</span>
-            <input id="q" type="search" placeholder="搜索照片、年份、颜色" autocomplete="off" aria-label="搜索照片" aria-controls="search-panel">
-          </label>
-          <div class="search-panel" id="search-panel" hidden role="group" aria-label="搜索建议与筛选">
-            <p class="search-panel-title">试试这些</p>
-            <div class="search-suggestions" id="search-suggestions" role="listbox" aria-label="查询建议"></div>
-            <div class="search-chips" id="search-chips" role="group" aria-label="年份"></div>
-            <p class="search-status" id="search-status" role="status" aria-live="polite" hidden></p>
-            <p class="search-explain" id="search-explain" hidden></p>
-            <button type="button" class="search-retry" id="search-retry" hidden>重试载入</button>
-          </div>
-        </div>
+        <!-- 上传入口必须在导航里。放页脚的时候安卓上要滑过整条时间流才能看到，
+             等于没有；它只在有后端时才出现（upload.js 解除 hidden），所以不影响本地预览。 -->
+        <!-- Upload has to live in the nav: in the footer it sat below the whole
+             timeline, which on Android meant scrolling past every photo. It stays
+             hidden until upload.js finds an API base, so static previews are
+             unaffected. -->
+        <button type="button" class="nav-action nav-action--upload" id="open-upload" hidden>上传</button>
       </div>
     </div>
   </nav>
@@ -87,6 +80,29 @@
       </div>
     </a>
   </header>
+
+  <!-- 搜索在内容列里，不在导航右上角：输入框与结果必须挨着。
+       放导航里时，桌面端输入框在最右、结果在内容列，视线要横跨整屏。
+       The search field sits in the content column, not the nav's right corner,
+       so the input and the results it controls are adjacent on wide screens. -->
+  <section class="search-bar" id="search-bar" aria-label="搜索">
+    <div class="search-bar-inner">
+      <div class="nav-search-wrap" id="search-wrap">
+        <label class="nav-search">
+          <span class="sr-only">搜索照片</span>
+          <input id="q" type="search" placeholder="搜索照片、年份、颜色" autocomplete="off" aria-label="搜索照片" aria-controls="search-panel">
+        </label>
+        <div class="search-panel" id="search-panel" hidden role="group" aria-label="搜索建议与筛选">
+          <p class="search-panel-title">试试这些</p>
+          <div class="search-suggestions" id="search-suggestions" role="listbox" aria-label="查询建议"></div>
+          <div class="search-chips" id="search-chips" role="group" aria-label="年份"></div>
+          <p class="search-status" id="search-status" role="status" aria-live="polite" hidden></p>
+          <p class="search-explain" id="search-explain" hidden></p>
+          <button type="button" class="search-retry" id="search-retry" hidden>重试载入</button>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <main>
     <section class="catalog" id="catalog">
@@ -156,11 +172,10 @@
   </main>
 
   <footer class="site-footer section--dark">
-    <!-- 这些入口原来在导航里或大块 CTA 里；导航瘦到三项后，它们落到页脚 -->
+    <!-- 低频入口留在这里；上传已经搬回导航（页脚位置在安卓上根本滑不到） -->
     <div class="footer-actions" id="footer-actions">
       <button type="button" class="footer-action" id="open-wall">照片墙</button>
       <button type="button" class="footer-action" id="open-wander">随便翻翻</button>
-      <button type="button" class="footer-action" id="open-upload" hidden>上传</button>
       <!-- 三档：跟随系统 → 浅色 → 深色。放页脚而不是导航，导航保持三项 -->
       <button type="button" class="footer-action" id="theme-toggle" aria-label="切换主题">主题：跟随系统</button>
     </div>
