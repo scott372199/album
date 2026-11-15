@@ -7,6 +7,9 @@
 /* ---------- 1. 令牌 ---------- */
 
 :root {
+  /* 让 UA 自己画的控件（滚动条、表单、焦点环）跟主题走，别只改我们的色 */
+  color-scheme: light;
+
   /* 语义色（T-13）：主题只覆盖这一层，块外的规则里不再出现裸色值 */
   --c-bg: #ffffff;              /* 页面底色 */
   --c-bg-elevated: #fafafc;     /* 略抬高的区块底 */
@@ -15,12 +18,12 @@
   --c-surface-raised: #ffffff;  /* 浮在底色上的控件（聚焦、悬停） */
   --c-text: #1d1d1f;
   --c-text-dim: #6e6e73;
-  --c-text-mute: #86868b;
+  --c-text-mute: #6b6b71;
   --c-line: rgba(0, 0, 0, 0.1);
   --c-line-soft: rgba(0, 0, 0, 0.06);
   --c-accent: #0071e3;
   --c-accent-strong: #0058b0;
-  --c-ok: #2f9e5f;
+  --c-ok: #237a49;
   --c-warn-text: #9a5b00;
   --c-warn-border: #c98a2b;
   --c-danger: #c0392b;
@@ -94,6 +97,51 @@
 
   --shadow-tile: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.06);
   --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.07), 0 18px 44px rgba(0, 0, 0, 0.12);
+}
+
+/* ---------- 1.1 深色档（T-14） ---------- */
+
+/*
+ * 只覆盖两层：语义色与毛玻璃/浮层底。深色固定层（看图、故事、照片墙）本来
+ * 就是黑的，换主题时不该跟着变白——它们已经是「黑盒子」了。
+ *
+ * 实际生效的主题由 theme.js 写在 <html data-theme="light|dark"> 上，所以这里
+ * 只有一份深色变量，不与 @media (prefers-color-scheme) 打架。「跟随系统」是
+ * 由脚本解析成这两个值之一后再写属性的。
+ *
+ * 底色不用纯黑 #000：和照片的舞台色（#0c0c0e）分不开，看照片时页面边界会糊掉。
+ *
+ * Only the semantic and glass layers are overridden. The fixed dark layer
+ * (lightbox, story, wall) is already black and must not turn light. The
+ * effective theme is resolved by theme.js into <html data-theme>, so there is
+ * exactly one copy of these values. The canvas is #121214 rather than pure
+ * black so it stays distinguishable from the photo stage (#0c0c0e).
+ */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --c-bg: #121214;
+  --c-bg-elevated: #17171a;
+  --c-surface: #1c1c20;
+  --c-surface-hover: #232329;
+  --c-surface-raised: #26262c;
+  --c-text: #ececef;
+  --c-text-dim: #a8a8b0;
+  --c-text-mute: #88888f;
+  --c-line: rgb(var(--c-on-rgb) / 0.14);
+  --c-line-soft: rgb(var(--c-on-rgb) / 0.09);
+  --c-accent: #5aa2ff;
+  --c-accent-strong: #7ab6ff;
+  --c-ok: #5fbf85;
+  --c-warn-text: #e0b062;
+  --c-warn-border: #b98a3e;
+  --c-danger: #ff8a7a;
+
+  --c-nav-glass: rgba(18, 18, 20, 0.72);
+  --c-nav-glass-scrolled: rgba(18, 18, 20, 0.86);
+  --c-nav-glass-solid: rgba(18, 18, 20, 0.96);
+  --c-sticky-glass: rgba(18, 18, 20, 0.88);
+  --c-panel-bg: rgba(18, 18, 20, 0.98);
 }
 
 /* ---------- 2. 基础 ---------- */

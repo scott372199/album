@@ -34,7 +34,9 @@ function splitRoot(css) {
 }
 
 const { tokenBlock, body } = splitRoot(CSS);
-const defined = new Set([...tokenBlock.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
+// 令牌可以定义在多个块里（浅色在主块、深色在 [data-theme="dark"] 块），
+// 所以定义集要扫全文，不能只看第一个 :root。
+const defined = new Set([...CSS.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
 
 test('规则里引用的每个自定义属性都有定义（或自带兜底值）', () => {
   // 带兜底的 var(--x, 8px) 不受这条约束：CSS 自己就给了退路。
@@ -51,7 +53,9 @@ test('规则里引用的每个自定义属性都有定义（或自带兜底值�
 test(':root 以外的规则里没有裸色值', () => {
   const naked = [];
   for (const line of body.split('\n')) {
-    if (!/^\s*[a-z-]+\s*:/.test(line)) continue;         // 只看声明行
+    // 令牌定义行（--x: ...）就是色值唯一允许待的地方，不论它在哪个块里
+    if (/^\s*--[a-z0-9-]+\s*:/.test(line)) continue;
+    if (!/^\s*[a-z-]+\s*:/.test(line)) continue;         // 只看普通声明行
     // 先把 var(--x) 与 rgb(var(--x) / α) 这种「合法引用」抹掉，再找剩下的色值
     const bare = line.replace(/rgba?\(\s*var\(--[a-z0-9-]+\)\s*\/[^)]*\)/g, ' ')
       .replace(/var\(--[a-z0-9-]+\s*(,[^)]*)?\)/g, ' ');

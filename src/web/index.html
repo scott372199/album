@@ -5,6 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light">
   <meta name="theme-color" content="#ffffff">
+  <!-- 主题必须在首次绘制前定下来，否则深色用户会看到一闪而过的白页。这里的判断
+       与 theme.js 的 decide() 完全一致：存储里的三档 + 系统偏好 → light|dark。
+       之后的一切切换由 theme.js 负责（含 meta 同步与持久化）。
+       The theme has to be settled before first paint, or dark users get a white
+       flash. This decision mirrors theme.js decide(); everything afterwards is
+       theme.js's job (meta sync and persistence included). -->
+  <script>
+    (function () {
+      try {
+        var c = localStorage.getItem('album.theme') || 'auto';
+        var dark = c === 'dark' || (c !== 'light'
+          && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        var t = dark ? 'dark' : 'light';
+        document.documentElement.dataset.theme = t;
+        document.documentElement.style.colorScheme = t;
+        var cs = document.querySelector('meta[name="color-scheme"]');
+        if (cs) cs.setAttribute('content', t);
+        var tc = document.querySelector('meta[name="theme-color"]');
+        if (tc) tc.setAttribute('content', dark ? '#121214' : '#ffffff');
+      } catch (e) { /* 存储被禁用时保持浅色，不影响任何功能 */ }
+    })();
+  </script>
   <!-- 接口地址在构建时注入；为空表示这套产物没有后端，上传入口不会出现 -->
   <!-- API base is injected at build time; empty means upload is unavailable -->
   <meta name="album-api" content="__API_BASE__">
@@ -134,6 +156,8 @@
       <button type="button" class="footer-action" id="open-wall">照片墙</button>
       <button type="button" class="footer-action" id="open-wander">随便翻翻</button>
       <button type="button" class="footer-action" id="open-upload" hidden>上传</button>
+      <!-- 三档：跟随系统 → 浅色 → 深色。放页脚而不是导航，导航保持三项 -->
+      <button type="button" class="footer-action" id="theme-toggle" aria-label="切换主题">主题：跟随系统</button>
     </div>
     <p id="footer-meta"></p>
     <p class="footer-note">照片与视频已剥离定位与设备信息</p>

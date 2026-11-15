@@ -20,6 +20,7 @@ import {
   ANCHOR_KEY, serializeAnchor, parseAnchor, nearestAnchor,
 } from './anchor.js';
 import { mountUploadLegend } from './upload-state.js';
+import { initTheme, themeLabel } from './theme.js';
 
 const ctx = {
   index: null,
@@ -553,6 +554,7 @@ function wire() {
   });
   el('open-wander').addEventListener('click', () => enterWander());
   el('open-wall').addEventListener('click', () => launchWall());
+  el('theme-toggle').addEventListener('click', () => theme.next());
 
   const more = new IntersectionObserver((entries) => {
     if (!entries.some((entry) => entry.isIntersecting)) return;
@@ -713,5 +715,30 @@ async function boot() {
   if (!restored) restoreAnchor();
   paintAnchorReset();
 }
+
+/* ---------- 主题（T-14） ---------- */
+
+/**
+ * 三档主题在模块加载时就装好，而不是等清单到位——清单拉取失败时页面只剩一个
+ * 报错 toast，那时候用户照样该能换主题。首屏的 `data-theme` 已经由 index.html
+ * head 里的同步脚本写过，这里接的是之后的切换、持久化与 meta 同步。
+ *
+ * The theme is installed at module load rather than after the manifest, so it
+ * still works when the manifest fetch fails. The first-paint `data-theme` came
+ * from the inline head script; this takes over switching, persistence and meta.
+ */
+const theme = initTheme({ onChange: () => paintThemeButton() });
+
+function paintThemeButton() {
+  const button = el('theme-toggle');
+  if (!button) return;
+  // 按钮上写「现在是什么档」，而不是「点一下会变成什么」——后者在跟随档下没法描述
+  const label = themeLabel(theme.choice);
+  button.textContent = label;
+  button.setAttribute('aria-label', `${label}，点击切换`);
+  button.dataset.theme = theme.resolved;
+}
+
+paintThemeButton();
 
 boot();
