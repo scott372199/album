@@ -1994,6 +1994,56 @@ body.is-uploading { overflow: hidden; }
   color: var(--ink-3);
 }
 
+/* 归位建议（T-27）：一块带边的卡片，压在相册名输入框上面。
+   采纳后自己消失；「不用了」就是关掉它，后面的流程与以前一模一样。 */
+.upload-suggest {
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper-3);
+}
+.upload-suggest-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.upload-suggest-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.upload-suggest-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.upload-suggest-tag {
+  padding: 4px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.upload-suggest-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+/* 主按钮在这个卡片里是「就地确认」，不该占满整行 */
+.upload-suggest .upload-suggest-accept {
+  width: auto;
+  height: 38px;
+  margin: 0;
+  padding: 0 18px;
+  font-size: 13.5px;
+}
+
 .upload-field {
   display: block;
   margin-bottom: 12px;

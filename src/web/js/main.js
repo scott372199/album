@@ -834,8 +834,14 @@ async function boot() {
   wire();
   // 安卓壳通过它决定返回键是关内层还是退出 Activity
   installBackBridge({ canGoBack: hasInnerState, goBack });
-  // 上传入口只在「有原生桥 + 配了接口地址」时才挂载，浏览器里是空操作
-  initUpload();
+  // 上传入口只在「有原生桥 + 配了接口地址」时才挂载，浏览器里是空操作。
+  // 归位建议（T-27）需要既有的相册名与语义索引，这里注入一个纯读的取数器。
+  initUpload({
+    getLibrary: () => ({
+      albums: (ctx.index?.albums || []).map((album) => album.name),
+      items: state.search.index?.items || [],
+    }),
+  });
   // 索引不可用时静默降级，不阻塞任何浏览路径（见 loadIndex）
   // Index outage degrades silently and never blocks browsing (see loadIndex).
   await loadIndex();

@@ -291,6 +291,17 @@
       </form>
 
       <div class="upload-body" id="upload-body" hidden>
+        <!-- 归位建议（T-27）：选完照片、还没开始传时出现。采纳只是把值填进下面
+             的相册名，之后走的还是原来那条上传路径；「不用了」则与以前完全一致。 -->
+        <div class="upload-suggest" id="upload-suggest" hidden role="group" aria-labelledby="upload-suggest-title">
+          <p class="upload-suggest-title" id="upload-suggest-title"></p>
+          <p class="upload-suggest-note" id="upload-suggest-note"></p>
+          <div class="upload-suggest-tags" id="upload-suggest-tags"></div>
+          <div class="upload-suggest-actions">
+            <button type="button" class="upload-primary upload-suggest-accept" id="upload-suggest-accept">用这个</button>
+            <button type="button" class="upload-link" id="upload-suggest-skip">不用了</button>
+          </div>
+        </div>
         <label class="upload-field">
           <span>放进哪个相册</span>
           <input id="upload-album" type="text" maxlength="40" autocomplete="off">

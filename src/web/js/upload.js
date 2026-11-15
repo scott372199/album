@@ -31,6 +31,8 @@ import { labelFor } from './upload-state.js';
  *      hash, the presigned URL lives 15 minutes), so retry instead of surfacing it.
  */
 
+import { buildSuggestion, suggestionNote } from './upload-suggest.js';
+
 const MAX_BATCH = 20;
 /** 3 次重试的等待时间（毫秒），总补偿 ≈ 13 秒，压在预签名 15 分钟有效期之内 */
 const RETRY_DELAYS = [1200, 3500, 8000];
@@ -47,6 +49,12 @@ const state = {
   /** 连 blob 都拿不到的失败（HEIC 解不开等），只能计数，无法重试 */
   bad: 0,
   ok: 0,
+  /** 用户是否自己动过相册名：动过就不再给建议，不和人的输入抢方向盘 */
+  albumTouched: false,
+  /** 归位建议面板挂着时，外部（关闭面板）也能把它结掉，避免 await 永远不回 */
+  settleSuggestion: null,
+  /** 由 main.js 注入：拿既有相册名与语义索引，纯读 */
+  getLibrary: () => ({ albums: [], items: [] }),
 };
 
 function apiBase() {
@@ -615,8 +623,60 @@ function updateCount() {
   el('upload-retry').hidden = state.failed.length === 0;
 }
 
+/**
+ * 展示归位建议，等用户选「用这个」或「不用了」。
+ * 关闭面板 / 按 Esc 也当成「不用了」——绝不能让上传卡在一个没人回答的
+ * Promise 上。
+ */
+function askSuggestion(suggestion) {
+  const panel = el('upload-suggest');
+  el('upload-suggest-title').textContent = `建议放进「${suggestion.album.name}」`;
+  el('upload-suggest-note').textContent = suggestionNote(suggestion);
+  el('upload-suggest-accept').textContent = `用「${suggestion.album.name}」`;
+
+  const tags = el('upload-suggest-tags');
+  tags.replaceChildren(...suggestion.tags.map((tag) => {
+    const chip = document.createElement('span');
+    chip.className = 'upload-suggest-tag';
+    chip.textContent = tag.zh;
+    return chip;
+  }));
+  tags.hidden = suggestion.tags.length === 0;
+
+  panel.hidden = false;
+  const accept = el('upload-suggest-accept');
+  const skip = el('upload-suggest-skip');
+
+  return new Promise((resolve) => {
+    const finish = (choice) => {
+      accept.removeEventListener('click', onAccept);
+      skip.removeEventListener('click', onSkip);
+      panel.hidden = true;
+      state.settleSuggestion = null;
+      resolve(choice);
+    };
+    const onAccept = () => finish('accept');
+    const onSkip = () => finish('skip');
+    accept.addEventListener('click', onAccept);
+    skip.addEventListener('click', onSkip);
+    state.settleSuggestion = finish;
+    accept.focus({ preventScroll: true });
+  });
+}
+
 async function uploadFiles(files) {
   if (state.busy) return;
+
+  // 归位建议（T-27）：用户自己改过相册名就不打扰；只读内存，不发请求
+  if (!state.albumTouched && files.length >= 2) {
+    const library = state.getLibrary() || {};
+    const suggestion = buildSuggestion({ files, albums: library.albums, items: library.items });
+    if (suggestion && !suggestion.weak) {
+      const choice = await askSuggestion(suggestion);
+      if (choice === 'accept') el('upload-album').value = suggestion.album.name;
+    }
+  }
+
   state.busy = true;
   el('upload-retry').hidden = true;
 
@@ -675,6 +735,8 @@ function open() {
 }
 
 function close() {
+  // 面板被关掉时建议还挂着：当成「不用了」，否则上传会停在那里等一个不会再来的点击
+  state.settleSuggestion?.('skip');
   el('upload').hidden = true;
   document.body.classList.remove('is-uploading');
 }
@@ -690,7 +752,8 @@ function close() {
  * escape hatch that only affects visibility — authorisation lives on the server,
  * where no token means no upload URL.
  */
-export function initUpload() {
+export function initUpload({ getLibrary } = {}) {
+  if (typeof getLibrary === 'function') state.getLibrary = getLibrary;
   const base = apiBase();
   if (!base) return;
   if (!hasNativeBridge() && !new URLSearchParams(location.search).has('upload')) return;
@@ -712,6 +775,12 @@ export function initUpload() {
     state.ok = 0;
     showLogin('');
   });
+  // 用户一动手就永久退出「建议」：之后的上传不再弹面板
+  el('upload-album').addEventListener('input', () => {
+    state.albumTouched = true;
+    el('upload-suggest').hidden = true;
+  });
+
   el('upload-files').addEventListener('change', (event) => {
     const files = [...(event.target.files || [])];
     event.target.value = '';
