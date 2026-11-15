@@ -1,32 +1,26 @@
 /**
- * 策展产物的落盘（V6 T-22）/ Writing the curation artifact.
+ * 策展产物的**构建期落盘**（V6 T-22）/ Build-time file writing for curation.
  *
- * 与规则（`curation.mjs`）分开是为了让这一层能被测：规则是纯函数，这里做的是
- * 「写哪两个文件、写不出来怎么办、一次块都没有时写不写」。把文件系统与模型
- * 都做成可注入的，验收里那条「同一 rev 重复构建 sha 相同」才有执行的可能。
+ * 规则在 `src/server/curation/rules.mjs`、发布逻辑在 `src/server/curation/publish.mjs`：
+ * 线上（处理器 Lambda）也要产出同一份产物，而镜像只 `COPY src/server/`。这里只剩
+ * 「写进 `dist/data/`」这一步——线上是写站点桶，产物逐字节相同。
  *
- * Split from the pure rules so this layer is testable: which two files, what
- * happens on failure, and whether anything is written when no month qualifies.
- * Filesystem and model are injectable so "same rev rebuilds byte-identically" is
- * an executable assertion rather than a promise.
- *
- * 双写沿用搜索索引的既有约定（plan §5）：
- *   `data/curation.<rev>.json`  不可变，可长缓存，是主路径
- *   `data/curation.json`        固定名兜底，短缓存，给「rev 版还没生成」的时刻
+ * Rules and copy live under src/server/curation/ because the runtime image only
+ * copies src/server/. This file only writes to dist/; the runtime writes the same
+ * bytes to the site bucket.
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { curateMonths, labelsFromIndex, applySentences, curationDocument, topWords } from './curation.mjs';
-import { createWriter, llmConfig } from './llm.mjs';
+import {
+  curateMonths, labelsFromIndex, applySentences, curationDocument, monthFacts,
+} from '../server/curation/rules.mjs';
+import { createWriter, llmConfig } from '../server/curation/llm.mjs';
 
-/** 产物目录：站点静态资源下的 data/ */
+// 只转手，不复制：构建期与线上必须共用同一套规则与版本号
+export * from '../server/curation/rules.mjs';
+
 const DATA_SUBDIR = 'data';
-
-/** 给模型的事实：只要「几张」与「出现过的中文词」，多一个字段都是在扩大公开面 */
-export function monthFacts(month, labelsById) {
-  return { count: month.count, words: topWords(month.picks, labelsById) };
-}
 
 /**
  * 产出并写入策展产物。

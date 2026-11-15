@@ -11,7 +11,7 @@ import { loadSite, resolveHero, resolveFeatured, resolveHeroSections } from './s
 import { buildHeroSections } from '../web/js/hero-data.js';
 import { writeCurationArtifacts } from './curation-artifact.mjs';
 import { writeStoryArtifacts } from './story.mjs';
-import { createWriter, llmConfig } from './llm.mjs';
+import { createWriter, llmConfig } from '../server/curation/llm.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const PHOTOS = path.join(ROOT, 'photos');

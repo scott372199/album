@@ -541,7 +541,7 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 
 ### T-22 每月策展产物与前端块 〔FR-07〕 **done(代码，待真实语料验收)**
 
-**改动**：`+ src/build/curation.mjs`、`+ src/build/curation-artifact.mjs`、`+ src/build/llm.mjs`、`+ src/web/js/curation.js`、`~ src/build/build.mjs`、`~ src/web/js/gallery.js`、`~ src/web/js/main.js`、`~ src/web/js/ui.js`、`~ src/web/style.css`
+**改动**：`+ src/server/curation/rules.mjs`（原 `src/build/curation.mjs`，见「产物上线」一节）、`+ src/server/curation/llm.mjs`（原 `src/build/llm.mjs`）、`+ src/server/curation/publish.mjs`、`+ src/build/curation-artifact.mjs`、`+ src/web/js/curation.js`、`~ src/build/build.mjs`、`~ src/server/processor/recognition.mjs`、`~ spec/v5/contracts/v5-contracts.json`、`~ src/web/js/gallery.js`、`~ src/web/js/main.js`、`~ src/web/js/ui.js`、`~ src/web/style.css`
 **做法**：规则选片（清晰度 / 去重折叠 / 标签多样性 / 时间分散），月内 <9 张不生成；产物 `data/curation.<rev>.json` + `data/curation.json`；前端在月份分组顶部渲染 9 张 + 一句话，可跳过（键盘可达「跳过本月精选」）。
 **完成判定**：抽查 3 个月无近似重复；<9 张不出块；产物缺失时不留空占位；同一 `rev` 重复构建 sha 相同。
 
@@ -568,19 +568,27 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 
 **模型角色收窄到「写一句话」**：选片 100% 由规则决定（FR-07 原文），模型只拿到「几张 + 出现过的中文词」，句子过筛（含数字、网址、套话一律丢弃），失败只丢句子。凭据从 `ALBUM_LLM_ENDPOINT/KEY/MODEL` 读，缺一个就当作没有配置；输出按 `(rev, prompt 版本)` 缓存进 `src/build/cache/`，同一 rev 不重复计费。**CI 里没有凭据是常态**，所以这条路径的「降级」不是兜底，是主路径之一，单测直接覆盖（假 fetch：成功、非 2xx、坏 JSON、断网、缓存命中五种）。
 
-**⚠️ 一处仍未接上，需要你拍板**：策展产物现在只在 `--target=all` 的本地构建里写进 `dist/`。线上的搜索索引由处理器（`album-search-publisher`）写进 S3，策展按 plan §5 也该由同一主体写 `data/curation.*`——但那要改两处**共享契约/基础设施**：`Dockerfile` 的 `COPY src/server/`（要能拿到规则模块）与 IAM policy（`data/{curation,story}.*`）。按约定这两处我不擅自改。所以现在线上策略是：**产物不存在 → 不渲染策展块**，功能静默缺席而不是出错。
+**产物上线（补做，2026-11-15）**：原先它只在 `--target=all` 的本地构建里写进 `dist/`，线上根本没有这个文件。接上之后有三件事值得记下来，因为**两处原以为要改的地方其实不用改**：
+
+1. **模块搬家，而不是改 Dockerfile**：镜像只 `COPY src/server/`，规则住在 `src/build/` 就永远进不了镜像。所以把规则与文案搬到 `src/server/curation/`（`rules.mjs` / `llm.mjs` / `story.mjs`），`src/build/*` 只剩「写进 `dist/data/`」这一层并 `export *` 转手。原以为要动 `Dockerfile`，实际不需要——新文件都在 `COPY` 覆盖的目录里。搬家当场暴露了一个隐患：`rules.mjs` 原本 `import { isMotion } from '../web/js/wall-source.js'`，反向依赖前端。删掉后在自己文件里按类型字面量重写，语义也收窄了（`wall-source#isMotion` 还要求有 `src`）。
+2. **IAM 不需要动**：读 `album-infra` 确认处理器角色的 `WriteArtifacts` 已经是 `s3:PutObject/GetObject/DeleteObject` on `site_bucket/*`，`data/curation.*` 与 `data/story.*` 天然覆盖。契约里的 `album-search-publisher` 是**代码层主体名**，不是独立 AWS 角色。
+3. **契约要动，但不 bump `version`**：`s3PrefixOwnership` 加两条（写者同上、`canDelete=false`），`iamBoundaries['album-search-publisher']` 扩成三条路径。**没有改 `version`**——`INDEX_VERSION = CONTRACT.version`，一 bump 前端 `search.js` 里写死的 `v5.1.0` 就对不上，索引会整份被拒。这是本次最容易踩的坑。
+
+**写在索引之后、包在 try 里**：`publishRecognition` 写完 `data/search-index.*` 再调发布器，失败只记 `artifacts.failed` 并继续返回 `rev`——索引已经落盘，产物只是下一层装饰。模型调用有 15 s **总时限**（`SENTENCE_BUDGET_MS`）：这一步跑在处理函数里，唯一不能发生的就是「为了几句文案把函数跑超时」，超时即退回派生文案。
+
+**线上暂时是派生文案**：处理函数的 environment 里没有 `ALBUM_LLM_*`，所以 `llmConfig()` 返回 null，精选与故事都按派生文案产出。要让线上措辞也由模型写，需要加三个环境变量（endpoint / model 走明文，key 建议走 SSM + 给处理器角色补 `ssm:GetParameter`）。**这一步没做**——它把密钥带进一个新的执行环境，属于该由你决定的变更，不是实现细节。
 
 **verify 拦下了我一次**：「9 宫格用 `object-fit: cover` 更整齐」被门禁挡下（D-01 不裁切）。改成沿用 `contain`，格子底色与卡片同色，留边看不出来。门禁在这里是对的：裁切是产品级决定，不该由某个块的版式需要悄悄推翻。
 
 **体积**：加完第一版是 120.3 KB，超预算 268 B。`check-budget.mjs` 与预算值都是共享契约，我没动它，改的是自己的代码：删掉三个只有测试在用的便利导出（`picksFor` / `blockKey` / `sentenceText`）、把两段过长的块注释收紧。最终 **119.6 KB / 120.0 KB（26 个文件）**。余量只剩 400 B，下一个功能进来之前得先还一笔债——这条记在这里，免得下次以为是「预算还很宽」。
 
-**新增**：`+ src/build/curation.mjs`（32 个导出，纯函数）、`+ src/build/curation-artifact.mjs`（双写 + 幂等）、`+ src/build/llm.mjs`（可注入 fetch 的文案写入器）、`+ src/web/js/curation.js`（取数与索引，不碰 DOM）、`+ src/server/test/v6-curation.test.mjs`（30 条）、`+ src/web/test/v6-curation-block.test.mjs`（13 条）。
+**新增**：`+ src/server/curation/rules.mjs`（33 个导出，纯函数）、`+ src/server/curation/llm.mjs`（可注入 fetch 的文案写入器）、`+ src/server/curation/publish.mjs`（白名单 key + 双写 + 15 s 时限）、`+ src/build/curation-artifact.mjs`（构建期落盘）、`+ src/web/js/curation.js`（取数与索引，不碰 DOM）、`+ src/server/test/v6-curation.test.mjs`（30 条）、`+ src/server/test/v6-artifact-publish.test.mjs`（13 条）、`+ src/web/test/v6-curation-block.test.mjs`（13 条）。
 
 ---
 
 ### T-23 故事文案构建期生成 〔FR-06〕 **done(代码)**
 
-**改动**：`+ src/build/story.mjs`、`~ src/build/build.mjs`、`~ src/web/js/story.js`、`~ src/web/js/data.js`、`~ src/web/index.html`
+**改动**：`+ src/server/curation/story.mjs`、`+ src/build/story.mjs`（构建期落盘）、`~ src/build/build.mjs`、`~ src/web/js/story.js`、`~ src/web/js/data.js`、`~ src/web/index.html`
 **做法**：章节标题 + 一句话副标题 + 结束语；产物 `data/story.<rev>.json` + `data/story.json`；生成失败 → 现有硬编码文案；结束语不再是「这一段，走完了。」。
 **完成判定**：断网可完整播放；同 `rev` 幂等；模型不可用时构建成功且故事可读。
 
@@ -592,7 +600,9 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 | 同 `rev` 幂等 | ✅ 章节按 key 码点序规整后写盘；单测把章节数组倒过来重算，产物逐字节相同（这条当场抓到一个真 bug，见下） |
 | 模型不可用时构建成功且故事可读 | ✅ 无凭据 → 派生文案；实测产物 9 章全部有标题与副标题，结束语 `2026 年 1 月 到 11 月，共 47 张` |
 
-**分组必须与播放器同源**：产物由 `buildStory()` 生成——**和运行时是同一个函数**（构建期 import `src/web/js/state.js`）。两边各写一套分组，「产物里的章在播放时对不上」这类错最难查，而且只在某个月份的边界上出现。同理，章是按 key 匹配的，所以带筛选播放时对得上的章有文案、其余退回「年份 + N 张」，不会错位。
+**分组必须与播放器同源**：产物与运行时必须用同一套分组——两边各写一套，「产物里的章在播放时对不上」这类错最难查，而且只在某个月份的边界上出现。同理，章是按 key 匹配的，所以带筛选播放时对得上的章有文案、其余退回「年份 + N 张」，不会错位。
+
+**「同源」的落实方式后来变了，理由值得记**：最初是构建期直接 `import buildStory()`（一个物理函数，两边不可能不同）。产物要上线时这条路断了——镜像只 `COPY src/server/`，前端只拷 `src/web/js/`，任何一端 import 另一端都是死路。所以现在是**两份实现 + 一条逐键比对用例**：`src/server/curation/story.mjs#chaptersOf()` 复刻分组，`v6-artifact-publish.test.mjs` 拿 `chaptersOf()` 与 `buildStory()` 在「空 / 单年多个月 / 跨年 / 输入倒序」四种输入上比 key、比 label、比每章的 id 集合。共享物理路径只是「不容易错」，一条会红的用例才是「错了会被发现」。
 
 **幂等测试抓到的真 bug**：`derivedEnding` 原先用**入参顺序**的首末章，而章节数组写盘前会按 key 排序。于是把同样的章节倒过来喂进去，产物里的结束语变成「2026 到 2025」——同一 rev 两份产物不一样。改成用排序后的数组算。这条要是没测，线上只会表现为「偶尔结束语是反的」。
 
@@ -604,11 +614,13 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 
 **与 T-22 合用一个加载器**：`data.js#loadArtifact(name, { rev, version })` 承担「先 rev 版、再固定名、版本对不上就不要」这套约定，策展与故事文案都走它，`curation.js` 里原来那段地址拼装因此删掉（顺带省了约 1 KB 体积）。两个产物**各拉一次批量调用**而没有合并成一次——合并要把两套事实塞进同一个请求再靠 key 前缀拆回来，省下的只是一次 HTTP。
 
-**⚠️ 与 T-22 同一处缺口**：故事产物现在也只在 `--target=all` 的本地构建里产出；线上要由服务端发布者写 `data/story.*`，同样卡在 Dockerfile 的 `COPY src/server/` 与 IAM policy 两处共享契约上，按约定我没动。线上现状：产物不存在 → 用派生文案，故事照常可播。
+**产物上线（补做，2026-11-15）**：与 T-22 同一处缺口、同一次补齐——`publishArtifacts()` 在写完搜索索引后写 `data/story.<rev>.json` + `data/story.json`，与精选共用一次模型调用、同一个 rev。细节见 T-22 的「产物上线」一节（模块搬家、IAM 不用改、契约不 bump `version`、15 s 总时限）。线上现状：产物存在、章节与副标题按派生文案生成，模型措辞待凭据。
+
+**故事比精选多一条纪律**：没有照片也照写（空章节 + 空结束语）。精选「凑不齐 9 张就不写」是因为空产物只会让线上多一个要解释的对象；故事不同——它随时可能被打开，留一份「什么都没有」的产物，前端那条读取路径平时就是通的，真出问题时在本地就能看见，而不是等到某天上线才第一次执行。
 
 **体积**：本次改的是已在包里的 `story.js` / `data.js`，加完是 120.7 KB（超 708 B）。做法仍是改自己的代码而不是动预算：抽公共加载器、删三个仅测试用的便利导出、把注释压到「一句结论 + 一句理由」。现在 **119.8 KB / 120.0 KB**。**再往里加功能前必须先处理这件事**——`check-budget` 量的是 `dist/` 里**未压缩的源码**（含注释），所以一百多行注释按 gzip 也要吃掉好几 KB。建议二选一：构建时给 js/css 去掉注释（这是改 `build.mjs`，不动预算值），或者正式把预算提到 128 KB。**我没有替你决定，因为这两条都会改动一条既有门禁的含义。**
 
-**新增**：`+ src/build/story.mjs`（12 个导出）、`+ src/server/test/v6-story.test.mjs`（15 条）、`+ src/web/test/v6-story-copy.test.mjs`（7 条）；`~ src/web/js/data.js`（`loadArtifact`）、`~ src/web/js/story.js`（`applyStoryCopy` / `chapterLine` / `endingLine` / `paintCard`）。
+**新增**：`+ src/server/curation/story.mjs`（10 个导出，服务端分组与文案）、`+ src/build/story.mjs`（构建期落盘，`export *` 转手）、`+ src/server/test/v6-story.test.mjs`（15 条）、`+ src/web/test/v6-story-copy.test.mjs`（7 条）；`~ src/web/js/data.js`（`loadArtifact`）、`~ src/web/js/story.js`（`applyStoryCopy` / `chapterLine` / `endingLine` / `paintCard`）。
 
 ---
 

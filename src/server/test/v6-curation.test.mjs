@@ -8,10 +8,10 @@ import {
   monthKey, isStill, labelsFromIndex, topLabels, clarityScore, densityScore, ratioFit,
   scoreOf, fingerprintOf, foldNearDuplicates, pickMonth, curateMonths,
   cleanSentence, applySentences, curationDocument, curationFor, isCurationUsable,
-} from '../../build/curation.mjs';
+} from '../curation/rules.mjs';
 import {
   PROMPT_VERSION, llmConfig, sanitizeSentence, parseSentences, createWriter,
-} from '../../build/llm.mjs';
+} from '../curation/llm.mjs';
 
 /**
  * V6 T-22 每月策展：规则选片 + 产物 + 文案降级。

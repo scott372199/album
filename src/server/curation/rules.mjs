@@ -1,29 +1,25 @@
 /**
- * 每月策展（V6 T-22）/ Monthly curation.
+ * 每月策展的选片规则（V6 T-22）/ Selection rules for monthly curation.
  *
  * 规则选片，模型**不参与选片**（FR-07）。本模块是纯函数：进 manifest 条目与
- * 语义索引，出「哪几个月有块、每月哪 9 张」。落盘、写 S3、发布都不在这里，
- * 于是这份规则可以被本地构建、Lambda 发布者、单测三处共用而不会各自漂移。
+ * 语义索引，出「哪几个月有块、每月哪 9 张」。落盘、写 S3、发布都不在这里。
  *
- * 三条选片信号在真实语料上先核对过，这里写清楚每个信号的**来源**，避免
- * 后来的人以为「清晰度」是算出来的像素指标：
+ * **为什么住在 `src/server/` 而不是 `src/build/`**：产物必须由服务端发布者写
+ * （plan §5：与搜索索引同一主体、同一时刻），而镜像只 `COPY src/server/`。
+ * 放在 build 目录就得往镜像里拷构建脚本，或者复制一份规则——前者脏，后者会漂移。
+ * 本地构建直接 import 这个文件，于是「构建期看到的规则」和「线上用的规则」是同一份。
  *
- *   1. 清晰度 → 用识别置信度当代理。模糊、过暗、失焦的片子，识别器给不出
- *      高置信标签。22 个标签的文件里有 1.0 / 0.97 / 0.80 / 0.71 这样的分层，
- *      是可见的间接量。**没有标签就没有分数**（视频恒无标签，故不进块）。
+ * Pure selection rules shared by the local build and the server publisher. It
+ * lives under src/server/ because the Docker image only copies that tree; the
+ * build imports the same file, so build-time and production rules cannot drift.
+ *
+ * 三条选片信号的来源都核对过，写清楚以免后来的人以为「清晰度」是像素指标：
+ *   1. 清晰度 → 用识别置信度当代理。模糊、过暗、失焦的片子给不出高置信标签。
  *   2. 标签多样性 → 用索引里的 label.term。**不能用 manifest.tags**：实测
  *      47 张里每张 tags 只有 1 个（年份），拿它算多样性等于没算。
  *   3. 时间分散 → 公开产物里最细的时间就是「月」（不变量 6 禁止日级粒度），
- *      所以月内没有可分散的时间轴。**不做假动作**：退到「同一相册连续出现
- *      降权」这一层，并如实命名。
- *
- * Rule-based selection: the model never picks photos (FR-07). Pure functions in,
- * a document out; persistence lives elsewhere so the rules can be shared without
- * drifting. Each signal's provenance is documented above because "sharpness" is
- * a proxy here, not a measured pixel metric.
+ *      所以退到「同一相册连续出现降权」这一层，并如实命名。
  */
-
-import { isMotion } from '../web/js/wall-source.js';
 
 /** 产物版本：字段改动时 +1，前端据此拒绝不认识的产物 */
 export const CURATION_VERSION = 1;
@@ -64,9 +60,16 @@ export function compareKeys(a, b) {
   return left < right ? -1 : 1;
 }
 
-/** 有画面的条目：动图/视频不在策展块里（它们没有识别标签，也没有静帧可比） */
+/** 动图类型：策展只挑「有画面」的，动图与视频都不进块（它们没有识别标签） */
+const MOTION_TYPES = new Set(['video', 'live', 'animation']);
+
+/**
+ * 有画面的条目。与 `web/js/wall-source.js#isMotion` 字面相似但**语义不同**：
+ * 那边还要求有 `src`（能不能播），这边只问「是不是一张静帧」。合成一个函数
+ * 会让两边的判据互相妥协，所以各自留一份，各自有用例。
+ */
 export function isStill(item) {
-  return Boolean(item) && !isMotion(item);
+  return Boolean(item) && !MOTION_TYPES.has(item.type || 'image');
 }
 
 /** 月份的稳定键：`2026-09` */
@@ -114,9 +117,16 @@ export function topWords(ids, labelsById, limit = 6) {
     .map(([word]) => word);
 }
 
+/**
+ * 给模型的事实：只要「几张」与「出现过最多的中文词」。多给一个字段，都是在扩大
+ * 对外公开的信息面（构建期与线上共用这一处定义）。
+ */
+export function monthFacts(month, labelsById) {
+  return { count: month.count, words: topWords(month.picks, labelsById) };
+}
+
 /** 按置信度降序取前 n 个标签，同分时按 term 码点序，保证确定性 */
-export function topLabels(labels, n = CLARITY_LABELS) {
-  if (!Array.isArray(labels)) return [];
+export function topLabels(labels, n = CLARITY_LABELS) {  if (!Array.isArray(labels)) return [];
   return labels
     .map((label) => ({ term: label.term, confidence: Number(label.confidence) || 0 }))
     .sort((a, b) => b.confidence - a.confidence || compareKeys(a.term, b.term))
