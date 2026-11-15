@@ -388,6 +388,68 @@ user approval before the acceptance run.*
 > *The verdict is unchanged: green CI, a live site and real data do not constitute
 > acceptance. blockers #2/#3/#5/#6 and T-29~T-32 remain open.*
 
+### 4.4 生命周期耗时复盘与优化 / Lifecycle timing review and optimisation
+
+2026-11-15 用户逐域验收通过后，要求复盘一键拉起/销毁的耗时、记录卡点并优化流程。
+数据来自 GitHub Actions 日志的 `##[group]apply` 与 `Apply complete!` 时间戳，以及
+Terraform 逐资源的 `Creation/Destruction complete after` 记录，不是估算值。
+*After the domain acceptance passed, the user asked for a timing review of one-click
+up/down. All numbers come from GitHub Actions group timestamps and Terraform
+per-resource completion records, not estimates.*
+
+| 动作 / Run | 总耗时 / Wall clock | 分层 / Layers | 主要卡点 / Bottleneck |
+| --- | --- | --- | --- |
+| down `43616395760`（11-14 夜）| 11m44s | 20-edge 192s + 30-compute 504s | CloudFront 部署 2m59s；ECS Express 服务销毁 **8m4s** |
+| down `43666751070`（11-15 上午）| **11m42s（702s）** | 20-edge 163s + 30-compute 496s | CloudFront 部署 2m29s；ECS Express 销毁 **7m58s**；Grafana ECS 服务 1m51s（并行） |
+| up `43663893466`（冷启动）| 6m35s | 15s + 21s + 160s + 184s | 29 个资源创建：ALB 2m14s、EFS 挂载点 1m26s、CloudFront 2m49s |
+| up `43665178832` / `43665730439`（改配置）| 2m24s / 2m19s | 19+23+24+64s / 17+22+23+63s | 四层串行 init+apply；**两个常驻层每次 0 变更却固定耗时 36~42s** |
+
+**卡点分三类 / Three bottleneck classes**：
+
+1. **AWS 控制面硬耗时**：ECS Express Gateway Service 删除稳定 7m58s~8m4s，占关站总时长
+   约 68%；创建期 ALB / EFS 挂载点各 1~2 分钟。Terraform 只能等待 API 返回。
+   *AWS control-plane latency: deleting the ECS Express service alone takes ~8 minutes
+   (≈68% of shutdown); ALB and EFS mount targets cost 1-2 minutes on creation.*
+2. **Terraform 串行开销**：四层逐层 `init` 再 `apply`，每层 10~15s 初始化；其中
+   `00-bootstrap` / `10-storage` 是常驻资源、历次均 0 变更，仍各占 15~23s。
+   *Serial per-layer init and no-op applies of persistent layers cost 36-42s per run.*
+3. **CloudFront 部署等待**：`aws_cloudfront_distribution` 默认 `wait_for_deployment=true`，
+   关站时 disabled 状态的传播要 2m29s~2m59s，但关站后无人访问，这段等待纯属浪费。
+   *Waiting for a disabled distribution to propagate wastes 2.5-3 minutes.*
+
+**已落地优化（`album-infra` PR #22，2026-11-15 已合并）/ Optimisations shipped**：
+
+- up 只 apply `30-compute` + `20-edge`；`00-bootstrap` 仅 init 以读取 `repository_url`，
+  `10-storage` 完全不进生命周期，其 IaC 变更仍由 `infra.yml` 负责。
+  *Up applies only the runtime layers; persistent layers stay under infra.yml.*
+- 所有需要的层并行 `terraform init`，逐个回收退出码；`apply_layer` 内不再重复 init。
+  *Parallel init with exit-code collection; no serial init inside apply.*
+- `cdn-site` 模块新增 `wait_for_deployment`（默认 true，photos 站不受影响）；管理站传
+  `var.mgmt_enabled`，关站跳过等待、拉起仍等；up 前置新增
+  `aws cloudfront wait distribution-deployed`，避免撞上 InProgress 分发。
+  *Skip the deployment wait only while disabling; up still waits and guards against
+  an in-progress distribution.*
+- `scripts/check.mjs` 新增第 100、101 条断言锁定快路径与 photos 站边界（共 101 项）。
+  *Two new offline assertions pin the fast path and the photo-site boundary.*
+
+**预期收益 / Expected gain**：重复 up 约 2m24s → 1m20s 左右（省 45~60s）；关站约
+11m42s → 9m 左右（省约 2m30s）。本次销毁用的是优化前代码，因此 702s 是干净的基线，
+下次可直接对比。*Repeat up: ~2m24s → ~1m20s; down: ~11m42s → ~9m. The 702s baseline
+was measured before the optimisation so the next run is directly comparable.*
+
+**未解决的硬约束与后续选项 / Remaining hard limit and options**：ECS Express 服务删除的
+~8 分钟无法靠 workflow 编排消除。可评估的架构级改造是「关站时把服务缩容到 0 而不删除」
+（`update-express-gateway-service --scaling-target`），需先验证 Terraform provider 支持、
+零副本是否仍计费、以及下次拉起的扩容耗时；另一项是把 Grafana 观测栈改为按需拉起
+（默认关），冷启动可再省约 2 分钟并省下 ALB 费用。两者都会改变资源范围，需用户确认后再做。
+*The ~8-minute deletion needs a scale-to-zero redesign (provider support, idle cost and
+scale-up time must be verified); making the Grafana stack opt-in would save ~2 more
+minutes and the ALB cost. Both change resource scope and require user approval.*
+
+> 判定不变：用户 2026-11-15 「验收通过」指本轮逐域验收通过；`V5-ACCEPTANCE.md` 的
+> release gate 未改写，#1/#2/#3/#5/#6 与 T-29~T-32 仍按该文档口径开放。
+> *The verdict is unchanged: this was domain acceptance, not the V5 release gate.*
+
 ## 5. 验收触发条件 / Acceptance trigger
 
 - [ ] 6 个 release blockers 各有生产证据；#1 的六示例例外由用户在 T-32 签字确认
