@@ -138,8 +138,13 @@
         <p class="section-kicker">ALBUMS</p>
         <h2 class="section-title">相册</h2>
       </div>
+      <!-- 按年份看：年度页（T-24）的入口。年份来自清单，新照片进来不用改配置 -->
+      <div class="year-nav" id="year-nav" role="group" aria-label="按年份看" hidden></div>
       <div class="album-grid" id="album-grid"></div>
     </section>
+
+    <!-- 年度页（T-24）：内容全由 year-page.js 装配，这里只是个占位容器 -->
+    <section class="year-page" id="year-page" aria-label="这一年" hidden></section>
 
     <section class="stats section--dark" aria-label="统计">
       <div class="stats-inner">

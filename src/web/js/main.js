@@ -21,6 +21,7 @@ import {
 } from './anchor.js';
 import { mountUploadLegend } from './upload-state.js';
 import { initTheme, themeLabel } from './theme.js';
+import { createYearPage, renderYearNav, buildYearSummary } from './year-page.js';
 
 const ctx = {
   index: null,
@@ -31,6 +32,7 @@ const ctx = {
   scrollBeforeMode: 0,
   searchUI: null,
   wanderBase: null,
+  yearPage: null,
 };
 
 function manifestRev(url) {
@@ -302,19 +304,63 @@ function syncControlValues() {
  */
 function applyView() {
   const isAlbumRoot = state.view === 'album' && !state.album;
+  // 年度页（T-24）：`view=year` 复用既有的 view 键，年份复用既有的 year 键，
+  // 一个 hash 键都不新增。它是个独立视图，不叠在时间流上，所以 catalog 全藏。
+  const isYear = state.view === 'year';
   const searching = state.mode === 'search';
 
   el('albums-section').hidden = !isAlbumRoot;
-  el('catalog').hidden = isAlbumRoot;
-  el('back').hidden = !(state.view === 'album' && state.album);
-  el('catalog-title').textContent = searching ? '搜索结果' : (state.album || '全部照片');
+  el('catalog').hidden = isAlbumRoot || isYear;
+  el('year-page').hidden = !isYear;
+  el('back').hidden = !((state.view === 'album' && state.album) || isYear);
+  el('catalog-title').textContent = searching
+    ? '搜索结果'
+    : (isYear ? `${state.year} 年` : (state.album || '全部照片'));
 
-  el('top').hidden = searching || isAlbumRoot;
+  el('top').hidden = searching || isAlbumRoot || isYear;
   el('footer-actions').hidden = searching;
 
   const albums = el('nav-albums');
   albums.setAttribute('aria-pressed', String(state.view === 'album'));
   albums.classList.toggle('is-active', state.view === 'album' && !searching);
+
+  // 年份条的选中态跟着视图走，所以放在这里而不是只在进页面时刷一次
+  if (ctx.index) {
+    renderYearNav(el('year-nav'), ctx.index.years, {
+      current: isYear ? state.year : '',
+      onOpen: (year) => enterYear(year),
+    });
+  }
+}
+
+/**
+ * 进年度页。年份缺省取清单里最新的一年——从导航点进来时没指定年份，
+ * 落到「空白页」是最差的选择。
+ */
+function enterYear(year) {
+  const fallback = ctx.index?.years?.[0];
+  const target = String(year || state.year || fallback || '');
+  if (!target) return;
+  state.view = 'year';
+  state.year = target;
+  state.album = '';
+  state.q = '';
+  state.tag = '';
+  state.month = '';
+  state.mode = null;
+  refresh();
+  syncUrl(true);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/** 年度页靠清单 + 语义索引两张表，索引没到位时只是没有标签与主色 */
+function renderYear() {
+  if (!ctx.yearPage || !ctx.index) return;
+  ctx.yearPage.render(buildYearSummary({
+    photos: ctx.index.photos,
+    items: state.search.index?.items || [],
+    year: state.year,
+  }));
 }
 
 function refresh() {
@@ -345,6 +391,11 @@ function refresh() {
     error: meta.error,
   });
 
+  if (state.view === 'year') {
+    renderYear();
+    el('sentinel').hidden = true;
+    return;
+  }
   if (state.view === 'album' && !state.album) return;
   ctx.catalog.update(state.filtered, { reset: true });
   el('sentinel').hidden = !ctx.catalog.hasMore;
@@ -516,6 +567,11 @@ function wire() {
   });
 
   el('back').addEventListener('click', () => {
+    // 年度页的「返回」是回时间流，不是回相册根目录——它本来就不在相册里
+    if (state.view === 'year') {
+      state.view = 'timeline';
+      state.year = '';
+    }
     state.album = '';
     refresh();
     syncUrl(true);
@@ -714,6 +770,36 @@ async function boot() {
 
   fillFilters();
   renderSite();
+
+  // 年度页（T-24）：三个出口都回时间流，只是带的筛选不同——
+  // 点月份带 year+month，点标签变成搜索，点「看这一年的照片」只带 year。
+  ctx.yearPage = createYearPage({
+    host: el('year-page'),
+    onPickMonth: (month) => {
+      state.view = 'timeline';
+      state.month = String(month);
+      refresh();
+      syncUrl(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    onPickTag: (zh) => {
+      const word = String(zh || '').trim();
+      if (!word) return;
+      state.view = 'timeline';
+      state.month = '';
+      state.q = word;
+      state.mode = 'search';
+      refresh();
+      syncUrl(true);
+    },
+    onReset: () => {
+      state.view = 'timeline';
+      state.month = '';
+      refresh();
+      syncUrl(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+  });
   // V5：搜索界面、五态图例；两者都只在已有静态骨架上装配，不新建第二套模型。
   // V5: search UI and the five-state legend, mounted on the existing skeleton.
   ctx.searchUI = initSearchUI({ onQuery, onRetry: loadIndex });

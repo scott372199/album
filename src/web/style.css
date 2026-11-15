@@ -46,6 +46,21 @@
   --c-toast: rgba(29, 29, 31, 0.94);
   --c-wall-bar: rgba(18, 18, 20, 0.72);
 
+  /* 内容色板：照片识别出来的颜色词要有个能看的实心块。这些是**数据的颜色**，
+     不是主题的颜色，所以三档主题里都不翻——只在深色底上靠一圈内阴影保住边界。
+     前缀用 --sw- 而不是 --c-：--c-* 那层的含义是「跟着主题变」。 */
+  --sw-red: #b4554a;
+  --sw-orange: #c07a45;
+  --sw-yellow: #c2a24a;
+  --sw-green: #5d8a63;
+  --sw-blue: #4a7fa5;
+  --sw-purple: #7a6a9a;
+  --sw-pink: #c48a94;
+  --sw-brown: #8a6f52;
+  --sw-grey: #8a8a8f;
+  --sw-black: #3a3a3e;
+  --sw-white: #efeee9;
+
   /* 叠加基色：照片与深色之上的半透明层。基色只定义一次，透明度留在使用处，
      写成 rgb(var(--c-on-rgb) / 0.16) —— 那个 16% 是哪来的，一眼看得出来 */
   --c-on-rgb: 255 255 255;
@@ -862,6 +877,181 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ---------- 10.x 年度页（T-24） ---------- */
+
+/* 年份入口条：只在相册根目录出现，点年份进年度页 */
+.year-nav {
+  max-width: 1600px;
+  margin: 0 auto 26px;
+  padding: 0 var(--pad);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.year-nav-item {
+  padding: 7px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease), background 0.2s var(--ease);
+}
+.year-nav-item:hover { border-color: var(--ink-3); color: var(--ink); }
+.year-nav-item.is-current {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.year-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 var(--pad) clamp(60px, 8vw, 110px);
+}
+.year-head { margin-bottom: clamp(22px, 3vw, 34px); }
+.year-title {
+  margin: 8px 0 6px;
+  font-size: var(--fs-section);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+.year-meta {
+  margin: 0;
+  font-size: var(--fs-caption);
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.year-empty {
+  margin: 0 0 40px;
+  padding: 36px 0;
+  color: var(--ink-3);
+  font-size: var(--fs-body);
+  border-top: 1px solid var(--line-soft);
+}
+
+/* 12 格恒长：空月留白但不压缩，所以 12 列是写死的，不按有照片的月份数生成 */
+.year-heat {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 6px;
+  height: clamp(120px, 16vw, 170px);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.year-cell {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.year-cell[data-empty="true"] { cursor: default; }
+.year-bar {
+  align-self: end;
+  width: 100%;
+  min-height: 3px;
+  border-radius: 4px 4px 0 0;
+  background: var(--accent);
+  transition: height 0.32s var(--ease), background 0.2s var(--ease);
+}
+/* 分档只改透明度，不引入第二套颜色：四档之间要能一眼分开，又不想多四种色 */
+.year-cell[data-level="1"] .year-bar { opacity: 0.42; }
+.year-cell[data-level="2"] .year-bar { opacity: 0.6; }
+.year-cell[data-level="3"] .year-bar { opacity: 0.78; }
+.year-cell[data-level="4"] .year-bar { opacity: 1; }
+/* 空月：格子还在，柱子不存在——这就是「留白不压缩」 */
+.year-cell[data-empty="true"] .year-bar { background: none; }
+.year-cell[data-empty="false"]:hover .year-bar { background: var(--c-accent-strong); opacity: 1; }
+.year-cell:focus-visible .year-bar { outline: 2px solid var(--accent); outline-offset: 2px; }
+.year-month {
+  padding-top: 7px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.year-side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  margin-top: 20px;
+}
+.year-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.year-tag {
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease);
+}
+.year-tag:hover { border-color: var(--ink-3); color: var(--ink); }
+
+.year-colour {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--fs-caption);
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.year-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  /* 内阴影而不是描边：深色底上白块不描边会糊在一起，描边又会让圆圈变大 */
+  box-shadow: inset 0 0 0 1px rgb(var(--c-off-rgb) / 0.18);
+}
+.year-swatch[data-colour="red"] { background: var(--sw-red); }
+.year-swatch[data-colour="orange"] { background: var(--sw-orange); }
+.year-swatch[data-colour="yellow"] { background: var(--sw-yellow); }
+.year-swatch[data-colour="green"] { background: var(--sw-green); }
+.year-swatch[data-colour="blue"] { background: var(--sw-blue); }
+.year-swatch[data-colour="purple"] { background: var(--sw-purple); }
+.year-swatch[data-colour="pink"] { background: var(--sw-pink); }
+.year-swatch[data-colour="brown"] { background: var(--sw-brown); }
+.year-swatch[data-colour="grey"] { background: var(--sw-grey); }
+.year-swatch[data-colour="black"] { background: var(--sw-black); }
+.year-swatch[data-colour="white"] { background: var(--sw-white); }
+
+.year-open {
+  margin-top: 26px;
+  padding: 11px 24px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
+}
+.year-open:hover { border-color: var(--ink); background: var(--paper-2); }
+
+@media (max-width: 640px) {
+  .year-heat { height: 104px; gap: 3px; }
+  .year-month { font-size: 9px; padding-top: 5px; }
 }
 
 /* ---------- 11. 深色章节 ---------- */

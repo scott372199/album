@@ -63,7 +63,8 @@ export function parseHashString(raw, snapshot) {
   if (snapshot.lightbox) snapshot.lightbox.index = -1;
 
   const view = params.get('view');
-  if (view === 'album' || view === 'timeline') snapshot.view = view;
+  // 'year' 是 V6 T-24 的年度页：复用 view 键，年份复用 year 键，不新增 hash 键
+  if (view === 'album' || view === 'timeline' || view === 'year') snapshot.view = view;
   const mode = params.get('mode');
   // 'search' 复用既有 mode 键：搜索态是视图状态，不是新的一层覆盖物，也不新增 hash 键
   if (mode === 'story' || mode === 'wall' || mode === 'search') snapshot.mode = mode;
