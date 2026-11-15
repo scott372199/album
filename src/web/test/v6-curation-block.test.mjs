@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
-  CURATION_VERSION, resolveCurationUrl, isCurationUsable, loadCuration,
-  curationIndex, pickPhotos, monthKeyOf,
+  CURATION_VERSION, isCurationUsable, loadCuration,
+  curationIndex, pickPhotos,
 } from '../js/curation.js';
+import { monthKeyOf } from '../js/month-strip.js';
 import { createCatalog } from '../js/gallery.js';
 
 /**
@@ -141,11 +142,18 @@ const oneBlock = () => {
 
 /* ---------- 产物地址与读取 ---------- */
 
-test('产物地址：rev 只认十六进制，其它一律走固定名', () => {
-  assert.equal(resolveCurationUrl('a75ad99f'), 'data/curation.a75ad99f.json');
-  assert.equal(resolveCurationUrl(''), '');
-  assert.equal(resolveCurationUrl('../../etc/passwd'), '');
-  assert.equal(resolveCurationUrl('a75ad99'), '', '太短的不像 rev');
+test('产物地址：rev 只认十六进制，像路径的上不了地址栏', async () => {
+  const asked = [];
+  const fetchImpl = async (url) => {
+    asked.push(url);
+    return { ok: false, status: 404 };
+  };
+  // 长得像路径的 rev 不拼进地址——否则一个坏 rev 就能把请求指到别处
+  await loadCuration({ rev: '../../etc/passwd', fetchImpl, now: () => 1 });
+  assert.deepEqual(asked, ['data/curation.json?_=1']);
+  asked.length = 0;
+  await loadCuration({ rev: 'a75ad99', fetchImpl, now: () => 1 });
+  assert.deepEqual(asked, ['data/curation.json?_=1'], '太短的不像 rev');
 });
 
 test('先拿 rev 版，失败退固定名；两份都没有就是 null', async () => {
@@ -222,7 +230,6 @@ test('monthKeyOf 与月份横条共用一份定义，不各写一遍', async () 
   assert.equal(monthKeyOf({ year: 2026, month: 9 }), '2026-09');
   const source = await readFile(new URL('../js/curation.js', import.meta.url), 'utf8');
   assert.match(source, /import \{ monthKeyOf \} from '\.\/month-strip\.js'/, '年月键只能有一份实现');
-  assert.match(source, /export \{ monthKeyOf \}/);
 });
 
 /* ---------- 时间流里的那一块 ---------- */

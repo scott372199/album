@@ -17,7 +17,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { curateMonths, labelsFromIndex, applySentences, curationDocument } from './curation.mjs';
+import { curateMonths, labelsFromIndex, applySentences, curationDocument, topWords } from './curation.mjs';
 import { createWriter, llmConfig } from './llm.mjs';
 
 /** 产物目录：站点静态资源下的 data/ */
@@ -25,19 +25,7 @@ const DATA_SUBDIR = 'data';
 
 /** 给模型的事实：只要「几张」与「出现过的中文词」，多一个字段都是在扩大公开面 */
 export function monthFacts(month, labelsById) {
-  const counts = new Map();
-  for (const id of month.picks) {
-    for (const label of labelsById.get(id) || []) {
-      const zh = typeof label.zh === 'string' ? label.zh.trim() : '';
-      if (zh) counts.set(zh, (counts.get(zh) || 0) + 1);
-    }
-  }
-  const words = [...counts.entries()]
-    // 词频降序，同频按码点序：任何机器上都得到同一句提示词
-    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
-    .slice(0, 6)
-    .map(([word]) => word);
-  return { count: month.count, words };
+  return { count: month.count, words: topWords(month.picks, labelsById) };
 }
 
 /**

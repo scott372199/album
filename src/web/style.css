@@ -1056,8 +1056,7 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
 
 /* ---------- 10.y 每月精选（T-22） ---------- */
 
-/* 一块卡片，压在该月标题之下。视觉上要比照片网格轻：它是导读，不是主角。
-   没有产物时整块不出现（连边框都不留），所以这里不需要「空态」样式。 */
+/* 卡片比照片网格轻：它是导读，不是主角。没有产物时整块不出现，所以没有空态样式 */
 .month-picks {
   margin: 2px 0 clamp(16px, 2vw, 24px);
   padding: 14px clamp(14px, 1.6vw, 20px) 16px;
@@ -1104,14 +1103,14 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
   grid-template-columns: repeat(9, minmax(0, 1fr));
   gap: 4px;
 }
-/* 九宫格里的瓦片由网格定尺寸，所以宽高交出去，只留一个正方形比例 */
+/* 尺寸交给网格，只留正方形比例 */
 .month-picks-grid .tile {
   width: 100%;
   height: auto;
   aspect-ratio: 1 / 1;
   border-radius: 8px;
 }
-/* 不裁切（verify 里是硬门禁）：方格里的照片留边，底色与卡片一致所以看不出缝 */
+/* 不裁切（verify 硬门禁）：留边，底色与卡片同色所以看不出缝 */
 .month-picks-grid .tile:hover { transform: translateY(-1px); }
 
 @media (max-width: 900px) {

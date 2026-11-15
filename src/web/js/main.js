@@ -476,7 +476,7 @@ function leaveMode() {
 
 function startStory(scope) {
   state.mode = 'story';
-  openStory(scope, { pace: state.pace, onClose: leaveMode });
+  openStory(scope, { pace: state.pace, onClose: leaveMode, rev: ctx.rev });
 }
 
 /**

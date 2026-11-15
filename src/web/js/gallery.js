@@ -3,7 +3,8 @@ import {
 } from './state.js';
 import { escapeHtml, photoAlt, srcsetFor, sizesFor, isTouch, reducedMotion, markWhenReady } from './ui.js';
 import { badgeText, spokenDuration } from './duration.js';
-import { pickPhotos, monthKeyOf } from './curation.js';
+import { pickPhotos } from './curation.js';
+import { monthKeyOf } from './month-strip.js';
 
 /* ---------- 视频瓦片：全局只允许 1 个在播 ---------- */
 const media = { playing: null };
@@ -124,10 +125,7 @@ function createTile(photo, { width, height, kind, onOpen, index }) {
   tile.className = 'tile';
   tile.dataset.id = photo.id;
   tile.dataset.index = String(index);
-  // 尺寸只在给了像素时写死；不给就让 CSS 定（每月精选的九宫格格子由网格决定，
-  // 内联 `0px` 会把 aspect-ratio 顶掉）。
-  // Only pin the size when pixels are given; otherwise CSS decides (the picks
-  // grid sizes its cells, and an inline 0px would defeat aspect-ratio).
+  // 不给像素就让 CSS 定尺寸：内联 0px 会把九宫格的 aspect-ratio 顶掉
   if (Number.isFinite(width) && Number.isFinite(height)) {
     tile.style.width = `${width}px`;
     tile.style.height = `${height}px`;
@@ -299,13 +297,9 @@ function createRow(plan, { byId, onOpen }) {
 
 /**
  * 每月精选块（V6 T-22）：9 张 + 一句话 + 一个跳过的出口。
- *
- * 不渲染空占位：产物缺失、id 对不上清单、当前筛选把它们滤光了都直接不建这个块；
- * 过滤后不足 3 张也不建——剩 1 张还叫「本月精选」是骗人。跳过用真按钮（键盘可达），
+ * 不渲染空占位：没产物、id 对不上、筛选后不足 3 张都不建块；跳过用真按钮（键盘可达），
  * 只在这一次浏览里生效。
- *
- * No placeholder ever: no artifact, stale ids, or a filter that leaves fewer than
- * three picks all mean no block. The skip is a real button and lasts this visit.
+ * Never an empty placeholder; the skip is a real button and lasts this visit only.
  */
 const MIN_VISIBLE_PICKS = 3;
 
@@ -378,11 +372,7 @@ function createYearSection(plan, { byId, order, onOpen, curation, skipped, onSki
       title.innerHTML = `${item.month} 月<span>${item.count}</span>`;
       rowsHost.appendChild(title);
 
-      // 策展块挂在月份标题**之下**：标题是这个分组的标签，块是分组的第一行内容。
-      // 放在标题之上会让人以为它属于上一个月。
-      // The picks block sits under the month heading: the heading labels the
-      // group, the block is its first content. Above the heading it would read as
-      // belonging to the previous month.
+      // 挂在月份标题之下：放标题之上会被读成上一个月的东西
       const key = monthKeyOf({ year: plan.year, month: item.month });
       const entry = curation?.get(key);
       if (entry && !skipped.has(key)) {
@@ -502,10 +492,7 @@ export function createCatalog({
   });
   observer.observe(container);
 
-  /**
-   * 跳过本月的精选：块自己消失，别的 DOM 一个都不动。
-   * 不重排整页是有意的——用户刚点完按钮，页面跳动会让人以为点错了东西。
-   */
+  /** 跳过本月精选：块自己消失，别的 DOM 一个都不动（重排会让页面跳动，像是点错了） */
   function skipPicks(key) {
     if (!key || skippedPicks.has(key)) return;
     skippedPicks.add(key);

@@ -1,26 +1,18 @@
 /**
- * 每月策展产物的读取与索引（V6 T-22）/ Load and index the curation artifact.
- *
- * 不碰 DOM：选片在构建期已定死，浏览器只做「按 rev 找到产物、按年月取那 9 个 id」。
- * 产物缺失是**正常状态**：返回 null，不留空占位（FR-01）。首屏预算 120 KB 是硬
- * 门禁，所以这里只留生产代码用得到的导出。
- *
- * No DOM: selection is frozen at build time. A missing artifact is a normal state,
- * not an error — null, no placeholder. Only exports production code actually uses.
+ * 每月策展产物的读取与索引（V6 T-22）。不碰 DOM，产物缺失就返回 null，不留空占位。
+ * Load/index the curation artifact. No DOM; a missing artifact means null.
  */
 
 import { monthKeyOf } from './month-strip.js';
+import { loadArtifact } from './data.js';
 
-export { monthKeyOf };
 
 /** 与构建期同一个版本号：对不上就不认这份产物 */
 export const CURATION_VERSION = 1;
 
-/** 带 rev 的不可变地址；rev 为空时返回空串（直接走固定名） */
-export function resolveCurationUrl(rev) {
-  const clean = String(rev || '').trim();
-  if (!/^[0-9a-f]{8,64}$/i.test(clean)) return '';
-  return `data/curation.${clean}.json`;
+/** 拉取产物：地址拼装与兜底顺序在 `data.js#loadArtifact` 里，这里只给出版本号 */
+export function loadCuration({ rev = '', fetchImpl, now } = {}) {
+  return loadArtifact('curation', { rev, version: CURATION_VERSION, fetchImpl, now });
 }
 
 /** 产物是否可用：版本对得上、有 months 数组 */
@@ -29,30 +21,6 @@ export function isCurationUsable(doc, { version = CURATION_VERSION } = {}) {
     && typeof doc === 'object'
     && Number(doc.version) === Number(version)
     && Array.isArray(doc.months);
-}
-
-/**
- * 拉取产物。先按 `rev` 拿不可变的那份，没有再退到固定名（plan §5 的兜底路径）。
- * 两个都失败 → `null`，调用方照常渲染时间流。
- */
-export async function loadCuration({ rev = '', fetchImpl = globalThis.fetch, now = Date.now } = {}) {
-  if (typeof fetchImpl !== 'function') return null;
-  const candidates = [];
-  const versioned = resolveCurationUrl(rev);
-  if (versioned) candidates.push(versioned);
-  candidates.push(`data/curation.json?_=${now()}`);
-
-  for (const url of candidates) {
-    try {
-      const response = await fetchImpl(url, { cache: 'no-cache' });
-      if (!response || !response.ok) continue;
-      const data = await response.json();
-      if (isCurationUsable(data)) return data;
-    } catch {
-      // 这一份没有就试下一份；都不行就是没有
-    }
-  }
-  return null;
 }
 
 /**

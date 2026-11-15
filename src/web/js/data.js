@@ -45,6 +45,31 @@ export async function loadSearchIndex(url) {
   return response.json();
 }
 
+/**
+ * 拉取构建期产物（策展 / 故事文案同一套约定）：先按 `rev` 拿不可变的那份，
+ * 没有再退到固定名；都不行就是 null。产物缺失是正常状态，不是错误。
+ * Shared artifact loader: versioned file first, fixed name as fallback; null when
+ * neither exists, because a missing artifact is a normal state.
+ */
+export async function loadArtifact(name, { rev = '', version = 1, fetchImpl = globalThis.fetch, now = Date.now } = {}) {
+  if (typeof fetchImpl !== 'function') return null;
+  const clean = String(rev || '').trim();
+  const urls = [];
+  if (/^[0-9a-f]{8,64}$/i.test(clean)) urls.push(`data/${name}.${clean}.json`);
+  urls.push(`data/${name}.json?_=${now()}`);
+  for (const url of urls) {
+    try {
+      const response = await fetchImpl(url, { cache: 'no-cache' });
+      if (!response || !response.ok) continue;
+      const data = await response.json();
+      if (data && Number(data.version) === Number(version)) return data;
+    } catch {
+      // 这一份没有就试下一份
+    }
+  }
+  return null;
+}
+
 export function buildIndex(manifest) {
   const photos = Array.isArray(manifest.photos) ? manifest.photos : [];
   const albums = Array.isArray(manifest.albums) ? manifest.albums : [];

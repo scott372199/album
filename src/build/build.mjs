@@ -10,6 +10,8 @@ import { buildManifest, loadTagOverrides } from './manifest.mjs';
 import { loadSite, resolveHero, resolveFeatured, resolveHeroSections } from './site.mjs';
 import { buildHeroSections } from '../web/js/hero-data.js';
 import { writeCurationArtifacts } from './curation-artifact.mjs';
+import { writeStoryArtifacts } from './story.mjs';
+import { createWriter, llmConfig } from './llm.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const PHOTOS = path.join(ROOT, 'photos');
@@ -19,6 +21,7 @@ const CACHE = path.join(ROOT, '.build-cache.json');
 const SITE_FILE = path.join(ROOT, 'site.json');
 const DATA_DIR = path.join(ROOT, 'data');
 const LLM_CACHE = path.join(ROOT, 'src', 'build', 'cache');
+const STORY_CACHE = path.join(LLM_CACHE, 'story');
 const CACHE_VERSION = 3;
 
 /**
@@ -377,12 +380,21 @@ async function main() {
   // Curation is produced only by the all target; the web target has no photos,
   // and the deploy never syncs data/ — production's copy comes from the server.
   if (TARGET === 'all') {
+    // 两个产物各一次批量调用，而不是合并成一次：合并要把两套事实塞进同一个请求、
+    // 再靠 key 前缀区分回来，省下的只是一次 HTTP，代价是两条链路互相耦合。
+    // Two batched calls rather than one merged request: merging would couple the
+    // two pipelines to save a single round trip.
+    const rev = hashOf(manifestJson);
+    const index = await loadLocalIndex();
     await writeCurationArtifacts({
+      photos: manifest.photos, rev, dist: DIST, index, cacheDir: LLM_CACHE,
+    });
+    await writeStoryArtifacts({
       photos: manifest.photos,
-      rev: hashOf(manifestJson),
+      rev,
       dist: DIST,
-      index: await loadLocalIndex(),
-      cacheDir: LLM_CACHE,
+      index,
+      writer: createWriter({ config: llmConfig(), cacheDir: STORY_CACHE }),
     });
   }
 

@@ -53,6 +53,9 @@ export const SENTENCE_MAX = 48;
 /** 顶层 picks 上限：给照片墙「精选」源用，不值得无限制地长 */
 export const PICKS_MAX = 60;
 
+/** 只认汉字标签：词表还没覆盖到的词仍会以英文 term 出现，那些不进文案 */
+const CJK = /[\u4e00-\u9fa5]/;
+
 /** 码点序：产物要跨平台逐字节一致，`localeCompare` 会因 ICU 不同而变 */
 export function compareKeys(a, b) {
   const left = String(a);
@@ -84,6 +87,31 @@ export function labelsFromIndex(index) {
     map.set(item.id, labels.filter((label) => label && typeof label.term === 'string' && label.term));
   }
   return map;
+}
+
+/**
+ * 一批照片里出现最多的中文词（给模型当事实用）。
+ * 只认 `zh`：内部 term 是英文标识，没有理由进提示词。
+ * 词频降序、同频按码点序——任何机器上都得到同一份提示词，这是幂等的前提。
+ *
+ * Most frequent Chinese words across a set of photos, for prompting. Chinese
+ * labels only, and ordered without locale-sensitive comparison so the prompt is
+ * identical on every machine.
+ */
+export function topWords(ids, labelsById, limit = 6) {
+  const counts = new Map();
+  for (const id of ids) {
+    for (const label of labelsById.get(id) || []) {
+      const zh = typeof label.zh === 'string' ? label.zh.trim() : '';
+      // 词表没覆盖到的标签会以英文 term 出现（实测有 brown / grey / person），
+      // 中文文案里混进英文词比少一个词更糟
+      if (zh && CJK.test(zh)) counts.set(zh, (counts.get(zh) || 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || compareKeys(a[0], b[0]))
+    .slice(0, limit)
+    .map(([word]) => word);
 }
 
 /** 按置信度降序取前 n 个标签，同分时按 term 码点序，保证确定性 */

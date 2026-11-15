@@ -207,7 +207,8 @@
         <p class="story-card-sub" id="story-card-sub"></p>
       </div>
       <div class="story-end" id="story-end" hidden>
-        <h2>这一段，走完了。</h2>
+        <!-- 结束语由构建期产物给出（T-23），运行时填入；没有产物就按首末章算一句 -->
+        <h2 id="story-end-title"></h2>
         <p id="story-end-stats"></p>
         <div class="story-end-actions">
           <button type="button" id="story-replay">再看一次</button>
