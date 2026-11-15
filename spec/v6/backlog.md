@@ -84,8 +84,50 @@ vocabulary visibility (B-02), stop full-list false positives (B-05), and reword 
 acceptance criterion around concepts actually present in the library. Never pad the
 private album with unrelated stock photos just to pass a check.
 
+## B-07 一键拉起/销毁 ≤ 60 秒 / One-click up/down within 60 seconds
+
+**中文 / Chinese**
+2026-11-15 用户明确提出性能期望：管理站的**一键拉起与一键销毁都要在 1 分钟内**完成，
+作为 V6 优化点；V5 不实现，只记录目标与约束。实测基线（五次生命周期，逐层时间戳见
+`spec/v5/V5-FULL-ACCEPTANCE-PLAN.md` §4.4）：拉起冷启动 **6m35s**、重复拉起 **2m24s**，
+销毁 **11m44s / 11m42s**。`album-infra` PR #22 的快路径（跳过常驻层、并行 init、
+关站不等 CDN 部署）预计把重复拉起降到约 1m20s、关站降到约 9m，**仍远达不到 60 秒**。
+
+根因是**架构级**而不是编排级：ECS Express Gateway Service 的删除稳定耗时
+7m58s~8m4s（占关站约 68%），创建侧 ALB / EFS 挂载点各 1~2 分钟；Terraform 只能等
+AWS 控制面返回。V6 需要改变「关站 = 销毁全部运行时」这个模型，候选方向：
+
+1. **缩容到 0 而不删除 / Scale to zero**: 用 `update-express-gateway-service
+   --scaling-target` 把副本降到 0、保留服务定义；先验证 Terraform provider 是否支持、
+   零副本是否仍计费、以及扩容回 1 的耗时。
+2. **运行时常驻 + 只切流量 / Keep runtime, switch traffic**: CloudFront 分发已常驻
+   （PR #17），关站可只把分发 disabled；计算层保留最小副本或按需唤醒。需重新评估
+   每月费用与 T-31 安全边界（源站公网直连仍是已知风险）。
+3. **拆掉冷启动重资源 / Drop heavy cold-start resources**: Grafana 观测栈
+   （ALB + EFS + ECS service）改为按需拉起、默认不进生命周期，冷启动可再省约 2 分钟
+   并省下 ALB 费用。
+4. **验收口径 / Acceptance metric**: 分别记录「触发 → 站点可登录」与
+   「触发 → 持续计费停止」两个 P95，两者都 ≤60s 才算达标；**不要用
+   「workflow 显示 success」冒充用户可感知的时间**。
+
+*English*
+On 2026-11-15 the user set a performance target: one-click up **and** down must both
+finish within 60 seconds. V5 records the goal but does not implement it. Measured
+baselines: cold up 6m35s, repeat up 2m24s, down 11m44s / 11m42s. The fast path shipped
+in `album-infra` PR #22 should bring repeat up to ~1m20s and down to ~9m — still far
+from 60s. The bottleneck is architectural: deleting an ECS Express Gateway Service
+takes 7m58s-8m4s (≈68% of shutdown), and ALB / EFS mount targets cost 1-2 minutes
+on creation. V6 must move away from "shutdown = destroy all runtime": scale the
+Express service to zero instead of deleting it (verify provider support, idle cost
+and scale-up time), keep a minimal runtime behind the already-persistent CloudFront
+distribution, and make the Grafana stack opt-in. Acceptance must measure two P95s —
+trigger→site sign-in and trigger→billing stops — both ≤60s; a green workflow is not
+a user-perceived timing measurement.*
+
 ---
 
-> 处理约定 / Convention：以上六条全部推迟到 V6 spec 阶段统一定义方案与优先级，
-> V5 不做任何改动。All six are deferred to the V6 spec phase; V5 makes no
-> changes for them.
+> 处理约定 / Convention：以上七条全部推迟到 V6 spec 阶段统一定义方案与优先级，
+> V5 不做任何改动。B-07 是**性能目标**，与 B-01~B-06 的产品体验项分开排期。
+> *All seven are deferred to the V6 spec phase; V5 changes nothing for them.
+> B-07 is a performance target and should be scheduled separately from the
+> product-experience items B-01–B-06.*

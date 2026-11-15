@@ -2,18 +2,16 @@
 
 > 2026-11-14。用户选定「按 `V5-ACCEPTANCE.md` 全矩阵验收」，即不缩范围、不降口径。
 > 本文是执行顺序与决策记录，不替代验收矩阵；判定仍只看 `V5-ACCEPTANCE.md`。
-> **当前状态：已按用户授权点火成功**：管理站四层在线（`30-compute` 26 个资源 +
-> 常驻 CloudFront 分发 `E2VQ7PHXOKOIVY`），`/actuator/health` 返回 `UP`。
-> 等待用户把 CNAME 指向 `d7shs93wdjmbm.cloudfront.net` 后开始逐域验收；
-> 验收后再一键销毁。判定仍只看 `V5-ACCEPTANCE.md`，代码就绪与站点上线都不等于验收通过。
+> **当前状态（2026-11-15）：V5 已收尾 / V5 is closed**。正式 UI 上线、七域真实数据复验、
+> 用户逐域验收通过、站点已一键销毁（702s / 11m42s，见 §4.4）；管理站常态关站，
+> CloudFront 分发常驻但 `disabled`。判定仍只看 `V5-ACCEPTANCE.md`：V5 为
+> `CLOSED WITH EXCEPTIONS`，未满足项整体结转 V6（含 B-07 生命周期性能目标）。
 >
-> *On 2026-11-14 the user chose full-matrix acceptance. This is the execution order
-> and decision record; the acceptance matrix remains the only gate. **The site has now
-> been brought up with the user's authorisation**: all four management layers are live
-> (26 resources in 30-compute plus the persistent CloudFront distribution
-> `E2VQ7PHXOKOIVY`), and `/actuator/health` returns `UP`. Domain-by-domain acceptance
-> starts once the user points the CNAME at `d7shs93wdjmbm.cloudfront.net`; one-click
-> teardown follows acceptance. Code readiness and a live site are not acceptance.*
+> *As of 2026-11-15 V5 is closed: the dashboard shipped, seven domains were verified
+> against real data, domain acceptance passed, and the site was torn down in 702s
+> (§4.4). The management site is off by default with a persistent-but-disabled CDN.
+> `V5-ACCEPTANCE.md` records `CLOSED WITH EXCEPTIONS`; outstanding items carry over
+> to V6, including the B-07 lifecycle performance target.*
 
 ## 1. 目标 / Goal
 
@@ -446,11 +444,26 @@ was measured before the optimisation so the next run is directly comparable.*
 scale-up time must be verified); making the Grafana stack opt-in would save ~2 more
 minutes and the ALB cost. Both change resource scope and require user approval.*
 
-> 判定不变：用户 2026-11-15 「验收通过」指本轮逐域验收通过；`V5-ACCEPTANCE.md` 的
-> release gate 未改写，#1/#2/#3/#5/#6 与 T-29~T-32 仍按该文档口径开放。
-> *The verdict is unchanged: this was domain acceptance, not the V5 release gate.*
+> 判定：用户 2026-11-15 的「验收通过」指**本轮逐域验收通过**；同日用户决定
+> **V5 收尾**，`V5-ACCEPTANCE.md` 标记为 `CLOSED WITH EXCEPTIONS`（带例外关闭），
+> #1/#2/#3/#5/#6 与 T-29~T-32 整体结转 V6，**不视为已满足**。生命周期 ≤60s 记为
+> V6 B-07。逐域验收通过、站点上线、一键销毁都不等于 release gate 全部满足。
+>
+> *Verdict: the 2026-11-15 "acceptance passed" refers to domain acceptance. The same
+> day the user closed V5 as `CLOSED WITH EXCEPTIONS`; blockers #1/#2/#3/#5/#6 and
+> T-29~T-32 carry over to V6 and are not treated as satisfied. The ≤60s lifecycle
+> target is V6 B-07. A green site, a signed domain review and a one-click teardown
+> do not add up to a satisfied release gate.*
 
 ## 5. 验收触发条件 / Acceptance trigger
+
+> 2026-11-15 收尾订正 / Closure note：以下清单是 2026-11-14 制定的**原计划**，保持原样
+> 作为过程记录。其中 `/api/management/snapshot` 在收尾时已实测 404，现行命令见
+> `V5-ACCEPTANCE.md`「Required acceptance commands」。这些勾选项**未全部完成**正是 V5
+> 判定为 `CLOSED WITH EXCEPTIONS` 的原因，未勾选项整体结转 V6，**不要在 V5 里回补勾选**。
+> *Dated 2026-11-14 and kept verbatim as a process record. The snapshot URL is gone
+> (404); see the live commands in `V5-ACCEPTANCE.md`. Unchecked items are exactly why
+> V5 closed with exceptions; they carry over to V6 and must not be ticked inside V5.*
 
 - [ ] 6 个 release blockers 各有生产证据；#1 的六示例例外由用户在 T-32 签字确认
 - [ ] T-29 / T-30 / T-31 / T-32 在 `tasks.md` 中更新为有证据的完成

@@ -385,3 +385,21 @@ P7 Acceptance       T-30 → T-31 → T-32
 4. 一开始部署 Kubernetes 或高可用 observability cluster；
 5. 第一阶段强制引入 embedding/vector database；
 6. 用复制 Apple 素材、页面文案或受版权保护资源实现视觉效果。
+
+---
+
+## 5. 迭代收尾 / Iteration closure (2026-11-15)
+
+**中文 / Chinese**
+用户 2026-11-15 完成逐域验收并决定 **V5 收尾**。本文各任务的 ✅ 仍只表示「代码已入库」，
+**不改写为有证据的验收完成**；T-29 / T-30 / T-31 / T-32 保持「⏳ 未开始」原状，
+由用户批准整体结转 V6，不伪造证据。下一轮范围一律写在 `spec/v6/`，不与 V5 混写；
+判定与结转清单见 `V5-ACCEPTANCE.md`「V5 收尾与结转 / Closure and carry-over」，
+产品与性能条目见 `spec/v6/backlog.md` B-01~B-07。
+
+*English*
+The user completed domain acceptance on 2026-11-15 and closed V5. A ✅ here still
+means "code merged", not "acceptance evidenced"; T-29~T-32 remain Not started and
+are carried over to V6 rather than being marked done. All next-iteration scope
+belongs in `spec/v6/` (B-01–B-07) and must never be mixed into V5. The closure
+table lives in `V5-ACCEPTANCE.md`.*

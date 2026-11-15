@@ -15,24 +15,40 @@
 > live site. The matrix below restates the evidence actually obtained; blockers without
 > evidence remain open and V5 **must not be declared fully accepted**.*
 
+> 2026-11-15 迭代收尾 / Iteration closure：用户已完成逐域验收（「验收通过」）并决定
+> **V5 迭代收尾**。本矩阵**不改写为 `fully accepted`**：未取得生产证据的 blockers 与
+> T-29~T-32 由用户决定**整体结转 V6**，记为已批准的例外，而不是「已满足」。
+> 「迭代关闭」与「release gate 全部满足」是两件事；逐域验收通过不等于后者。
+> 结转清单见文末「V5 收尾与结转 / Closure and carry-over」。
+>
+> *On 2026-11-15 the user completed domain acceptance and closed the V5 iteration.
+> This matrix is NOT rewritten as fully accepted: blockers lacking production evidence
+> and T-29~T-32 are carried over to V6 as user-approved exceptions, not as satisfied
+> criteria. Closing an iteration is not the same as satisfying the release gate.*
+
 ## Status summary
 
 | Success criterion | Status | Evidence / blocker |
 | --- | --- | --- |
 | Apple-style responsive home, hero chapters, accessible motion | **Partial** | Hero registry (`site.json` → `manifest.heroSections`, capped at 8), `srcset` preloading of the current and next slide, reduced-motion and low-performance fallback are implemented. Browser acceptance on the real photo set is still required. |
 | Natural-language semantic image search | **生产已接线并实机验收 / Wired and accepted on production**; still **Partial** against the six examples | 版本化静态索引 `data/search-index.<rev>.json` 与兜底 `data/search-index.json` 已发布（2026-11-14 核验：`rev=72fbe1c4c299…`，47 条、34 张带识别标签）；识别输入恒为脱敏派生图 `photos/<id>/grid.webp`，经 WebP→JPEG 送 Rekognition，标签按图存 `data/labels/<id>.json`；新上传在 processor 内 best-effort 识别并重建索引。**实机验收**：黑色、白色、绿色、山峰、湖水、汽车均返回结果；2026-11-14 另用真实上传链路两次验证颜色命中新图（见下两节）。**仍未达成**：六个示例未全部命中（「摩托车」无结果，见 V6 B-02；「山峰」在当前语料中无标签，见 V6 B-06）；词表外词静默返回全量（V6 B-05）。correlation ID 已于 2026-11-14 第二次取证闭环，不再是本行缺口。 / *A versioned static index is published from redacted derivatives, backfilled for 34 of 47 items, accepted on the live site for colour and scene queries, and re-verified end-to-end twice with real uploads on 2026-11-14; six-example coverage and out-of-vocabulary behaviour remain unmet. Correlation-ID propagation was closed by the second run.* |
-| Unified CI/CD, resources, logs, metrics, security and billing management | **Partial** | `cx.chenyouyi.top` is deployed and read-only. CI/CD/resources/security are fixture-backed; Logs, Metrics and Billing explicitly report unavailable until their adapters are connected. |
+| Unified CI/CD, resources, logs, metrics, security and billing management | **Partial** | 2026-11-15 线上复验：正式登录页与七域导航已上线；`cicd` / `resources` / `logs` / `security` / `billing` 均为 `source=aws` 真实只读数据，`resources` 状态全 `active`；`metrics` 诚实返回 `unavailable`（近一小时无 CloudWatch 样本，不伪造 0），`audit` 仍为 `fixture`（19 条示例）。管理站常态关站，一键生命周期见 `V5-FULL-ACCEPTANCE-PLAN.md` §4.4。 / *The dashboard and seven-domain navigation shipped; five domains return real AWS read-only data, metrics honestly reports `unavailable` and audit remains fixture-backed. The site is off by default.* |
 | Structured evidence for upload, processing, publishing and infrastructure changes | **Partial** | 基础设施证据齐备：CloudWatch 日志、Terraform state、GitHub 工作流产物；生产 S3 对象证据（`data/labels/<id>.json` ×34、版本化索引、兜底索引）、CI run `43560052551`，以及 2026-11-14 两次真实上传的 S3 事件 → 三档产物 → 标签 → 清单 → 索引 → 搜索命中全链路日志（见下两节）。correlation ID 已在第二次取证中闭环：两个 CloudWatch 日志组按同一 ID 可查到 `upload / processor / publish / recognition / index / invalidation` 全阶段，CloudTrail 的 `CreateInvalidation` 请求参数也带同一 ID。**仍缺**管理站 Logs/Metrics/Billing 的真实运维数据、识别失败的生产故障注入证据、以及三端浏览器 + reduced-motion 记录。 / *Infrastructure evidence and two complete real-upload traces exist. The second run closed the correlation-ID requirement with a single-ID trace across both log groups and a matching CloudTrail CallerReference. Still missing: real management-site operations data, production failure-injection evidence and three-platform browser records.* |
-| Layered, least-privilege, planable and rollbackable infrastructure | **Pass** | `30-compute` and `40-management-edge` are independent Terraform states; immutable image digest, IAM roles, HTTPS-only origin, SG boundary and plan/apply evidence are recorded. |
+| Layered, least-privilege, planable and rollbackable infrastructure | **Pass** | 重组后 `30-compute` 与 `20-edge` 是独立 Terraform state；不可变镜像 digest、IAM 角色、HTTPS-only origin、SG 边界与 plan/apply 证据齐备。 / *After the reorganisation `30-compute` and `20-edge` are independent states; immutable digest, IAM roles, HTTPS-only origin, SG boundary and plan/apply evidence are recorded.* |
 
 ## Required acceptance commands
 
 ```bash
-# Management surface
+# Management surface — 常态关站，先一键拉起；共享口令只在对话中单独提供，绝不入库
+# The management site is off by default; bring it up first and never store the shared key here.
 curl -fsS https://cx.chenyouyi.top/
 curl -fsS https://cx.chenyouyi.top/actuator/health
-curl -fsS -H 'X-Correlation-Id: v5-acceptance-001' \
-  https://cx.chenyouyi.top/api/management/snapshot
+TOKEN=$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  -d '{"principal":"admin","password":"<shared-key>"}' \
+  https://cx.chenyouyi.top/api/v1/auth/login | jq -r .accessToken)
+curl -fsS -H "Authorization: Bearer $TOKEN" \
+  -H 'X-Correlation-Id: v5-acceptance-001' \
+  https://cx.chenyouyi.top/api/v1/resources
 
 # Photo surface
 curl -fsS https://photos.chenyouyi.top/
@@ -43,16 +59,27 @@ npm test
 npm run build
 ```
 
+> 旧端点 `GET /api/management/snapshot` 已不存在（实测 404），实际契约是
+> `POST /api/v1/auth/login` + `GET /api/v1/*` 七域。blocker #6 要求的
+> 「不得把 `ACTIVE` / `Deployed` 报成 `planned`」已由真实 `resources` 适配器满足，
+> 但验收命令必须按实际端点更新，不能继续引用废弃 URL。
+> *The legacy snapshot endpoint is gone (404); the live contract is the v1 login plus
+> seven read-only domains. Blocker #6 is satisfied by the real inventory adapter, but
+> the acceptance commands must reference the endpoints that actually exist.*
+
 ## Delivery hygiene / 交付卫生
 
 2026-11-13 起，四个仓库的 V5 源码全部入库：`spec/v5`（含 `spec`/`plan`/`contracts`）、
 `src/server/{search,recognition}`、`40-management-edge` 全层与 `observability/`。
-**此前 `40-management-edge` 已 apply 到生产但四个文件未跟踪**，属最高风险项，现已修正。
-本地提交**尚未推送**，需人工审阅后推送。
+**此前 `40-management-edge` 已 apply 到生产但四个文件未跟踪**，属最高风险项，现已修正
+（该层在 V5 重组后为 `20-edge`）。下段英文写于 2026-11-13，当时「本地提交尚未推送、
+需人工审阅」是准确的；**V5 收尾时四个仓库的改动均已通过 PR 合并推送到 `main`**。
 
 *Since 2026-11-13 all V5 source lives in git. The management edge layer had been applied to
-production while four of its files were untracked — the highest-risk defect, now fixed. Commits
-are local and await review before pushing.*
+production while four of its files were untracked — the highest-risk defect, now fixed; that
+layer was later reorganised into `20-edge`. The note "commits are local and await review"
+describes the 2026-11-13 state only: at V5 closure every change had been merged to `main`
+through pull requests.*
 
 ## 2026-11-14 端到端上传实测 / End-to-end upload run
 
@@ -181,3 +208,40 @@ V5 must not be declared fully accepted until all of these have evidence:
 - A successful ECS health check does not prove the V5 frontend or semantic search
   acceptance criteria.
 - DNS, App Runner removal and write API enablement remain separate approvals.
+
+---
+
+## V5 收尾与结转 / Closure and carry-over (2026-11-15)
+
+**中文 / Chinese**
+用户 2026-11-15 完成逐域验收并决定 **V5 迭代收尾**。已取得生产证据的部分：照片站
+（Apple 式首页、语义搜索实机验收、脱敏上传链路）、#4 correlation ID 全链路闭环、
+分层可 plan / 可回滚的 IaC、管理站正式登录页与七域 API（其中
+`cicd` / `resources` / `logs` / `security` / `billing` 为 `source=aws` 真实只读数据）。
+**V5 不声明 `fully accepted`**：以下未满足项由用户批准整体结转 V6，记为已批准的例外，
+而非「已满足」。
+
+| 项 / Item | V5 收尾时状态 / Status at closure | 去向 / Destination |
+| --- | --- | --- |
+| blocker #1 六示例全命中 | 库内无「摩托车」等语料，未达成 | V6 B-02 / B-05 / B-06 |
+| blocker #2 识别失败生产故障注入 | 有代码与单测，无生产证据 | V6（用户已定「不做补生产证据」） |
+| blocker #3 Logs / Metrics / Billing 真实数据 | logs / billing 已真实；metrics `unavailable`、audit `fixture` | V6 真实运维数据 |
+| blocker #4 correlation ID 全链路 | ✅ 已关闭 | — |
+| blocker #5 三端浏览器 + reduced-motion | 无记录 | V6 验收记录 |
+| blocker #6 不把 ACTIVE 报成 planned | 真实 `resources` 适配器已满足；本文验收命令已订正 | 已订正 |
+| T-29 / T-30 / T-31 / T-32 | 未开始 | V6 发布关卡 |
+| 前端 V6 / 服务端 V5 镜像对齐 | `prod.tfvars` 仍指向旧镜像 tag | V6 首个编码任务 |
+| 一键 up / down ≤ 60s | 实测 up 2m24s~6m35s、down 11m42s | **V6 B-07** |
+
+*English*
+The user completed domain acceptance on 2026-11-15 and closed the V5 iteration.
+Production evidence exists for the photo site, the correlation-ID trace, layered
+planable/rollbackable infrastructure, and the management dashboard with seven live
+read-only domains (five of them backed by real AWS data). V5 is **not** declared
+fully accepted: the items above are carried over to V6 as user-approved exceptions,
+not as satisfied criteria. The lifecycle performance target is tracked as V6 B-07.
+
+> **判定 / Verdict**：V5 = `CLOSED WITH EXCEPTIONS`（带例外关闭）。逐域验收通过，
+> release gate 未全部满足；后续任何「V5 已完全验收」的说法都与本文件冲突。
+> *V5 is closed with exceptions: domain acceptance passed, the release gate is not
+> fully satisfied. Any later claim of full V5 acceptance contradicts this file.*

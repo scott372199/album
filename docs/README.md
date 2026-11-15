@@ -80,6 +80,21 @@ resources but never content.*
 
 ---
 
+## 当前迭代 / Current iteration
+
+**V5 已收尾（`CLOSED WITH EXCEPTIONS`），V6 进行中。** photos 站常态在线；管理站
+`cx.chenyouyi.top` **常态关站**，由 `album-infra` 的 `mgmt-lifecycle.yml` 一键拉起/销毁，
+CloudFront 分发常驻但 `disabled`。验收判定与结转清单看
+[`spec/v5/V5-ACCEPTANCE.md`](../spec/v5/V5-ACCEPTANCE.md)，线上资产、API/CDN 契约与
+操作命令看 [`spec/v5/V5-HANDOFF.md`](../spec/v5/V5-HANDOFF.md)；V6 目标（含一键
+up/down ≤60s 的 B-07）看 [`spec/v6/backlog.md`](../spec/v6/backlog.md)。
+
+*V5 is closed with exceptions and V6 is active. The photo site is always live; the
+management site is off by default behind a persistent-but-disabled CDN and is brought
+up / torn down by one workflow. See the closure matrix, the handoff and the V6 backlog.*
+
+---
+
 ## 与旧文档的关系 / Relation to older docs
 
 | 旧文档 / Old doc | 现状 / Status |
@@ -87,6 +102,8 @@ resources but never content.*
 | `docs/cicd-architecture.md` | **已并入本目录并删除**：OIDC/角色/state/Secrets 进 03 §2、§3、§8；三条流水线进 02 §6~§8；排错表与术语表进 02 附录 |
 | `spec/v1` ~ `spec/v3` | 历史迭代，冻结 |
 | `spec/v4/{spec,plan,tasks}.md` | v4 的需求、方案与执行记录；**过程记录**，不再作为系统说明维护 |
+| `spec/v5/` | V5 已收尾（带例外）；判定看 `V5-ACCEPTANCE.md`，线上现状看 `V5-HANDOFF.md`，过程看 `V5-FULL-ACCEPTANCE-PLAN.md` |
+| `spec/v6/` | 当前迭代：`spec` / `plan` / `tasks` 与 `backlog.md`（B-01~B-07） |
 | 根目录 `README.md` | 入口与速查；细节一律指向本目录 |
 
 *The old CI/CD document was absorbed into these three files and removed; spec/ stays as a dated
