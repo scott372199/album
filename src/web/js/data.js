@@ -74,13 +74,9 @@ export async function loadArtifact(name, { rev = '', version = 1, fetchImpl = gl
 export const PLACEHOLDER_TAGS = new Set(['未分类', '未命名', 'uncategorized']);
 
 /**
- * 「标签」筛选里值得给用户看的取值。
- *
- * 照片的 tags 是 `[相册名, 年份]`，相册基本都叫「未分类」——这一栏于是成了「年份」
- * 的复制品，用户连问两次「它在筛什么」。纯年份与占位名剔掉；剩下的不足两个值时
+ * 「标签」筛选里值得给用户看的取值：照片 tags 是 `[相册名, 年份]`，相册名统一
+ * 「未分类」，这一栏于是成了「年份」的复制品。纯年份与占位名剔掉；不足两个值时
  * 调用方隐藏整栏，等真有自定义标签时它会自己长回来。
- * Tags are `[album, year]` with album = "未分类", so the facet duplicated the
- * year filter.
  */
 export function usefulTags(tags, years = []) {
   const yearSet = new Set((Array.isArray(years) ? years : []).map(String));

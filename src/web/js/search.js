@@ -46,11 +46,8 @@ export { LEXICON, LEXICON_KEYS };
 const LATIN_TERM = /^[a-z][a-z '\-]*[a-z]$/i;
 
 /**
- * 拉丁整串 → 规范词；不像规范词就 null。
- *
- * 索引里的 `labels[].term` 本来就是英文，词表没收录的词若一律判「没听懂」，
- * 它的 chip 就成了死链——而它本可以用一次精确的 term 匹配命中。
- * An unlisted English word must still be a literal lookup, not "unrecognised".
+ * 拉丁整串 → 规范词；不像规范词就 null。词表没收录的英文词若判「没听懂」，
+ * 它的 chip 就成了死链——它本可以用一次精确的 term 匹配命中。
  */
 function latinTerm(text) {
   const value = String(text || '').trim().replace(/\s+/g, ' ');
@@ -82,13 +79,9 @@ function scanChunk(chunk, ctx) {
     }
     i += key.length;
   }
-  // 整块没认出来 → 拉丁词兜底，否则进 unmatched。英文词从此是直查而不是
-  // 「没听懂」，中文未知词仍然如实报错。
-  //
-  // 以前是静默 `i += 1`：词表没有就 terms 为空，查询退化成「无条件」返回全部
-  // 照片，比返回 0 更有害——它看起来像搜到了。
-  // Unmatched chunks fall back to a literal Latin term; Chinese unknowns still
-  // report as unmatched. The old silent skip degraded to "no condition".
+  // 整块没认出来 → 拉丁词兜底，否则进 unmatched：英文词从此是直查而不是
+  // 「没听懂」，中文未知词仍然如实报错。以前静默 `i += 1`，词表没有就 terms
+  // 为空、查询退化成「无条件」返回全部照片，比返回 0 更有害。
   if (ctx.explanation.length === before) {
     const term = latinTerm(chunk);
     if (term) addTerm(term, chunk, ctx);
@@ -136,10 +129,8 @@ export function parseQuery(raw, { page = 1, pageSize = 40 } = {}) {
   const unmatched = [];
   rest = rest.replace(/[的和与及了的\s,，、;；]+/g, ' ');
 
-  // 纯拉丁整句先按整串试一次：多词规范词（`interior design`）会被逐块扫描
-  // 的空格切碎，拼不回一个 term，而索引里存的就是整串。
-  // A purely Latin query is tried as ONE term first: multi-word terms would
-  // otherwise be split apart and never match the index.
+  // 纯拉丁整句先按整串试一次：多词规范词（`interior design`）会被逐块扫描的
+  // 空格切碎，拼不回一个 term，而索引里存的就是整串。
   const whole = /[\u4e00-\u9fa5]/.test(rest) ? null : latinTerm(rest);
   if (whole) {
     addTerm(whole, original.trim(), { explanation, terms, filters, unmatched });
@@ -222,10 +213,8 @@ export function sanitizeIndex(raw) {
       labels: Array.isArray(item.labels)
         ? item.labels.filter((l) => l && typeof l.term === 'string').map((l) => ({
           term: String(l.term),
-          // 展示名在这里也归一一次：**已发布的旧索引**里大量 zh 就是英文原文，
-          // 光签发新索引救不了它们。灯箱 chips 读这个字段并拿它搜索。
-          // Normalised here too: published indexes carry English `zh`, and the
-          // lightbox chips search with this field.
+          // 展示名也归一一次：**已发布的旧索引**里大量 zh 就是英文原文，灯箱
+          // chips 读这个字段并拿它搜索。
           zh: zhLabel(String(l.term), typeof l.zh === 'string' ? l.zh : ''),
           kind: typeof l.kind === 'string' ? l.kind : '',
           confidence: Number(l.confidence) || 0,
@@ -382,21 +371,9 @@ export function queryStatusOf({ query = '', parse = null, total = 0, hasIndex = 
  * 「摩托车」，而这批照片里一张都没有——用户点一下，得到空结果，还以为是自己
  * 用错了。建议词的价值在于「点了就一定有东西看」。
  *
- * 排序用「覆盖率黄金区间 8%–60%」：覆盖率太高的词（比如灰色，几乎每张都有）
- * 当建议等于没建议；太低的（只有 1 张）点开也是空的。区间内按覆盖率降序。
- * 区间内一个都没有时退化为按频次排序，而不是硬凑够数量——凑出来的都是噪音。
- *
- * **试过但撤掉的**：按「结果集重叠」做多样性去重，想让头部几条不指向同一批
- * 照片。真实语料上失败了——34 张有标签照片里 `brown` 出现在 28 张，其余候选
- * 与它重叠 73%–88%，任何阈值都会把 12 条候选筛到只剩 1 条。这批语料本身就是
- * 单一的人物照簇，要真正去重得有语义分组信号（人脸聚类），而那是 V6 明确
- * 不做的。宁可给 12 条略冗余的建议，也不上线一个把列表塌成 1 条的启发式。
- *
- * Tried and reverted: diversity de-duplication by result-set overlap. On real
- * data brown appears in 28 of 34 labelled photos and every other candidate
- * overlaps it by 73–88%, so any threshold collapses 12 candidates to 1. The
- * corpus is one big people cluster; real grouping needs face clustering, which
- * V6 explicitly excludes.
+ * 排序用「覆盖率黄金区间 8%–60%」：太高的词（灰色几乎每张都有）当建议等于没
+ * 建议，太低的只有 1 张、点开是空的；区间内一个都没有时退化为按频次排序。
+ * 按结果集重叠做多样性去重的方案试过并撤掉了，原因见 spec/v6/tasks.md §9。
  */
 export function deriveSuggestions(index, { limit = 10, query = '' } = {}) {
   const items = Array.isArray(index?.items) ? index.items : [];
@@ -421,8 +398,7 @@ export function deriveSuggestions(index, { limit = 10, query = '' } = {}) {
   const rows = [];
   for (const [term, n] of freq) {
     if (inQuery.has(term)) continue;   // 已经在查询里的词不必再建议
-    // 碎片词不占建议位：`头`/`脸`/`袖子` 点进去是同一批人脸，等于没建议。
-    // 想在词表里调，改 `src/shared/lexicon.json` 的 `suggest: false`。
+    // 碎片词不占建议位（词表里标 `suggest: false`）
     if (TERM_SUGGEST_OFF.has(term)) continue;
     const zh = zhLabel(term);
     if (!zh || zh === term) continue;  // 没有中文名就不建议：推荐一个搜不了的词没意义

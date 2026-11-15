@@ -126,12 +126,9 @@ export function groupByYearMonth(list) {
 /* ---------------- 编辑式栅格 ---------------- */
 
 /**
- * 网格密度三档：修的是「一行想要多大」，不是「一行几张」。
- * 每行几张由宽度和 `maxPerRow` 决定，密度只改目标行宽——所以照片永远不会被裁切，
- * 只是行内会少放一张、整体变大。
- *
- * Density changes the target row width, not the crop: photos are never cut, the
- * row simply holds fewer of them at a larger size.
+ * 网格密度三档：修的是「一行想要多大」，不是「一行几张」。每行几张由宽度与
+ * `maxPerRow` 决定，密度只改目标行宽——照片永远不会被裁切，只是行内少放一张、
+ * 整体变大。
  */
 export const DENSITY = { compact: 200, standard: 340, large: 520 };
 export const DENSITY_KEY = 'album.density';
@@ -141,12 +138,9 @@ export function normalizeDensity(value) {
 }
 
 /**
- * `maxPerRow` 必须跟着密度走。原来写死成 3，1280 宽下「紧凑 200 + 上限 3」与
- * 「标准 340 + 上限 3」排出来完全一样，下拉框换了等于没换（2026-11-16 验收）。
- * 上限与目标行宽成反比（以标准档为基准，标准档观感不变），地板取 2。
- *
- * The cap follows the density: a hard-coded 3 made 紧凑 and 标准 identical at
- * 1280px. It scales inversely with the target width, anchored on 标准.
+ * `maxPerRow` 必须跟着密度走：原来写死成 3，1280 宽下「紧凑 + 上限 3」与「标准
+ * + 上限 3」排出来完全一样，下拉框换了等于没换。上限与目标行宽成反比（以标准档
+ * 为基准，观感不变），地板取 2。
  */
 function maxPerRowFor(target, base) {
   return Math.max(2, Math.round((base * DENSITY.standard) / target));
