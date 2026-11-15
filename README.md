@@ -27,6 +27,8 @@ WebView shell, distributed as a private APK.*
 | [`docs/01-architecture.md`](docs/01-architecture.md) | 用了什么：前端、安卓壳、AWS 服务、GitHub 能力、Terraform 四层 |
 | [`docs/02-flows.md`](docs/02-flows.md) | 怎么连起来：读 / 传 / 发布 / 改基础设施，每条流的时序与失败分支 |
 | [`docs/03-security.md`](docs/03-security.md) | 凭什么安全：威胁模型、七道边界、泄露演练、自检清单 |
+| [`spec/v5/V5-ACCEPTANCE.md`](spec/v5/V5-ACCEPTANCE.md) | V5 验收判定与结转清单（V5 已收尾，带例外）；[`V5-HANDOFF.md`](spec/v5/V5-HANDOFF.md) 是线上现状入口 |
+| [`spec/v6/`](spec/v6/) | 当前迭代：spec / plan / tasks 与产品、性能 backlog（B-01~B-07） |
 | [`spec/v4/`](spec/v4/) | v4 的需求、方案与执行记录（过程记录，冻结） |
 | [`spec/v1`~`v3`](spec/) | 历史迭代（冻结） |
 
