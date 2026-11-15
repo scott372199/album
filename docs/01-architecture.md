@@ -351,24 +351,28 @@ by OAC, and the bucket policy allows it. A direct S3 REST call has none of them.
 *One image, two entrypoints selected by `image_config.command`. Built only on an amd64 runner
 because a locally built arm64 image simply refuses to start on Lambda.*
 
-#### 4.4a 两套 node_modules，一条静态 import 就能越界 / Two dependency sets, one import apart
+#### 4.4a 三个依赖集合，一条静态 import 就能越界 / Three dependency sets, one import apart
 
-镜像里装的是 `src/server/package.json`（含 `@aws-sdk/*`），CI 在仓库根只装
-`sharp` + `exifr`。所以**测试跑得通的机器，依赖集合和 CI 不一样**——本地
-`node_modules` 恰好有 AWS SDK，`node --test` 全绿，推到 CI 上整份用例连一条断言都跑不到
-（`ERR_MODULE_NOT_FOUND`）。同一个坑还有一处：镜像只 `COPY src/server/`，`src/build/`
-里的东西在线上根本不存在。
+| 在哪跑 | 有什么依赖 |
+| --- | --- |
+| 单测 job（`build-image` 的 `test`） | **一个包都不装**（纯函数不需要安装，这是它存在的意义） |
+| 构建 / 本机 | 仓库根 `package.json`：`sharp` + `exifr` |
+| 镜像 | `src/server/package.json`：再加 `@aws-sdk/*`、`@aws-sdk/client-*` |
+
+所以「本机全绿」证明不了任何事：本地 `node_modules` 三样俱全，静态 import 无条件加载，
+推到 CI 上整份用例在模块解析阶段就死掉（`ERR_MODULE_NOT_FOUND`），连一条断言都跑不到。
+同一个坑还有一处：镜像只 `COPY src/server/`，`src/build/` 里的东西线上根本不存在。
 
 | 规则 / Rule | 为什么 / Why |
 | --- | --- |
-| 测试的静态 import 图里不许出现 `@aws-sdk/*` | CI 不装它；`v6-artifact-publish` 有一条静态扫描用例守着 |
-| 真要访问 S3 时才 `await import('./store.mjs')` | 延迟加载，把 SDK 挡在构建与测试之外 |
+| 从测试文件出发的**静态** import 图里只许有相对路径与 `node:` | 单测 job 不装依赖；`v6-artifact-publish` 有一条静态扫描用例守着，报错会直接点名文件和包 |
+| 真要访问 S3 / 图形处理时才 `await import(...)` | 延迟加载，把 SDK 与 `sharp` 挡在构建与测试之外 |
 | 线上的代码全在 `src/server/` 下 | 镜像只 `COPY src/server/`，`src/build/` 只是本地产物写入器 |
 
-*Two dependency sets: the image installs `src/server/package.json` (with `@aws-sdk/*`), CI
-installs only the repo root's `sharp` + `exifr`. A static import of the SDK therefore passes
-locally and kills the whole test file in CI — which is why a static-scan test now guards it,
-and why the SDK is only loaded via `await import()` when S3 work is actually needed.*
+*Three dependency sets: the unit-test job installs nothing, the build/root has `sharp` +
+`exifr`, and only the image has `@aws-sdk/*`. A static import is unconditional, so it passes
+locally and kills the whole test file in CI — which is why a static-scan test now guards the
+reachable graph and why such packages are only loaded via `await import()` on demand.*
 
 ### 4.5 API Gateway 的四件事与三件不干的事 / What the gateway does and does not do
 

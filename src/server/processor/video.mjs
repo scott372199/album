@@ -2,7 +2,6 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
-import sharp from 'sharp';
 import { envInt } from '../lib/config.mjs';
 
 /**
@@ -171,6 +170,10 @@ export async function assertCleanVideo(file) {
 }
 
 async function grabPoster(clipPath, duration, tmpDir) {
+  // sharp 延迟加载：CI 的单测 job 一个包都不装，静态 import 会让整份测试在
+  // 模块解析阶段就死掉（真实事故，见 docs/01-architecture.md 4.4a）。
+  // Lazy: CI's unit-test job installs nothing, so a static import kills the file.
+  const sharp = (await import('sharp')).default;
   const frameFile = path.join(tmpDir, `poster-${Date.now()}.png`);
   // 取 0.3 倍处而不是第 0 帧：手机视频开头常常是黑的
   const seek = Math.min(1, Math.max(0, duration / 3));
