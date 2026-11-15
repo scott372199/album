@@ -40,7 +40,7 @@
 | T-16 | 图片加载三兜底 | V6.1 | T-08 | P-03 | **done(代码)** |
 | T-17 | 回到上次位置 | V6.1 | T-10 | P-01 | **done(代码)** |
 | T-18 | 相册卡片三信息 | V6.1 | T-10 | P-02 | **done(代码)** |
-| T-19 | 灯箱同月横条 + 标签 chips | V6.1 | T-04、T-10 | FR-09 | pending |
+| T-19 | 灯箱同月横条 + 标签 chips | V6.1 | T-04、T-10 | FR-09 | **done(代码)** |
 | T-20 | 视频控件 + manifest `duration` | V6.1 | T-10 | U-08 | pending |
 | T-21 | 上传断点续传与闭环 | V6.1 | — | FR-10 | pending |
 | T-22 | 每月策展产物与前端块 | V6.2 | T-10 | FR-07 | pending |
@@ -449,6 +449,25 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 **改动**：`+ src/web/js/month-strip.js`、`~ src/web/js/lightbox.js`、`~ src/web/style.css`
 **做法**：同月照片从 `state.filtered` 按 year/month 过滤（无需新数据）；chips 取自该照片 `labels[].zh`（依赖 T-04），点击 → `#mode=search&q=<zh>`。
 **完成判定**：同月可横滑并预取；点 chip 进入该标签结果视图；390 px 宽下横条默认收起、不占首屏高度；**不出现「这天拍了 N 张」**（不变量 6）。
+
+**实施结果**
+
+| 判据 | 实测 |
+| --- | --- |
+| 同月可横滑并预取 | ✅ `overflow-x: auto` + `scroll-snap`；当前张 `scrollIntoView`；左右各 2 张预取 `view` |
+| 点 chip 进入该标签结果视图 | ✅ `#mode=search&q=<zh>`，复用既有 hash 键，**不新增** |
+| 390 px 默认收起 | ✅ 断点 640，窄屏 `data-collapsed="true"`，只留一行「本月 N 张 · 展开」 |
+| 不出现「这天拍了 N 张」 | ✅ 只有年月聚合，文案是「本月 N 张」；单测里没有日级字段可用 |
+
+**一处与任务书的偏差**：任务书说「同月照片从 `state.filtered` 过滤」。实际从**灯箱当前列表**过滤（`list`）。在时间流/搜索结果下两者是同一批对象，但在**漫游**模式下列表是随机序列——按 `state.filtered` 取会出现「横条里有这张，点了跳不动」的条目。判定标准是「点了必须真的换一张」，所以取更近的那个集合。单测 `横条的每一张都在当前列表里` 就是钉这条。
+
+**chips 的来源**：清单里没有 `labels`（它们在 `data/search-index.json`），所以 `main.js` 传一个 `labelsFor(photo)` 回调进灯箱，从 `state.search.index.items` 里取该照片的 `labels`。索引还没加载完时返回空数组——横条照常显示，只是暂时没有 chips，不阻塞任何路径。
+
+**预取为什么要排除视频**：视频要整段拖，预取一个 `view.webp` 对播放没有帮助，白占带宽。`prefetchTargets` 跳过 `type` 为 video/live 的条目，也跳过没有 `view`/`grid` 的（降级失败的条目）。
+
+**新增**：`+ src/web/js/month-strip.js`（约 200 行，7 个纯函数 + 1 个装配函数）、`+ src/web/test/v6-month-strip.test.mjs`（16 条，含手写假 DOM 的 3 条装配测试）、`~ lightbox.js`（`show()` 末尾接横条）、`~ index.html`（`#lb-month` 容器）、`~ style.css`（横条与 chips 样式，颜色全部走「照片之上的白」叠加基色）、`~ main.js`（`labelsFor` 与 `onChip`）。产物 85.9 → 91.3 KB gzip。
+
+**顺手修的一个 bug**（由装配测试发现）：点击「展开」只改了容器属性，`aria-expanded` 与按钮文字要等下一次渲染才更新——屏幕阅读器会一直念「已折叠」。改成 `paintToggle()` 一处写三个地方。
 
 ---
 

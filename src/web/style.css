@@ -1037,6 +1037,89 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
   text-align: center;
 }
 
+/* ---------- 同月横条与标签 chips（T-19） ---------- */
+
+/* 灯箱本身是黑盒子，这里的颜色一律用「照片之上的白」叠加基色 */
+.lb-month {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 clamp(12px, 4vw, 48px) 10px;
+}
+
+.lb-month-head { display: flex; align-items: center; gap: 10px; }
+
+.lb-month-toggle,
+.lb-chip {
+  padding: 6px 12px;
+  border: 1px solid rgb(var(--c-on-rgb) / 0.24);
+  border-radius: 999px;
+  background: rgb(var(--c-on-rgb) / 0.08);
+  color: rgb(var(--c-on-rgb) / 0.9);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.lb-month-toggle:hover,
+.lb-chip:hover { background: rgb(var(--c-on-rgb) / 0.16); border-color: rgb(var(--c-on-rgb) / 0.4); }
+.lb-month-toggle:focus-visible,
+.lb-chip:focus-visible { outline: 2px solid var(--c-inverse); outline-offset: 2px; }
+
+/* 横条：可横滑，不出现纵向滚动条；收起时高度归零但不 display:none，
+   否则展开动画会跳 */
+.lb-month-track {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  padding: 2px 0;
+}
+.lb-month-track::-webkit-scrollbar { display: none; }
+.lb-month[data-collapsed="true"] .lb-month-track { display: none; }
+
+.lb-month-item {
+  position: relative;
+  flex: 0 0 auto;
+  width: 58px;
+  height: 58px;
+  padding: 0;
+  border: 1px solid rgb(var(--c-on-rgb) / 0.18);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgb(var(--c-on-rgb) / 0.06);
+  cursor: pointer;
+  scroll-snap-align: center;
+}
+.lb-month-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;   /* 不裁切（D-01） */
+  display: block;
+}
+.lb-month-item.is-current { border-color: var(--c-inverse); }
+.lb-month-item.is-current::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px var(--c-inverse);
+}
+
+.lb-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+@media (max-width: 640px) {
+  /* 手机上横条与 chips 都不该抢首屏：一段一行、可横滑 */
+  .lb-month { padding: 0 12px 8px; gap: 6px; }
+  .lb-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .lb-chips::-webkit-scrollbar { display: none; }
+}
+
 .lb-bottom {
   flex: 0 0 auto;
   padding: 8px 22px 20px;

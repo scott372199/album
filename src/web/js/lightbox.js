@@ -1,5 +1,6 @@
 import { state, PLAY_INTERVAL } from './state.js';
 import { el, photoAlt, reducedMotion } from './ui.js';
+import { createMonthStrip, monthStripPlan, prefetchTargets } from './month-strip.js';
 
 const refs = {};
 let list = [];
@@ -7,6 +8,7 @@ let hooks = { onNavigate: () => {}, onClose: () => {} };
 let playTimer = null;
 let opened = false;
 let thumbsBuilt = false;
+let monthStrip = null;
 
 function cache() {
   if (refs.root) return refs;
@@ -17,6 +19,7 @@ function cache() {
     counter: el('lb-counter'),
     meta: el('lb-meta'),
     thumbs: el('lb-thumbs'),
+    month: el('lb-month'),
     zoom: el('lb-zoom'),
     play: el('lb-play'),
     mute: el('lb-mute'),
@@ -124,6 +127,42 @@ function updateThumbState() {
   }
 }
 
+/**
+ * 同月横条（T-19）：条目来自灯箱**当前列表**，所以点了一定跳得到；chips 来自
+ * 识别标签（`labels[].zh`），点一下就是按这个词搜索。
+ *
+ * 预取跟着横条走：同月左右各两张先拉 view，横滑时不用等。
+ *
+ * The same-month strip is built from the lightbox's current list, so every item
+ * is reachable; chips come from recognition labels and jump to a search. The
+ * neighbours are prefetched along with the strip.
+ */
+function renderMonthStrip(photo) {
+  const host = cache().month;
+  if (!host) return;
+  if (!monthStrip) {
+    monthStrip = createMonthStrip({
+      host,
+      onPick: (id) => {
+        const index = list.findIndex((item) => item.id === id);
+        if (index >= 0) show(index);
+      },
+      onChip: (term) => hooks.onChip?.(term),
+    });
+  }
+  const labels = typeof hooks.labelsFor === 'function' ? hooks.labelsFor(photo) : [];
+  monthStrip.render(list, photo, labels);
+
+  const plan = monthStripPlan(list, photo?.id);
+  for (const id of prefetchTargets(plan.items, plan.index)) {
+    const target = list.find((item) => item.id === id);
+    const url = target && (target.view || target.grid);
+    if (!url) continue;
+    const img = new Image();
+    img.src = url;
+  }
+}
+
 function show(index) {
   if (!list.length) return;
   const total = list.length;
@@ -168,6 +207,7 @@ function show(index) {
   updateThumbState();
   prefetch(state.lightbox.index + 1);
   prefetch(state.lightbox.index - 1);
+  renderMonthStrip(photo);
   hooks.onNavigate(photo);
 }
 

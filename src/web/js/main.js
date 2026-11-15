@@ -680,6 +680,23 @@ async function boot() {
 
   initLightbox({
     onNavigate: () => syncUrl(false),
+    // chips（T-19）：拿识别标签里出现过的中文词。索引还没到位时返回空数组，
+    // 横条照常显示，只是暂时没有 chips。
+    labelsFor: (photo) => {
+      const items = state.search.index?.items;
+      if (!Array.isArray(items)) return [];
+      const hit = items.find((item) => item.id === photo?.id);
+      return Array.isArray(hit?.labels) ? hit.labels : [];
+    },
+    onChip: (term) => {
+      const word = String(term || '').trim();
+      if (!word) return;
+      closeLightbox();
+      state.q = word;
+      state.mode = 'search';
+      refresh();
+      syncUrl(true);
+    },
     onClose: () => {
       state.lightbox.index = -1;
       // 漫游期间 state.filtered 被换成了随机序列，关掉要还回去，
