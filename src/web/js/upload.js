@@ -34,6 +34,7 @@ import { labelFor } from './upload-state.js';
 import { buildSuggestion, suggestionNote } from './upload-suggest.js';
 import {
   failureLabel, remainingParts, signedStillValid, photoIdFor,
+  asReadFailure, canResetPicker,
 } from './upload-state.js';
 
 const MAX_BATCH = 20;
@@ -594,6 +595,10 @@ async function selfCheck(uploadUrl) {
 }
 
 async function failureText(err) {
+  // 文件读不到（系统回收了句柄）不是「重试能好」的失败，也不是网络问题：
+  // 直接给一句能照做的话，别把浏览器那句 "permission problems" 端给用户。
+  const readFailure = asReadFailure(err);
+  if (readFailure) return readFailure.message;
   if (!err.retryable) return err.message;
   const total = Number(err.total) || 0;
   const percent = total ? Math.round(((Number(err.sent) || 0) / total) * 100) : 0;
@@ -644,8 +649,11 @@ async function run(album, entries) {
         state.ok += 1;
         state.lastSha = entry.sha256;
       } catch (err) {
-        entry.row.fail(await failureText(err));
-        state.failed.push(entry);
+        // 句柄失效的失败重试没有意义，只计数，不进「重试失败项」
+        const readFailure = asReadFailure(err);
+        entry.row.fail(readFailure ? readFailure.message : await failureText(err));
+        if (readFailure) state.bad += 1;
+        else state.failed.push(entry);
       }
     }
   }
@@ -729,7 +737,7 @@ async function uploadFiles(files) {
           row,
         });
       } catch (err) {
-        row.fail(err.message);
+        row.fail((asReadFailure(err) || err).message);
         state.bad += 1;
       }
     }
@@ -803,6 +811,9 @@ async function goSee() {
 function open() {
   el('upload').hidden = false;
   document.body.classList.add('is-uploading');
+  // 面板重开时才是清空选择器的安全时机：此时没有批次在跑、也没有留着重试的条目，
+  // 清掉之后「再选同一批文件」也能重新触发 change。
+  if (canResetPicker({ busy: state.busy, failed: state.failed })) el('upload-files').value = '';
   if (tokenValid(state.token)) showPicker();
   else showLogin('');
 }
@@ -856,8 +867,9 @@ export function initUpload({ getLibrary } = {}) {
   });
 
   el('upload-files').addEventListener('change', (event) => {
+    // 不能在这里清空 input：`value = ''` 会让 Chromium 立刻作废这批 File 的引用，
+    // 之后每次读取都抛 NotReadableError（线上选 22 张只成功 3 张就是这个）。
     const files = [...(event.target.files || [])];
-    event.target.value = '';
     if (files.length) uploadFiles(files);
   });
   document.addEventListener('keydown', (event) => {
