@@ -13,6 +13,7 @@
     "test": "node --test \"src/server/test/*.test.mjs\" \"src/web/test/*.test.mjs\"",
     "test:server": "node --test \"src/server/test/*.test.mjs\"",
     "test:web": "node --test \"src/web/test/*.test.mjs\"",
+    "test:bare": "node scripts/test-bare.mjs",
     "hash-key": "node scripts/hash-key.mjs",
     "check:repo": "node scripts/check-repo.mjs",
     "check:budget": "node scripts/check-budget.mjs",

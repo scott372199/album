@@ -366,6 +366,7 @@ because a locally built arm64 image simply refuses to start on Lambda.*
 | 规则 / Rule | 为什么 / Why |
 | --- | --- |
 | 从测试文件出发的**静态** import 图里只许有相对路径与 `node:` | 单测 job 不装依赖；`v6-artifact-publish` 有一条静态扫描用例守着，报错会直接点名文件和包 |
+| 提 PR 前跑一次 `npm run test:bare` | 它把仓库拷到临时目录（不带 `node_modules`）跑全量，静态扫描看不见的运行期依赖由它兜 |
 | 真要访问 S3 / 图形处理时才 `await import(...)` | 延迟加载，把 SDK 与 `sharp` 挡在构建与测试之外 |
 | 线上的代码全在 `src/server/` 下 | 镜像只 `COPY src/server/`，`src/build/` 只是本地产物写入器 |
 
