@@ -342,6 +342,38 @@ h1, h2, h3, p { margin: 0; }
   pointer-events: none;
 }
 
+/* ---------- 3a. 搜索条（内容列） ---------- */
+
+/* 搜索框从导航右上角搬到内容列：它下面紧跟着就是搜索结果，
+   放导航里时桌面端要横跨整屏才连得起来。宽度与 .catalog 对齐。 */
+/* The search field moved out of the nav's right corner into the content
+   column, directly above the results it filters. Width matches .catalog. */
+.search-bar {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: clamp(18px, 2.2vw, 30px) var(--pad) 0;
+}
+.search-bar-inner { display: flex; }
+.search-bar .nav-search-wrap { flex: 1 1 auto; min-width: 0; max-width: 520px; }
+.search-bar .nav-search input {
+  width: 100%;
+  height: 40px;
+  font-size: 14px;
+  border-radius: 12px;
+  padding-left: 36px;
+}
+.search-bar .nav-search input:focus { width: 100%; }
+/* 放大镜跟着变高的输入框走，不然图标会飘在中间偏上 */
+.search-bar .nav-search::before { top: 13px; left: 14px; width: 10px; height: 10px; }
+.search-bar .nav-search::after { top: 24px; left: 24px; width: 7px; }
+/* 下拉面板跟着输入框宽度，不再固定成 190px 那一截 */
+.search-bar .search-panel { left: 0; right: auto; width: 100%; min-width: 280px; }
+
+/* 搜索态：结果顶上来了，就不再需要首屏那张大图占位（applyView 会隐藏 #top），
+   这里只把搜索条与结果之间的空隙收紧。 */
+/* While searching the hero is hidden, so trim the gap above the results. */
+.search-bar.is-active { padding-bottom: 0; }
+
 /* ---------- 4. Hero ---------- */
 
 .hero {
@@ -378,6 +410,14 @@ h1, h2, h3, p { margin: 0; }
   object-fit: contain;   /* 不裁切（D-01） */
   display: block;
 }
+
+/* 图还没发布出来时（data/hero.webp 404/403）别把破图图标留在首屏上。
+   首屏图由处理函数在发布时写入，全新站点或还没传过照片时它**本来就不存在**；
+   watchHeroMedia 发现图没加载成功就给 .hero 打上 is-degraded，这里直接藏掉 img，
+   只留 .hero-stage 的深色底与标题——那本来就是设计里的「无图状态」。
+   When data/hero.webp has not been published yet the stage must not show a
+   broken-image glyph; watchHeroMedia marks the hero and this hides the img. */
+.hero.is-degraded .hero-media { display: none; }
 
 .hero-scrim {
   position: absolute;
@@ -1921,12 +1961,12 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
     padding: 9px var(--pad);
   }
   .tabs { gap: 16px; }
-  .nav-actions { width: 100%; margin-left: 0; gap: 6px; }
+  /* 搜索搬去内容列之后导航只剩品牌 + 两个按钮，一行放得下，不再需要换行 */
+  .nav-actions { margin-left: auto; gap: 6px; }
   .nav-action { height: 30px; padding: 0 11px; font-size: 12px; }
-  /* 搜索框吃掉这一行的剩余宽度，别被挤成一小截 */
-  .nav-search { order: 3; flex: 1 1 auto; min-width: 0; }
-  .nav-search input { width: 100%; }
-  .nav-search input:focus { width: 100%; }
+  /* 手机上搜索条跟内容同宽；输入框 40px 高，手指好点 */
+  .search-bar { padding-top: 14px; }
+  .search-bar .nav-search-wrap { max-width: none; }
 
   /* 手机上矮一些：50dvh，仍然不铺满一屏，下面露出时间流的第一行 */
   .hero-stage { height: 50vh; height: 50dvh; min-height: 240px; }

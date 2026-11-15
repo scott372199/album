@@ -22,6 +22,7 @@ import {
   ANCHOR_KEY, serializeAnchor, parseAnchor, nearestAnchor,
 } from './anchor.js';
 import { mountUploadLegend } from './upload-state.js';
+import { watchHeroMedia } from './hero-media.js';
 import { initTheme, themeLabel } from './theme.js';
 import { createYearPage, renderYearNav, buildYearSummary } from './year-page.js';
 import { portraitIds } from './wall-source.js';
@@ -326,6 +327,8 @@ function applyView() {
 
   el('top').hidden = searching || isAlbumRoot || isYear;
   el('footer-actions').hidden = searching;
+  // 搜索态下搜索条就是结果的表头，收紧它与结果之间的空隙
+  el('search-bar')?.classList.toggle('is-active', searching);
 
   const albums = el('nav-albums');
   albums.setAttribute('aria-pressed', String(state.view === 'album'));
@@ -831,6 +834,12 @@ async function boot() {
 
   fillFilters();
   renderSite();
+  // 首屏图由处理函数在发布时写成，全新站点上它还不存在（线上实测 403）。
+  // 失败时给 .hero 打 is-degraded，CSS 把 img 藏掉，别留一个破图图标。
+  // The hero image may not be published yet; degrade to the stage colour.
+  watchHeroMedia(el('hero-media'), {
+    onMissing: () => el('top')?.classList.add('is-degraded'),
+  });
   registerOffline();
 
   // 年度页（T-24）：三个出口都回时间流，只是带的筛选不同——
