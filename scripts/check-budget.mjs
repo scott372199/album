@@ -26,12 +26,26 @@ const DIST = path.join(ROOT, 'dist');
 const BASELINE = path.join(ROOT, '.budget-baseline.json');
 const EXT = new Set(['.js', '.css']);
 
+/**
+ * 目录根的 `sw.js` 不计入：Service Worker 是浏览器**后台**取的，不参与首屏渲染，
+ * 也不会阻塞 LCP；不支持 SW 的浏览器一个字节都不会下载它。把它算进来等于让
+ * 「离线能力」和「首屏体积」互相挤占，而这两件事优化的方向根本不同。
+ * 其余 `.js` / `.css` 一律照算，没有别的例外。
+ *
+ * The root `sw.js` is excluded: a service worker is fetched in the background,
+ * never blocks first paint, and is not downloaded at all by browsers without SW
+ * support. Everything else is still counted — this is the only exception.
+ */
+function measured(full) {
+  return !(path.dirname(full) === DIST && path.basename(full) === 'sw.js');
+}
+
 async function walk(dir) {
   const out = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) out.push(...await walk(full));
-    else if (EXT.has(path.extname(entry.name))) out.push(full);
+    else if (EXT.has(path.extname(entry.name)) && measured(full)) out.push(full);
   }
   return out;
 }
