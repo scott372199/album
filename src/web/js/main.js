@@ -282,6 +282,16 @@ function fillFilters() {
   fill(el('tag'), ctx.index.tags, (value) => value);
   fill(el('year'), ctx.index.years, (value) => `${value} 年`);
   fill(el('month'), ctx.index.months, (value) => `${value} 月`);
+
+  // 标签栏只在真有标签可筛时出现：这一栏现在等于年份的复制品，摆着只会让人问
+  // 「它在筛什么」。选项由 `usefulTags()` 过滤，少于两个值整栏隐藏。
+  const tagField = el('tag')?.closest('.field');
+  const tagUsable = ctx.index.tags.length >= 2;
+  if (tagField) tagField.hidden = !tagUsable;
+  if (!tagUsable && state.tag) {
+    state.tag = '';
+    el('tag').value = '';
+  }
 }
 
 function syncControlValues() {

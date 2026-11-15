@@ -11,19 +11,21 @@ import { normalizeLabels } from '../recognition/provider.mjs';
  * 识别期，那么「补一个中文名」就得重跑 Rekognition——对 3 万张照片是几小时
  * 和一笔真金白银。放在索引期，补词表只需重建索引。
  *
- * 这条测试锁三件事：
+ * 这条测试锁四件事：
  *   1. 没带 zh 的标签，建索引后一定有 zh；
- *   2. 已经带了 zh 的标签，不能被词表覆盖（人工/历史结果优先）；
- *   3. `zhForTerm()` 对词表外的 term 会兜底成 term 本身——所以「有 zh」
+ *   2. **能解析回本词**的中文名优先保留（人工/历史结果优先）；
+ *   3. 识别期原样写进 zh 的英文 term 必须被换成中文名——否则前端的标签
+ *      chips（点一下就是按它搜索）会变成死链；
+ *   4. `zhForTerm()` 对词表外的 term 会兜底成 term 本身——所以「有 zh」
  *      **不等于**「有中文名」。这是 scripts/audit-terms.mjs 的判定口径，
  *      也是 B-05 的根因，必须用测试钉住，否则以后又会拿非空当已覆盖。
  *
  * V6 C-3: the Chinese name is resolved at index-build time. Recognition only
  * emits English terms; backfilling at recognition time would mean re-running
- * Rekognition for every vocabulary fix. Three things are pinned here: missing
- * `zh` gets filled, an existing `zh` is never overwritten, and `zhForTerm()`
- * falls back to the term itself — hence "has zh" does NOT mean "has a Chinese
- * name", which is the audit's criterion and the root cause of B-05.
+ * Rekognition for every vocabulary fix. Pinned here: missing `zh` gets filled, a
+ * resolvable Chinese name is kept, an English `zh` is replaced (it would become a
+ * dead chip), and `zhForTerm()` falls back to the term itself — hence "has zh"
+ * does NOT mean "has a Chinese name".
  */
 
 const manifest = {
@@ -59,11 +61,42 @@ test('缺失的 zh 在建索引时用词表回填', () => {
   assert.deepEqual(labels.map((l) => l.zh), ['湖水', '山峰']);
 });
 
-test('已有 zh 的标签不被词表覆盖', () => {
+test('已有可搜中文名保留：词表别名也算中文名', () => {
+  // `湖景` 是 lake 的词表别名，能解析回本词——点它搜得到，所以人工/历史的
+  // 中文名优先于词表主名。
+  // A resolvable alias counts as a real name: clicking it finds photos, so a
+  // human/historical name wins over the lexicon's primary name.
+  const labels = labelsOf('a1b2c3d4e5f6', [
+    label('lake', 'scene', 0.91, { zh: '湖景' }),
+  ]);
+  assert.equal(labels[0].zh, '湖景', '能解析回本词的中文名应保留');
+});
+
+test('识别期原样写入的英文 zh 会被换成中文名（线上死链的根因）', () => {
+  // 线上真实形状：`person → zh: "person"`，33 条；`grey → "grey"` 34 条。
+  // 灯箱的标签 chips 直接读 zh 并拿它去搜索，英文 zh 于是成了「点了没结果」。
+  // Real production shape: `person → zh: "person"`. The lightbox chips read `zh`
+  // and search with it, so an English `zh` was a dead link.
+  const labels = labelsOf('a1b2c3d4e5f6', [
+    label('person', 'object', 0.98, { zh: 'person' }),
+    label('grey', 'color', 0.35, { zh: 'grey' }),
+    label('shorts', 'object', 0.72, { zh: 'shorts' }),
+  ]);
+  const zhOf = new Map(labels.map((l) => [l.term, l.zh]));
+  assert.equal(zhOf.get('person'), '人物');
+  assert.equal(zhOf.get('grey'), '灰色');
+  assert.equal(zhOf.get('shorts'), '短裤');
+});
+
+test('解析不回本词的中文名退回词表名：留着它就是一块点了没结果的标签', () => {
+  // `湖面` 不在词表里，parseQuery 无法把它映射回 lake——这正是「点一下得到
+  // 空结果」的另一种来源。判据不是「是不是中文」，而是「能不能搜到」。
+  // `湖面` is not in the lexicon, so parseQuery cannot map it back to lake: a
+  // Chinese name that does not resolve is just another dead chip.
   const labels = labelsOf('a1b2c3d4e5f6', [
     label('lake', 'scene', 0.91, { zh: '湖面' }),
   ]);
-  assert.equal(labels[0].zh, '湖面', '已有中文名应保留，不能被词表改写');
+  assert.equal(labels[0].zh, '湖水');
 });
 
 test('回填发生在索引侧：只给英文 term 也能得到中文名', () => {

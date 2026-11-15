@@ -52,6 +52,7 @@ if (!Array.isArray(data.terms) || !data.terms.length) {
 const lex = new Map();      // 中文词 -> [canonical, kind]
 const termZh = new Map();   // canonical -> 中文主名
 const termKind = new Map(); // canonical -> kind
+const termSuggestOff = new Set(); // 不做检索建议的 canonical
 const problems = [];
 
 for (const entry of data.terms) {
@@ -62,6 +63,9 @@ for (const entry of data.terms) {
 
   termZh.set(term, zh);
   termKind.set(term, entry.kind === 'color' ? 'color' : (entry.kind || 'object'));
+
+  // `suggest: false`：能做搜索词，但不进「试试这些」——见 TERM_SUGGEST_OFF 的注释
+  if (entry.suggest === false) termSuggestOff.add(term);
 
   // searchable === false：只提供中文名（供 labels[].zh 回填），不占检索键位
   if (entry.searchable === false) continue;
@@ -144,6 +148,23 @@ lines.push('};');
 lines.push('');
 lines.push('/** 颜色规范词集合 / color canonical terms */');
 lines.push(`export const COLOR_TERMS = new Set([${colors.map(q).join(', ')}]);`);
+lines.push('');
+lines.push('/**');
+lines.push(' * 标签中文名的唯一判定，索引构建与浏览器共用。判据是**含汉字**不是非空：');
+lines.push(' * 识别阶段会把英文 term 原样写进 zh（线上 124/163），按非空判读得到的标签');
+lines.push(' * 点下去搜不到。已有的中文名只在能解析回本词时保留，否则退回词表名。');
+lines.push(' * The one rule for a label name. "Contains Han", not "non-empty": recognition');
+lines.push(' * writes the English term into zh, and those labels were dead links.');
+lines.push(' */');
+lines.push(`const HAN = /[\\u3400-\\u9fff]/;`);
+lines.push(`export function zhLabel(term, provided = '') {`);
+lines.push(`  const text = typeof provided === 'string' ? provided.trim() : '';`);
+lines.push(`  if (HAN.test(text) && LEXICON[text] && LEXICON[text][0] === term) return text;`);
+lines.push(`  return TERM_ZH[term] || (typeof term === 'string' ? term : '');`);
+lines.push('}');
+lines.push('');
+lines.push('/** 不适合做检索建议的碎片词：占一个建议位，却什么都说明不了 */');
+lines.push(`export const TERM_SUGGEST_OFF = new Set([${[...termSuggestOff].sort(compareCodePoint).map(q).join(', ')}]);`);
 lines.push('');
 lines.push('/** 颜色+物体组合，供 explanation 顺序稳定 / explicit colour-object phrases */');
 lines.push(`export const COLOR_OBJECT_COMBINATIONS = ${JSON.stringify(data.combinations || [], null, 2)};`);

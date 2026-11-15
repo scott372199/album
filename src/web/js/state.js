@@ -126,12 +126,9 @@ export function groupByYearMonth(list) {
 /* ---------------- 编辑式栅格 ---------------- */
 
 /**
- * 网格密度三档：修的是「一行想要多大」，不是「一行几张」。
- * 每行几张由宽度和 `maxPerRow` 决定，密度只改目标行宽——所以照片永远不会被裁切，
- * 只是行内会少放一张、整体变大。
- *
- * Density changes the target row width, not the crop: photos are never cut, the
- * row simply holds fewer of them at a larger size.
+ * 网格密度三档：修的是「一行想要多大」，不是「一行几张」。每行几张由宽度与
+ * `maxPerRow` 决定，密度只改目标行宽——照片永远不会被裁切，只是行内少放一张、
+ * 整体变大。
  */
 export const DENSITY = { compact: 200, standard: 340, large: 520 };
 export const DENSITY_KEY = 'album.density';
@@ -140,18 +137,36 @@ export function normalizeDensity(value) {
   return Object.hasOwn(DENSITY, value) ? value : 'standard';
 }
 
+/**
+ * `maxPerRow` 必须跟着密度走：原来写死成 3，1280 宽下「紧凑 + 上限 3」与「标准
+ * + 上限 3」排出来完全一样，下拉框换了等于没换。上限与目标行宽成反比（以标准档
+ * 为基准，观感不变），地板取 2。
+ */
+function maxPerRowFor(target, base) {
+  return Math.max(2, Math.round((base * DENSITY.standard) / target));
+}
+
 export function layoutParams(containerWidth, density = 'standard') {
-  const target = DENSITY[normalizeDensity(density)];
+  const mode = normalizeDensity(density);
+  const target = DENSITY[mode];
   if (containerWidth >= 1200) {
-    return { gap: 20, target, maxPerRow: 3, featureMin: 320, featureMax: 780, featureEvery: 6 };
+    return {
+      gap: 20, target, maxPerRow: maxPerRowFor(target, 3), featureMin: 320, featureMax: 780, featureEvery: 6,
+    };
   }
   if (containerWidth >= 1024) {
-    return { gap: 16, target, maxPerRow: 3, featureMin: 280, featureMax: 700, featureEvery: 6 };
+    return {
+      gap: 16, target, maxPerRow: maxPerRowFor(target, 3), featureMin: 280, featureMax: 700, featureEvery: 6,
+    };
   }
   if (containerWidth >= 768) {
-    return { gap: 14, target, maxPerRow: 2, featureMin: 240, featureMax: 620, featureEvery: 5 };
+    return {
+      gap: 14, target, maxPerRow: maxPerRowFor(target, 2), featureMin: 240, featureMax: 620, featureEvery: 5,
+    };
   }
-  return { gap: 10, target, maxPerRow: 2, featureMin: 180, featureMax: 520, featureEvery: 4 };
+  return {
+    gap: 10, target, maxPerRow: maxPerRowFor(target, 2), featureMin: 180, featureMax: 520, featureEvery: 4,
+  };
 }
 
 function ratioOf(item) {

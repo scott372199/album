@@ -31,6 +31,31 @@ export function validatePagination(page, pageSize) {
   };
 }
 
+/** 像规范词的拉丁整串：字母开头、字母结尾、2–40 字符、可含空格与连字符 */
+const LATIN_TERM = /^[a-z][a-z '\-]*[a-z]$/i;
+
+/**
+ * 拉丁整串 → 规范词（小写、空白归一），不像规范词就 null。
+ *
+ * 索引里的 `labels[].term` 本来就是英文，词表没收录的词不该判成「没听懂」：
+ * 那会把一次精确的 term 匹配说成无法解读。中文未知词不进这条兜底。
+ *
+ * Latin strings normalise to a canonical term, so an unlisted English word
+ * performs a literal lookup instead of being reported as uninterpreted.
+ */
+function latinTerm(text) {
+  const value = String(text || '').trim().replace(/\s+/g, ' ');
+  if (value.length < 2 || value.length > 40) return null;
+  return LATIN_TERM.test(value) ? value.toLowerCase() : null;
+}
+
+/** 把一个规范词记进解析结果 / Record one canonical term in the parse result */
+function addTerm(term, input, ctx) {
+  if (!ctx.terms.includes(term)) ctx.terms.push(term);
+  if (!ctx.filters.tags.includes(term)) ctx.filters.tags.push(term);
+  ctx.explanation.push({ kind: 'term', input, mappedTo: term });
+}
+
 function scanChunk(chunk, ctx) {
   const before = ctx.explanation.length;
   let i = 0;
@@ -48,11 +73,17 @@ function scanChunk(chunk, ctx) {
     }
     i += key.length;
   }
-  // 整块零命中 → 整块进 unmatched，与前端 search.js 同源同语义。
+  // 整块零命中 → 拉丁词兜底，否则整块进 unmatched，与前端 search.js 同源同语义。
   // 静默跳过会让未知词把查询降级成「无条件」，返回全部照片。
-  // A fully-unmatched chunk is reported whole, mirroring the web implementation.
-  // Silently skipping it would degrade an unknown word to "no condition".
-  if (ctx.explanation.length === before) ctx.unmatched.push(chunk);
+  //
+  // A fully-unmatched chunk falls back to a literal Latin term; otherwise it is
+  // reported whole, mirroring the web implementation. Silently skipping it would
+  // degrade an unknown word to "no condition".
+  if (ctx.explanation.length === before) {
+    const term = latinTerm(chunk);
+    if (term) addTerm(term, chunk, ctx);
+    else ctx.unmatched.push(chunk);
+  }
 }
 
 /**
@@ -106,6 +137,17 @@ export function parseQuery(raw, { page = 1, pageSize = DEFAULT_PAGE_SIZE } = {})
   // Strip filler words, then longest-prefix match against the lexicon
   const unmatched = [];
   rest = rest.replace(/[的和与及了的\s,，、;；]+/g, ' ');
+
+  // 纯拉丁整句先按整串试一次：多词规范词（`interior design`）在逐块扫描里会被
+  // 空格切碎，拼不回一个 term，而索引里存的就是整串。与前端逐字一致。
+  //
+  // A purely Latin query is tried as ONE term first: multi-word canonical terms
+  // would otherwise be split by the chunk scanner and never match the index.
+  const whole = /[\u4e00-\u9fa5]/.test(rest) ? null : latinTerm(rest);
+  if (whole) {
+    addTerm(whole, original.trim(), { explanation, terms, filters, unmatched });
+    rest = '';
+  }
   for (const chunk of rest.match(/[\u4e00-\u9fa5a-zA-Z0-9]+/g) || []) {
     scanChunk(chunk, { explanation, terms, filters, unmatched });
   }

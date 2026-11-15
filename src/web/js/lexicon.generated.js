@@ -6,10 +6,10 @@
  * 唯一真相是 src/shared/lexicon.json，改完跑 `node scripts/gen-lexicon.mjs`。
  * Both artifacts are emitted from one source; regenerate after every edit.
  *
- * 词表 rev：86b1eb418dfab759｜term 126 个｜可搜中文词 319 个
+ * 词表 rev：53f472bff8351b97｜term 126 个｜可搜中文词 319 个
  */
 
-export const LEXICON_REV = '86b1eb418dfab759';
+export const LEXICON_REV = '53f472bff8351b97';
 
 /** 中文词 -> [规范词, 类别] / Chinese phrase -> [canonical, kind] */
 export const LEXICON = {
@@ -600,6 +600,23 @@ export const TERM_KIND = {
 
 /** 颜色规范词集合 / color canonical terms */
 export const COLOR_TERMS = new Set(['black', 'blue', 'brown', 'green', 'grey', 'orange', 'pink', 'purple', 'red', 'white', 'yellow']);
+
+/**
+ * 标签中文名的唯一判定，索引构建与浏览器共用。判据是**含汉字**不是非空：
+ * 识别阶段会把英文 term 原样写进 zh（线上 124/163），按非空判读得到的标签
+ * 点下去搜不到。已有的中文名只在能解析回本词时保留，否则退回词表名。
+ * The one rule for a label name. "Contains Han", not "non-empty": recognition
+ * writes the English term into zh, and those labels were dead links.
+ */
+const HAN = /[\u3400-\u9fff]/;
+export function zhLabel(term, provided = '') {
+  const text = typeof provided === 'string' ? provided.trim() : '';
+  if (HAN.test(text) && LEXICON[text] && LEXICON[text][0] === term) return text;
+  return TERM_ZH[term] || (typeof term === 'string' ? term : '');
+}
+
+/** 不适合做检索建议的碎片词：占一个建议位，却什么都说明不了 */
+export const TERM_SUGGEST_OFF = new Set(['advertisement', 'art', 'black hair', 'face', 'hair', 'head', 'photography', 'sitting', 'sleeve', 'text']);
 
 /** 颜色+物体组合，供 explanation 顺序稳定 / explicit colour-object phrases */
 export const COLOR_OBJECT_COMBINATIONS = [

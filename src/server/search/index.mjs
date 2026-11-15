@@ -21,7 +21,7 @@ import {
 import {
   normalizeLabels, LABEL_KINDS, isFiniteConfidence,
 } from '../recognition/provider.mjs';
-import { vocabularySnapshot, zhForTerm } from './vocabulary.mjs';
+import { vocabularySnapshot, zhLabel } from './vocabulary.mjs';
 
 export const INDEX_VERSION = CONTRACT.version;
 export const ITEM_FIELDS = ['id', 'year', 'month', 'tags', 'labels', 'colors', 'source'];
@@ -159,14 +159,18 @@ export function createIndex({ manifest, items = [], vocabulary = vocabularySnaps
     const rec = recognized.get(photo.id);
     // 中文名在**索引构建期**回填，不依赖识别期的产物（V6 C-3）：
     // 词表更新后只需重建索引，不必重跑 Rekognition。
-    // `zhForTerm()` 的兜底是 term 本身，所以「有 zh」不等于「有中文名」——
-    // 判读覆盖率时要用「含汉字」而不是「非空」（见 scripts/audit-terms.mjs）。
     //
-    // The Chinese name is resolved at index-build time, not at recognition time,
-    // so a vocabulary update only needs an index rebuild. `zhForTerm()` falls
-    // back to the term itself, so a non-empty `zh` does not imply a real name.
+    // 判据是**含汉字**，不是「非空」：识别阶段会把英文 term 原样写进 zh
+    // （线上实测 124/163 条），按非空判读会把这些标签原样放进索引，前端每一块
+    // 可点的标签于是变成「点了搜不到」的死链（2026-11-16 验收发现）。
+    // 现在统一走 `zhLabel()`：能解析回本词的中文名 > 词表名 > 规范词本身。
+    //
+    // The Chinese name is resolved at index-build time, not at recognition time.
+    // The criterion is "contains Han", not "non-empty": recognition writes the
+    // English term into zh (124 of 163 labels in production), and a non-empty
+    // check let those through, turning every clickable label into a dead link.
     const labels = normalizeLabels(Array.isArray(rec?.labels) ? rec.labels : [])
-      .map((label) => (label.zh ? label : { ...label, zh: zhForTerm(label.term) }));
+      .map((label) => ({ ...label, zh: zhLabel(label.term, label.zh) }));
     const colors = Array.isArray(rec?.colors)
       ? [...new Set(rec.colors.filter((color) => typeof color === 'string'))]
       : [];

@@ -193,12 +193,12 @@ const ratioOf = (photo) => Number(photo.ratio) || 1;
  *
  * 计划里只放 id 与几何量、不放照片对象，它才能当「结构签名」用。
  *
- * The layout plan is plain data (ids + geometry). Both the full repaint and the
- * incremental append consume it, so their equivalence is assertable in Node
- * without a DOM.
+ * `density` 必须一路传进 `layoutParams`：这个形参曾经漏掉过，调用方照常传
+ * `planCatalog(photos, width, density)`，JS 不报错、参数被静默丢弃，三档密度
+ * 永远按「标准」排。
  */
-export function planCatalog(photos, width) {
-  const params = layoutParams(width);
+export function planCatalog(photos, width, density = 'standard') {
+  const params = layoutParams(width, density);
   const years = [];
   let offset = 0;
 

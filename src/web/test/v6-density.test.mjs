@@ -93,6 +93,27 @@ test('大图行宽度不超过容器宽度', () => {
   }
 });
 
+test('planCatalog 真的用上了 density 形参（这个形参漏过一次）', () => {
+  // 事故还原：`planCatalog(photos, width)` 只声明两个参数，调用处照常传第三个
+  // `density`，JS 不报错、参数被静默丢弃，于是三档密度排出来一模一样，
+  // 下拉框换了等于没换。这条测试问的是「同一批照片，三档的行数必须不同」。
+  //
+  // Regression: `planCatalog` used to declare only two parameters while callers
+  // still passed `density`; the extra argument was silently dropped, so all three
+  // modes laid out identically. Rows must differ per mode.
+  const list = photos(24);
+  const rowCount = (density) => planCatalog(list, WIDTH, density).years
+    .reduce((sum, year) => sum + year.rows.filter((row) => row.kind === 'row').length, 0);
+
+  const compact = rowCount('compact');
+  const standard = rowCount('standard');
+  const large = rowCount('large');
+
+  // 越紧凑，一行装得越多，总行数就越少
+  assert.ok(compact < standard, `紧凑 ${compact} 行，应该少于标准 ${standard} 行`);
+  assert.ok(standard < large, `标准 ${standard} 行，应该少于大图 ${large} 行`);
+});
+
 test('密度不影响分年分组与瓦片总数', () => {
   const list = photos(20);
   for (const density of ['compact', 'standard', 'large']) {

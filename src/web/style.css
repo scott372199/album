@@ -624,7 +624,10 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
   gap: 10px;
 }
 
+/* `display: flex` 会盖掉 hidden 属性，所以显式补一条：整栏隐藏靠它 */
+/* `display: flex` beats the hidden attribute, so the rule is explicit. */
 .field { display: flex; flex-direction: column; gap: 6px; }
+.field[hidden] { display: none; }
 .field > span {
   font-size: 10px;
   letter-spacing: 0.16em;
