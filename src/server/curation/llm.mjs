@@ -43,15 +43,26 @@ const SYSTEM_PROMPT = [
 
 /**
  * 从环境变量读配置。缺一个就当作没有配置——半个配置比没有配置更危险。
- * 只接受 https：构建机不该向明文地址发送凭据。
+ * 只接受 https：不该向明文地址发送凭据。
+ *
+ * **凭据有两种来源，优先级明确**：
+ *   - `ALBUM_LLM_KEY`（构建期 / 本地）：直接给明文，方便离线和一次性构建；
+ *   - `ALBUM_LLM_KEY_PARAM`（线上）：只给 **SSM 参数路径**，密钥本身在
+ *     SecureString 里，运行时才取。环境变量是低密级数据——`lambda:GetFunction
+ *     Configuration` 就能读，所以密钥本身绝不放进环境变量。
+ *
+ * Two credential sources, in order: a plaintext key for local builds, or the
+ * path of an SSM SecureString for the runtime. Env vars are readable by anyone
+ * with lambda:GetFunctionConfiguration, so the secret itself never goes there.
  */
 export function llmConfig(env = process.env) {
   const endpoint = String(env.ALBUM_LLM_ENDPOINT || '').trim();
   const key = String(env.ALBUM_LLM_KEY || '').trim();
+  const keyParam = String(env.ALBUM_LLM_KEY_PARAM || '').trim();
   const model = String(env.ALBUM_LLM_MODEL || '').trim();
-  if (!endpoint || !key || !model) return null;
+  if (!endpoint || !model || !(key || keyParam)) return null;
   if (!/^https:\/\//i.test(endpoint)) return null;
-  return { endpoint, key, model };
+  return { endpoint, model, key, keyParam };
 }
 
 /** 只留一句能公开的中文：单行、限长、不含数字（数字多半是日期或时间） */
@@ -104,12 +115,41 @@ export function createWriter({
   fetchImpl = globalThis.fetch,
   cacheDir = '',
   timeoutMs = REQUEST_TIMEOUT_MS,
+  loadParam = null,
   logger = console.warn,
 } = {}) {
-  const enabled = Boolean(config && config.endpoint && config.key && config.model
+  const enabled = Boolean(config && config.endpoint && config.model
+    && (config.key || config.keyParam)
     && typeof fetchImpl === 'function');
   const memory = new Map();
   let loadedRev = '';
+  let keyCache = '';
+
+  /**
+   * 拿到密钥。给了明文就用明文；只给了 SSM 路径就去取（进程内缓存由
+   * `lib/params.mjs` 负责，5 分钟）。**取不到不算错误**——没有密钥和没有
+   * 配置是同一种情况：这一次不写文案，产物照发。
+   *
+   * 动态 import 是刻意的：本地构建不该为了一个用不到的凭据去加载 AWS SDK。
+   */
+  async function apiKey() {
+    if (config.key) return config.key;
+    if (keyCache) return keyCache;
+    if (!config.keyParam) return '';
+    try {
+      const resolve = loadParam || (async (name) => {
+        const { loadSecrets } = await import('../lib/params.mjs');
+        const secrets = await loadSecrets({ llmKey: name });
+        return secrets.llmKey;
+      });
+      keyCache = String(await resolve(config.keyParam) || '');
+      return keyCache;
+    } catch (err) {
+      // 只报「取不到」，不报参数路径以外的任何内容，绝不带出值
+      logger(`文案凭据读取失败（不影响产物）：${err.message}`);
+      return '';
+    }
+  }
 
   function cacheFile(rev) {
     return cacheDir ? path.join(cacheDir, `${rev}.v${PROMPT_VERSION}.json`) : '';
@@ -146,7 +186,7 @@ export function createWriter({
     }
   }
 
-  async function request(rev, batch) {
+  async function request(rev, batch, key) {
     const controller = typeof AbortController === 'function' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
     try {
@@ -154,7 +194,8 @@ export function createWriter({
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: `Bearer ${config.key}`,
+          // 密钥只在请求头里出现，不进 URL、不进 body、不进日志
+          authorization: `Bearer ${key}`,
         },
         body: JSON.stringify({
           model: config.model,
@@ -186,11 +227,13 @@ export function createWriter({
     if (!wanted.length) return new Map();
     await loadCache(rev);
     const missing = wanted.filter((job) => !memory.has(job.key));
-    if (!enabled || !missing.length) {
+    // 缓存已经覆盖了全部请求时不必去取凭据
+    const key = enabled && missing.length ? await apiKey() : '';
+    if (!key || !missing.length) {
       return new Map(wanted.filter((job) => memory.has(job.key)).map((job) => [job.key, memory.get(job.key)]));
     }
     for (const batch of chunk(missing, BATCH_SIZE)) {
-      await request(rev, batch.map((job) => ({ key: job.key, facts: job.facts || {} })));
+      await request(rev, batch.map((job) => ({ key: job.key, facts: job.facts || {} })), key);
     }
     await saveCache(rev);
     return new Map(wanted.filter((job) => memory.has(job.key)).map((job) => [job.key, memory.get(job.key)]));

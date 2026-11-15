@@ -8,8 +8,19 @@
  * touching a real `dist/`.
  */
 
-/** 120 KB：V6 的硬预算，改它要先改 spec.md FR-14 */
-export const BUDGET_BYTES = 120 * 1024;
+/**
+ * 128 KB：V6 的硬预算。
+ *
+ * 2026-11-15 由 120 KB 上调（用户决定）。理由是这条门禁量的是 `dist/` 里
+ * **未压缩的源码，含注释**——本仓库构建不剥注释，于是「写清楚为什么」和
+ * 「省 400 字节」直接对撞，而真正该守的是首屏字节数不是注释字数。
+ * 上调后仍有 ~8 KB 余量留给下一个功能；要再动它，先改 spec.md FR-14。
+ *
+ * Raised from 120 KB on 2026-11-15 (user decision): the gate measures
+ * uncompressed source including comments, so documentation and byte count were
+ * fighting each other. Change spec.md FR-14 first if this moves again.
+ */
+export const BUDGET_BYTES = 128 * 1024;
 
 export function formatBytes(bytes) {
   if (!Number.isFinite(bytes)) return '—';

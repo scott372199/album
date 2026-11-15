@@ -16,9 +16,9 @@ import {
 
 const file = (name, size) => ({ file: name, size });
 
-test('预算就是 120 KB', () => {
-  assert.equal(BUDGET_BYTES, 120 * 1024);
-  assert.equal(formatBytes(BUDGET_BYTES), '120.0 KB');
+test('预算就是 128 KB（2026-11-15 由 120 KB 上调，见 scripts/lib/budget.mjs）', () => {
+  assert.equal(BUDGET_BYTES, 128 * 1024);
+  assert.equal(formatBytes(BUDGET_BYTES), '128.0 KB');
 });
 
 test('刚好等于预算是通过，超 1 字节才算超', () => {
@@ -33,15 +33,16 @@ test('刚好等于预算是通过，超 1 字节才算超', () => {
 });
 
 test('超限时报出超出多少，并给出 top-5 且降序', () => {
+  // 用「相对预算」写，预算再调也不会让这条用例悄悄变成「没超」
   const items = [
-    file('vendor.js', 90 * 1024),
+    file('vendor.js', BUDGET_BYTES - 20 * 1024),
     file('app.js', 20 * 1024),
     file('style.css', 15 * 1024),
     file('tiny.js', 100),
   ];
   const result = summarize(items, BUDGET_BYTES);
   assert.equal(result.over, true);
-  assert.equal(result.total, 125 * 1024 + 100);
+  assert.equal(result.total, BUDGET_BYTES + 15 * 1024 + 100);
   assert.deepEqual(result.top.map((item) => item.file), ['vendor.js', 'app.js', 'style.css', 'tiny.js']);
   assert.equal(result.top.length, 4, '不足 5 个时不要补空位');
 });

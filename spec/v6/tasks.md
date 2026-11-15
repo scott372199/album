@@ -328,9 +328,11 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 
 **改动**：`+ scripts/check-budget.mjs`、`~ package.json`（`verify` 串联）、`~ .github/workflows/deploy-web.yml`（构建后加一步）
 
-**做法**：对构建产物目录下所有 `.js`/`.css` 求 gzip 之和；>120 KB 则 exit 1 并列出 top-5 贡献文件与各自增量。**LCP 不进 CI**（C-4）——改为发布后手工实测，结果写进验收矩阵。
+**做法**：对构建产物目录下所有 `.js`/`.css` 求 gzip 之和；>128 KB 则 exit 1 并列出 top-5 贡献文件与各自增量。**LCP 不进 CI**（C-4）——改为发布后手工实测，结果写进验收矩阵。
 
 **完成判定**：临时引入 200 KB 依赖 → CI 失败且指出模块；正常构建通过并打印真实数字。
+
+**预算于 2026-11-15 由 120 KB 上调到 128 KB（用户决定）**：这条门禁量的是 `dist/` 里**未压缩的源码、含注释**，而本仓库构建不剥注释。于是 T-22/T-23 两次都演成「删自己的便利导出、压自己的注释」来挤回预算——被砍掉的恰好是解释「为什么这么写」的部分，这不是门禁该优化的方向。真正要守的是首屏字节数，不是注释字数。上调后余量约 8 KB。同时保留了另一条路（构建时剥注释）作为将来真正的解法：**它不改变门禁含义，只改变被量的东西**，需要时再做。
 
 ---
 
@@ -576,11 +578,20 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 
 **写在索引之后、包在 try 里**：`publishRecognition` 写完 `data/search-index.*` 再调发布器，失败只记 `artifacts.failed` 并继续返回 `rev`——索引已经落盘，产物只是下一层装饰。模型调用有 15 s **总时限**（`SENTENCE_BUDGET_MS`）：这一步跑在处理函数里，唯一不能发生的就是「为了几句文案把函数跑超时」，超时即退回派生文案。
 
-**线上暂时是派生文案**：处理函数的 environment 里没有 `ALBUM_LLM_*`，所以 `llmConfig()` 返回 null，精选与故事都按派生文案产出。要让线上措辞也由模型写，需要加三个环境变量（endpoint / model 走明文，key 建议走 SSM + 给处理器角色补 `ssm:GetParameter`）。**这一步没做**——它把密钥带进一个新的执行环境，属于该由你决定的变更，不是实现细节。
+**线上措辞：默认派生，可开、且密钥不落地**。处理函数的 environment 里默认没有 `ALBUM_LLM_*`，`llmConfig()` 返回 null，精选与故事按派生文案产出——这是**默认状态，也是一个合法终态**（FR-07 本来就要求选片与措辞不被模型绑架）。要开就有两条凭据来源，优先级明确：
+
+- `ALBUM_LLM_KEY`（明文，本地/构建期用）；
+- `ALBUM_LLM_KEY_PARAM`（**只给 SSM 参数路径**，线上用）：`createWriter` 在第一次真正要发请求时才去 `lib/params.mjs` 取，进程内缓存 5 分钟；取不到就当作没接模型，不发请求、不抛错。
+
+选后者是因为**环境变量是低密级数据**——控制台和 `GetFunctionConfiguration` 都能明文读到。于是密钥只存在于 SSM SecureString 里：不进 git、不进 tfvars、不进 Terraform state（Terraform 压根不创建这个参数，只授予读路径）、不进日志、不进前端产物（key 只在 `src/server/` 里被读，镜像只 COPY 那一层）。IAM 是一条独立策略，`ssm:GetParameter` 精确到单个参数 ARN + `kms:Decrypt`，不配就整条不存在。运维步骤写在 `album-infra` README §4a。
+
+**动态 import 是刻意的**：`llm.mjs` 里那次 `await import('../lib/params.mjs')` 只在真的要取凭据时才执行，所以本地构建与全部测试都不需要 AWS SDK——把「构建期能用」和「线上能取密钥」放进同一个文件，代价不能是让本地多一个运行依赖。
+
+**新用例两条**（`v6-artifact-publish.test.mjs`）：密钥只按路径取一次、只出现在 `Authorization` 头，URL/body/日志里都没有；取不到凭据时不发请求、不抛错、日志不含密钥。
 
 **verify 拦下了我一次**：「9 宫格用 `object-fit: cover` 更整齐」被门禁挡下（D-01 不裁切）。改成沿用 `contain`，格子底色与卡片同色，留边看不出来。门禁在这里是对的：裁切是产品级决定，不该由某个块的版式需要悄悄推翻。
 
-**体积**：加完第一版是 120.3 KB，超预算 268 B。`check-budget.mjs` 与预算值都是共享契约，我没动它，改的是自己的代码：删掉三个只有测试在用的便利导出（`picksFor` / `blockKey` / `sentenceText`）、把两段过长的块注释收紧。最终 **119.6 KB / 120.0 KB（26 个文件）**。余量只剩 400 B，下一个功能进来之前得先还一笔债——这条记在这里，免得下次以为是「预算还很宽」。
+**体积**：加完第一版是 120.3 KB，超预算 268 B。`check-budget.mjs` 与预算值都是共享契约，当时我没动它，改的是自己的代码：删掉三个只有测试在用的便利导出（`picksFor` / `blockKey` / `sentenceText`）、把两段过长的块注释收紧。最终 **119.6 KB / 120.0 KB（26 个文件）**。**（后来你决定把预算提到 128 KB，见 T-12。）**
 
 **新增**：`+ src/server/curation/rules.mjs`（33 个导出，纯函数）、`+ src/server/curation/llm.mjs`（可注入 fetch 的文案写入器）、`+ src/server/curation/publish.mjs`（白名单 key + 双写 + 15 s 时限）、`+ src/build/curation-artifact.mjs`（构建期落盘）、`+ src/web/js/curation.js`（取数与索引，不碰 DOM）、`+ src/server/test/v6-curation.test.mjs`（30 条）、`+ src/server/test/v6-artifact-publish.test.mjs`（13 条）、`+ src/web/test/v6-curation-block.test.mjs`（13 条）。
 
@@ -618,7 +629,7 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 
 **故事比精选多一条纪律**：没有照片也照写（空章节 + 空结束语）。精选「凑不齐 9 张就不写」是因为空产物只会让线上多一个要解释的对象；故事不同——它随时可能被打开，留一份「什么都没有」的产物，前端那条读取路径平时就是通的，真出问题时在本地就能看见，而不是等到某天上线才第一次执行。
 
-**体积**：本次改的是已在包里的 `story.js` / `data.js`，加完是 120.7 KB（超 708 B）。做法仍是改自己的代码而不是动预算：抽公共加载器、删三个仅测试用的便利导出、把注释压到「一句结论 + 一句理由」。现在 **119.8 KB / 120.0 KB**。**再往里加功能前必须先处理这件事**——`check-budget` 量的是 `dist/` 里**未压缩的源码**（含注释），所以一百多行注释按 gzip 也要吃掉好几 KB。建议二选一：构建时给 js/css 去掉注释（这是改 `build.mjs`，不动预算值），或者正式把预算提到 128 KB。**我没有替你决定，因为这两条都会改动一条既有门禁的含义。**
+**体积**：本次改的是已在包里的 `story.js` / `data.js`，加完是 120.7 KB（超 708 B）。做法仍是改自己的代码而不是动预算：抽公共加载器、删三个仅测试用的便利导出、把注释压到「一句结论 + 一句理由」。现在 **119.8 KB / 120.0 KB**。连续两个任务都靠压注释过关，说明该改的是门禁而不是注释——**你随后决定把预算提到 128 KB**（见 T-12），于是这两处不再需要还债。
 
 **新增**：`+ src/server/curation/story.mjs`（10 个导出，服务端分组与文案）、`+ src/build/story.mjs`（构建期落盘，`export *` 转手）、`+ src/server/test/v6-story.test.mjs`（15 条）、`+ src/web/test/v6-story-copy.test.mjs`（7 条）；`~ src/web/js/data.js`（`loadArtifact`）、`~ src/web/js/story.js`（`applyStoryCopy` / `chapterLine` / `endingLine` / `paintCard`）。
 

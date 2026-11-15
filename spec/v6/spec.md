@@ -65,7 +65,7 @@ V6 不动数据底座，只动三件事：**首页从「多个模块拼在一起
 | S-5 | 第 500 张后单次追加渲染 | 全量 `replaceChildren`，O(n) 重建 | 增量追加，long task ≤50ms |
 | S-6 | 浏览时外部请求（生成式） | 无 | **仍为 0** |
 | S-7 | 月度成本 | ≈¥0.003（V5 实测） | ≤¥15（不新增常驻资源） |
-| S-8 | JS+CSS gzip 体积 / 桌面 LCP | 无基线，无 CI 门禁 | ≤120KB（**CI 硬门禁**）/ ≤2.5s（发布后实测入矩阵），见 FR-14 |
+| S-8 | JS+CSS gzip 体积 / 桌面 LCP | 无基线，无 CI 门禁 | ≤128KB（**CI 硬门禁**，2026-11-15 由 120KB 上调）/ ≤2.5s（发布后实测入矩阵），见 FR-14 |
 
 ---
 
@@ -475,7 +475,7 @@ EARS 记法：**当**（事件）/ **在 … 时**（状态）/ **若**（异常
 - **搜索**：第五节表格五个查询全部符合期望；`EXAMPLE_QUERIES` 硬编码消失；中文输入法一次输入检索 ≤2 次。
   *Search: all five queries in the table behave as specified; hardcoded examples removed; at most two search calls per IME typing session.*
 - **性能**：第 500 张后单次追加 long task ≤50ms；容器节点单调递增；Lighthouse CLS ≤0.1；JS+CSS gzip ≤120KB 且由 CI 强制。
-  *Performance: no append-long-task above 50 ms after photo 500; monotonically growing DOM; CLS ≤0.1; JS+CSS gzip ≤120 KB enforced in CI.*
+  *Performance: no append-long-task above 50 ms after photo 500; monotonically growing DOM; CLS ≤0.1; JS+CSS gzip ≤128 KB enforced in CI.*
 - **支撑件**：改词表一处后前端与服务端同时生效、代码内无第二份 `LEXICON`；CI 在人为超限时失败并定位到模块。
   *Supporting work: one edit to the lexicon changes both sides with no second LEXICON literal; CI fails and names the module when a budget is exceeded.*
 - **生成式**：断网下故事、策展、年度页全部可读；同一 `rev` 重复构建幂等；模型不可用时构建成功。浏览过程外部请求数 = 0（Network 面板核对）。

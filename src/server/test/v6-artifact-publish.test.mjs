@@ -5,6 +5,7 @@ import {
   assertArtifactKey, versionedKey, fixedKey, publishArtifacts,
 } from '../curation/publish.mjs';
 import { chaptersOf, storyDocument } from '../curation/story.mjs';
+import { createWriter } from '../curation/llm.mjs';
 import { buildStory } from '../../web/js/state.js';
 import { publishRecognition } from '../processor/recognition.mjs';
 
@@ -363,4 +364,55 @@ test('发布链路的 import 图不越出 src/server/：镜像只 COPY 这一层
   assert.ok(seen.size > 10, `只走到了 ${seen.size} 个文件，import 图没解析成功`);
   assert.deepEqual(escaped, [], '处理器 import 了镜像里不存在的文件');
   assert.ok([...seen].some((file) => file.endsWith(`curation${path.sep}publish.mjs`)), '处理器没有走到产物发布');
+});
+
+/* ---------------- 凭据来源 / where the key comes from ---------------- */
+
+const LLM = {
+  endpoint: 'https://llm.test/v1/chat', model: 'm', key: '', keyParam: '/album/photos/llm-api-key',
+};
+
+test('密钥只从 SSM 路径取：请求头里带它，URL、body、日志里都没有', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, body: init.body, auth: init.headers.authorization });
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '[{"key":"k1","text":"风很大"}]' } }] }) };
+  };
+  const asked = [];
+  const writer = createWriter({
+    config: LLM,
+    fetchImpl,
+    loadParam: async (name) => { asked.push(name); return 'super-secret-value'; },
+  });
+
+  assert.equal(writer.enabled, true);
+  const out = await writer.write('rev1234', [{ key: 'k1', facts: {} }]);
+
+  assert.equal(out.get('k1'), '风很大');
+  assert.deepEqual(asked, ['/album/photos/llm-api-key'], '应当只按路径取一次');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].auth, 'Bearer super-secret-value');
+  assert.ok(!calls[0].url.includes('super-secret-value'), '密钥进了 URL');
+  assert.ok(!calls[0].body.includes('super-secret-value'), '密钥进了请求体');
+  // 再要一次同样的 key：内存缓存命中，不再取凭据、不再请求
+  await writer.write('rev1234', [{ key: 'k1', facts: {} }]);
+  assert.equal(asked.length, 1);
+  assert.equal(calls.length, 1);
+});
+
+test('凭据取不到 = 没接模型：不请求、不抛错，日志里不出现密钥', async () => {
+  const logs = [];
+  let called = 0;
+  const writer = createWriter({
+    config: LLM,
+    fetchImpl: async () => { called += 1; return { ok: true, status: 200, json: async () => ({}) }; },
+    loadParam: async () => { throw new Error('AccessDenied'); },
+    logger: (message) => logs.push(message),
+  });
+
+  const out = await writer.write('rev1234', [{ key: 'k1', facts: {} }]);
+  assert.equal(out.size, 0);
+  assert.equal(called, 0, '拿不到凭据就不该发请求');
+  assert.ok(logs.some((line) => line.includes('凭据读取失败')));
+  assert.ok(logs.every((line) => !line.includes('super-secret')), '日志里不许出现密钥');
 });

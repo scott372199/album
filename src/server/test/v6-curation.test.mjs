@@ -289,7 +289,21 @@ test('半个配置等于没有配置；明文地址不收', () => {
   const ok = llmConfig({
     ALBUM_LLM_ENDPOINT: 'https://x.test/v1/chat', ALBUM_LLM_KEY: 'k', ALBUM_LLM_MODEL: 'm',
   });
-  assert.deepEqual(ok, { endpoint: 'https://x.test/v1/chat', key: 'k', model: 'm' });
+  assert.deepEqual(ok, {
+    endpoint: 'https://x.test/v1/chat', key: 'k', keyParam: '', model: 'm',
+  });
+  // 线上只给 SSM 路径，密钥本身不进环境变量
+  const viaParam = llmConfig({
+    ALBUM_LLM_ENDPOINT: 'https://x.test/v1/chat',
+    ALBUM_LLM_KEY_PARAM: '/album/photos/llm-api-key',
+    ALBUM_LLM_MODEL: 'm',
+  });
+  assert.equal(viaParam.key, '');
+  assert.equal(viaParam.keyParam, '/album/photos/llm-api-key');
+  // 明文地址 + 只有路径同样不收
+  assert.equal(llmConfig({
+    ALBUM_LLM_ENDPOINT: 'http://x.test/v1', ALBUM_LLM_KEY_PARAM: '/k', ALBUM_LLM_MODEL: 'm',
+  }), null);
 });
 
 test('句子过筛：含数字（日期/时间）、网址、套话的一律不要', () => {
