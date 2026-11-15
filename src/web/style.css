@@ -1054,6 +1054,71 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
   .year-month { font-size: 9px; padding-top: 5px; }
 }
 
+/* ---------- 10.y 每月精选（T-22） ---------- */
+
+/* 一块卡片，压在该月标题之下。视觉上要比照片网格轻：它是导读，不是主角。
+   没有产物时整块不出现（连边框都不留），所以这里不需要「空态」样式。 */
+.month-picks {
+  margin: 2px 0 clamp(16px, 2vw, 24px);
+  padding: 14px clamp(14px, 1.6vw, 20px) 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: var(--paper-2);
+}
+.month-picks-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.month-picks-label {
+  margin: 0;
+  font-size: var(--fs-caption);
+  letter-spacing: 0.1em;
+  color: var(--ink-2);
+}
+/* 跳过的出口：真按钮、Tab 得能到（FR-07），但要小到不像主操作 */
+.month-picks-skip {
+  padding: 4px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-3);
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: color 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.month-picks-skip:hover { color: var(--ink); border-color: var(--ink-3); }
+.month-picks-sentence {
+  margin: 0 0 12px;
+  max-width: 46em;
+  font-size: var(--fs-body);
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+.month-picks-grid {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 4px;
+}
+/* 九宫格里的瓦片由网格定尺寸，所以宽高交出去，只留一个正方形比例 */
+.month-picks-grid .tile {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+}
+/* 不裁切（verify 里是硬门禁）：方格里的照片留边，底色与卡片一致所以看不出缝 */
+.month-picks-grid .tile:hover { transform: translateY(-1px); }
+
+@media (max-width: 900px) {
+  .month-picks-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .month-picks-head { flex-wrap: wrap; gap: 6px 12px; }
+}
+
 /* ---------- 11. 深色章节 ---------- */
 
 .section--dark {

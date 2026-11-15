@@ -4,6 +4,7 @@ import {
 } from './state.js';
 import { loadManifest, buildIndex, resolveManifest, loadSearchIndex } from './data.js';
 import { createCatalog, renderAlbums } from './gallery.js';
+import { loadCuration, curationIndex } from './curation.js';
 import { initLightbox, openLightbox, closeLightbox, isLightboxOpen } from './lightbox.js';
 import { initStory, openStory, closeStory, isStoryOpen } from './story.js';
 import { initWall, enterWall, exitWall, isWallOpen } from './wall.js';
@@ -508,21 +509,31 @@ function openStoryForScope() {
  * The wall's "picks" source reads the T-22 curation artifact; until it exists
  * this returns [] and the wall falls back to "all" with a hint.
  */
-let picksPromise = null;
-function loadPicks() {
-  if (!picksPromise) {
-    picksPromise = (async () => {
-      try {
-        const response = await fetch(`data/curated.json?_=${Date.now()}`, { cache: 'no-cache' });
-        if (!response.ok) return [];
-        const data = await response.json();
-        return Array.isArray(data?.picks) ? data.picks : [];
-      } catch {
-        return [];
-      }
-    })();
+let curationPromise = null;
+/**
+ * 策展产物（T-22）只拉一次，时间流的每月精选块与照片墙的「精选」源共用同一个
+ * Promise——两处各拉一遍既浪费请求，也让「产物有多大」这件事出现两个版本。
+ * 缺失是正常状态：返回 null，两处各自按「没有精选」处理。
+ */
+function loadCurationDoc() {
+  if (!curationPromise) {
+    curationPromise = loadCuration({ rev: ctx.rev }).catch(() => null);
   }
-  return picksPromise;
+  return curationPromise;
+}
+
+function loadPicks() {
+  return loadCurationDoc().then((doc) => (Array.isArray(doc?.picks) ? doc.picks : []));
+}
+
+/**
+ * 把产物挂到时间流上。产物比清单晚到是常态（两个请求并行），所以这里允许晚挂：
+ * `setCuration` 会重排一次，页面不会因为晚到而丢掉精选块。
+ */
+async function mountCuration() {
+  const doc = await loadCurationDoc();
+  if (!doc) return 0;
+  return ctx.catalog?.setCuration(curationIndex(doc)) || 0;
 }
 
 function launchWall(push = true) {
@@ -862,7 +873,10 @@ async function boot() {
   });
   // 索引不可用时静默降级，不阻塞任何浏览路径（见 loadIndex）
   // Index outage degrades silently and never blocks browsing (see loadIndex).
+  // 策展产物与索引并行拉：两者互不依赖，也不该互相等
+  const curationTask = mountCuration();
   await loadIndex();
+  await curationTask;
   // 关掉浏览器的自动滚动恢复：我们自己按年月恢复，避免「先跳顶部再跳回来」的闪动
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   const restored = await applyFromHash({ initial: true });

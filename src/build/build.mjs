@@ -9,6 +9,7 @@ import { processEntry } from './media.mjs';
 import { buildManifest, loadTagOverrides } from './manifest.mjs';
 import { loadSite, resolveHero, resolveFeatured, resolveHeroSections } from './site.mjs';
 import { buildHeroSections } from '../web/js/hero-data.js';
+import { writeCurationArtifacts } from './curation-artifact.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const PHOTOS = path.join(ROOT, 'photos');
@@ -16,6 +17,8 @@ const WEB = path.join(ROOT, 'src', 'web');
 const DIST = path.join(ROOT, 'dist');
 const CACHE = path.join(ROOT, '.build-cache.json');
 const SITE_FILE = path.join(ROOT, 'site.json');
+const DATA_DIR = path.join(ROOT, 'data');
+const LLM_CACHE = path.join(ROOT, 'src', 'build', 'cache');
 const CACHE_VERSION = 3;
 
 /**
@@ -67,6 +70,21 @@ async function fileExists(file) {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * 本地语义索引。构建**不依赖**它：索引是服务端产物，本地可能还没有，
+ * 此时策展只按「比例 + featured」排，多样性与清晰度这两项空转。
+ *
+ * Local semantic index; the build does not require it. When absent, curation
+ * falls back to ratio + featured only — no clarity, no diversity.
+ */
+async function loadLocalIndex() {
+  try {
+    return JSON.parse(await readFile(path.join(DATA_DIR, 'search-index.json'), 'utf8'));
+  } catch {
+    return null;
   }
 }
 
@@ -353,6 +371,20 @@ async function main() {
     },
   });
   await writeFile(path.join(DIST, 'data', 'version.json'), versionJson);
+
+  // 策展只在 all 目标产出：web 目标没有照片（CI 里也没有），
+  // 而发布流水线不同步 data/，线上那份由服务端发布者写。
+  // Curation is produced only by the all target; the web target has no photos,
+  // and the deploy never syncs data/ — production's copy comes from the server.
+  if (TARGET === 'all') {
+    await writeCurationArtifacts({
+      photos: manifest.photos,
+      rev: hashOf(manifestJson),
+      dist: DIST,
+      index: await loadLocalIndex(),
+      cacheDir: LLM_CACHE,
+    });
+  }
 
   const css = await readFile(path.join(WEB, 'style.css'));
   const cssName = `style.${hashOf(css)}.css`;

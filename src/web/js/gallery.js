@@ -3,6 +3,7 @@ import {
 } from './state.js';
 import { escapeHtml, photoAlt, srcsetFor, sizesFor, isTouch, reducedMotion, markWhenReady } from './ui.js';
 import { badgeText, spokenDuration } from './duration.js';
+import { pickPhotos, monthKeyOf } from './curation.js';
 
 /* ---------- 视频瓦片：全局只允许 1 个在播 ---------- */
 const media = { playing: null };
@@ -123,8 +124,14 @@ function createTile(photo, { width, height, kind, onOpen, index }) {
   tile.className = 'tile';
   tile.dataset.id = photo.id;
   tile.dataset.index = String(index);
-  tile.style.width = `${width}px`;
-  tile.style.height = `${height}px`;
+  // 尺寸只在给了像素时写死；不给就让 CSS 定（每月精选的九宫格格子由网格决定，
+  // 内联 `0px` 会把 aspect-ratio 顶掉）。
+  // Only pin the size when pixels are given; otherwise CSS decides (the picks
+  // grid sizes its cells, and an inline 0px would defeat aspect-ratio).
+  if (Number.isFinite(width) && Number.isFinite(height)) {
+    tile.style.width = `${width}px`;
+    tile.style.height = `${height}px`;
+  }
   tile.tabIndex = 0;
   tile.setAttribute('role', 'button');
   // 时长进 aria-label：角标本身是装饰，读屏用户也该知道这条有 34 秒
@@ -290,7 +297,68 @@ function createRow(plan, { byId, onOpen }) {
   return node;
 }
 
-function createYearSection(plan, { byId, onOpen }) {
+/**
+ * 每月精选块（V6 T-22）：9 张 + 一句话 + 一个跳过的出口。
+ *
+ * 不渲染空占位：产物缺失、id 对不上清单、当前筛选把它们滤光了都直接不建这个块；
+ * 过滤后不足 3 张也不建——剩 1 张还叫「本月精选」是骗人。跳过用真按钮（键盘可达），
+ * 只在这一次浏览里生效。
+ *
+ * No placeholder ever: no artifact, stale ids, or a filter that leaves fewer than
+ * three picks all mean no block. The skip is a real button and lasts this visit.
+ */
+const MIN_VISIBLE_PICKS = 3;
+
+function createMonthPicks(entry, { byId, order, onOpen, onSkip }) {
+  const photos = pickPhotos(byId, entry.picks).filter((photo) => order.has(photo.id));
+  if (photos.length < MIN_VISIBLE_PICKS) return null;
+
+  const box = document.createElement('section');
+  box.className = 'month-picks';
+  box.dataset.monthPicks = entry.key;
+  box.setAttribute('role', 'group');
+  box.setAttribute('aria-label', `${entry.year} 年 ${entry.month} 月精选，${photos.length} 张`);
+
+  const head = document.createElement('div');
+  head.className = 'month-picks-head';
+
+  const label = document.createElement('p');
+  label.className = 'month-picks-label';
+  label.textContent = `本月精选 · ${photos.length} 张`;
+  head.appendChild(label);
+
+  const skip = document.createElement('button');
+  skip.type = 'button';
+  skip.className = 'month-picks-skip';
+  skip.textContent = '跳过本月精选';
+  skip.setAttribute('aria-label', `跳过 ${entry.year} 年 ${entry.month} 月的精选`);
+  skip.addEventListener('click', () => onSkip(entry.key));
+  head.appendChild(skip);
+  box.appendChild(head);
+
+  const sentence = typeof entry.sentence === 'string' ? entry.sentence.trim() : '';
+  if (sentence) {
+    const note = document.createElement('p');
+    note.className = 'month-picks-sentence';
+    note.textContent = sentence;
+    box.appendChild(note);
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'month-picks-grid';
+  for (const photo of photos) {
+    grid.appendChild(createTile(photo, {
+      kind: 'picks',
+      onOpen,
+      index: order.get(photo.id) ?? 0,
+    }));
+  }
+  box.appendChild(grid);
+
+  return box;
+}
+
+function createYearSection(plan, { byId, order, onOpen, curation, skipped, onSkip }) {
   const section = document.createElement('section');
   section.className = 'year-group';
   section.dataset.year = String(plan.year);
@@ -309,6 +377,18 @@ function createYearSection(plan, { byId, onOpen }) {
       title.dataset.month = String(item.month);
       title.innerHTML = `${item.month} 月<span>${item.count}</span>`;
       rowsHost.appendChild(title);
+
+      // 策展块挂在月份标题**之下**：标题是这个分组的标签，块是分组的第一行内容。
+      // 放在标题之上会让人以为它属于上一个月。
+      // The picks block sits under the month heading: the heading labels the
+      // group, the block is its first content. Above the heading it would read as
+      // belonging to the previous month.
+      const key = monthKeyOf({ year: plan.year, month: item.month });
+      const entry = curation?.get(key);
+      if (entry && !skipped.has(key)) {
+        const block = createMonthPicks(entry, { byId, order, onOpen, onSkip });
+        if (block) rowsHost.appendChild(block);
+      }
     } else {
       rowsHost.appendChild(createRow(item, { byId, onOpen }));
     }
@@ -334,7 +414,10 @@ function createYearSection(plan, { byId, onOpen }) {
  * 增量：追加时只增删改动过的那几年，已经画好的年份一个节点都不碰；
  * 宽度变化、筛选重置这类「整页语义变了」的情况仍走全量重排。
  */
-export function createCatalog({ container, onOpen, initialBatch = 60, chunk = 60, density = 'standard' }) {
+export function createCatalog({
+  container, onOpen, initialBatch = 60, chunk = 60, density = 'standard',
+  curation = null, onSkipCuration = null,
+}) {
   let photos = [];
   let limit = initialBatch;
   let frame = null;
@@ -342,6 +425,9 @@ export function createCatalog({ container, onOpen, initialBatch = 60, chunk = 60
   let renderedKeys = [];
   let sections = [];
   let currentDensity = normalizeDensity(density);
+  // 每月精选（T-22）：图谱与「已跳过」都在闭包里，重排不会把跳过状态弄丢
+  let curationIndex = curation instanceof Map ? curation : new Map();
+  const skippedPicks = new Set();
 
   function measure() {
     const width = container.clientWidth || 800;
@@ -356,8 +442,12 @@ export function createCatalog({ container, onOpen, initialBatch = 60, chunk = 60
     lastWidth = width;
     const visible = photos.slice(0, limit);
     const plan = planCatalog(visible, width, currentDensity);
-    const byId = new Map(visible.map((photo) => [photo.id, photo]));
-    const nodes = plan.years.map((yearPlan) => createYearSection(yearPlan, { byId, onOpen }));
+    // 精选块要能打开「可见部分之外」的照片，所以索引建在整份列表上
+    const byId = new Map(photos.map((photo) => [photo.id, photo]));
+    const order = new Map(photos.map((photo, index) => [photo.id, index]));
+    const nodes = plan.years.map((yearPlan) => createYearSection(yearPlan, {
+      byId, order, onOpen, curation: curationIndex, skipped: skippedPicks, onSkip: skipPicks,
+    }));
 
     container.replaceChildren(...nodes);
     sections = nodes;
@@ -374,7 +464,8 @@ export function createCatalog({ container, onOpen, initialBatch = 60, chunk = 60
     const { keep, rebuild, stale } = diffYears(renderedKeys, plan.years);
     if (!rebuild.length && !stale) return; // 没有任何变化：一个节点都不碰
 
-    const byId = new Map(visible.map((photo) => [photo.id, photo]));
+    const byId = new Map(photos.map((photo) => [photo.id, photo]));
+    const order = new Map(photos.map((photo, index) => [photo.id, index]));
     for (let i = keep; i < sections.length; i += 1) sections[i].remove();
     sections.length = keep;
     renderedKeys.length = keep;
@@ -383,7 +474,9 @@ export function createCatalog({ container, onOpen, initialBatch = 60, chunk = 60
     const fragment = document.createDocumentFragment();
     const appended = [];
     for (const yearPlan of rebuild) {
-      const node = createYearSection(yearPlan, { byId, onOpen });
+      const node = createYearSection(yearPlan, {
+        byId, order, onOpen, curation: curationIndex, skipped: skippedPicks, onSkip: skipPicks,
+      });
       fragment.appendChild(node);
       appended.push(node);
     }
@@ -409,7 +502,35 @@ export function createCatalog({ container, onOpen, initialBatch = 60, chunk = 60
   });
   observer.observe(container);
 
+  /**
+   * 跳过本月的精选：块自己消失，别的 DOM 一个都不动。
+   * 不重排整页是有意的——用户刚点完按钮，页面跳动会让人以为点错了东西。
+   */
+  function skipPicks(key) {
+    if (!key || skippedPicks.has(key)) return;
+    skippedPicks.add(key);
+    for (const section of sections) {
+      const walk = (node) => {
+        const blocks = Array.isArray(node.children)
+          ? node.children.filter((child) => child?.dataset?.monthPicks === key)
+          : [];
+        for (const block of blocks) node.children.splice(node.children.indexOf(block), 1);
+        for (const child of Array.isArray(node.children) ? [...node.children] : []) walk(child);
+      };
+      walk(section);
+    }
+    onSkipCuration?.(key);
+  }
+
   return {
+    /** 策展产物是异步到的：到了再挂上并重排一次 */
+    setCuration(next) {
+      const index = next instanceof Map ? next : new Map();
+      curationIndex = index;
+      skippedPicks.clear();
+      paintFull();
+      return index.size;
+    },
     update(list, { reset = true } = {}) {
       photos = list;
       if (reset) limit = Math.min(initialBatch, list.length || initialBatch);
