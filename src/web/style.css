@@ -1710,8 +1710,12 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
   z-index: 5;
   transform: translate(-50%, 14px);
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
   gap: 6px;
+  /* 多了「播放源」之后控制条变长：窄屏必须能折行，否则会顶出屏幕两侧 */
+  max-width: calc(100vw - 20px);
   padding: 8px 10px;
   border-radius: 999px;
   border: 1px solid rgb(var(--c-on-rgb) / 0.14);
@@ -1756,6 +1760,9 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
 .wall-field select {
   height: 28px;
   padding: 0 6px;
+  /* 相册名可能很长，截断而不是把控制条撑开 */
+  max-width: 132px;
+  text-overflow: ellipsis;
   border: 0;
   border-radius: 8px;
   background: rgb(var(--c-on-rgb) / 0.1);

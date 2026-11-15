@@ -22,6 +22,7 @@ import {
 import { mountUploadLegend } from './upload-state.js';
 import { initTheme, themeLabel } from './theme.js';
 import { createYearPage, renderYearNav, buildYearSummary } from './year-page.js';
+import { portraitIds } from './wall-source.js';
 
 const ctx = {
   index: null,
@@ -501,6 +502,29 @@ function openStoryForScope() {
   startStory(scope);
 }
 
+/**
+ * 照片墙「精选」源读 T-22 的策展产物。产物还没生成时这里返回空数组，墙退回
+ * 「全部」并给一句提示——不猜、也不假装有精选。只拉一次，失败就记空。
+ * The wall's "picks" source reads the T-22 curation artifact; until it exists
+ * this returns [] and the wall falls back to "all" with a hint.
+ */
+let picksPromise = null;
+function loadPicks() {
+  if (!picksPromise) {
+    picksPromise = (async () => {
+      try {
+        const response = await fetch(`data/curated.json?_=${Date.now()}`, { cache: 'no-cache' });
+        if (!response.ok) return [];
+        const data = await response.json();
+        return Array.isArray(data?.picks) ? data.picks : [];
+      } catch {
+        return [];
+      }
+    })();
+  }
+  return picksPromise;
+}
+
 function launchWall(push = true) {
   const photos = ctx.index.photos;
   if (!photos.length) return;
@@ -512,6 +536,9 @@ function launchWall(push = true) {
     clock: wallOptions.clock !== false,
     night: wallOptions.night,
     rev: ctx.rev,
+    // 人像多停 1.5 秒（T-25）：判据是识别标签里有没有 person/people
+    portraits: portraitIds(state.search.index?.items || []),
+    loadPicks,
     onClose: leaveMode,
     onManifest: (manifest) => {
       state.data = manifest;

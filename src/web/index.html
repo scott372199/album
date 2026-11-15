@@ -239,6 +239,14 @@
     <div class="wall-bar" id="wall-bar">
       <button type="button" class="wall-btn" id="wall-prev" aria-label="上一张">&#8249;</button>
       <button type="button" class="wall-btn" id="wall-toggle">暂停</button>
+      <!-- 播放源（T-25）：四源互斥落在这一只下拉里。选项由 wall-source.js
+           从照片现算（全部 / 精选 / 每年 / 每相册），所以新内容进来不用改配置 -->
+      <label class="wall-field">
+        <span>播放</span>
+        <select id="wall-source">
+          <option value="all">全部</option>
+        </select>
+      </label>
       <label class="wall-field">
         <span>间隔</span>
         <select id="wall-interval">

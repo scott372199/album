@@ -1,8 +1,10 @@
 import { el, clockParts, inNightWindow, shuffle, reducedMotion, markWhenReady } from './ui.js';
 import { startVersionWatch } from './update.js';
 import { setKeepScreenOn } from './native.js';
-
-const MAX_VIDEO_MS = 45000;
+import {
+  VIDEO_SAFETY_MS, parseSource, sourceToken, sourceOptions, sourcePool,
+  buildQueue, dwellMs, isMotion,
+} from './wall-source.js';
 
 const w = {
   active: false,
@@ -27,6 +29,10 @@ const w = {
   hooks: {},
   rev: null,
   dayKey: '',
+  // 播放源（T-25）：四源互斥，池子只有一个
+  source: { kind: 'all', value: '' },
+  picks: null,
+  portraits: new Set(),
 };
 
 const refs = {};
@@ -45,6 +51,7 @@ function cache() {
     next: el('wall-next'),
     toggle: el('wall-toggle'),
     interval: el('wall-interval'),
+    source: el('wall-source'),
     clockToggle: el('wall-clock-toggle'),
     night: el('wall-night'),
     exit: el('wall-exit'),
@@ -52,29 +59,6 @@ function cache() {
   return refs;
 }
 
-function isMotion(photo) {
-  return (photo.type === 'video' || photo.type === 'live' || photo.type === 'animation') && photo.src;
-}
-
-/* ---------- 队列 ---------- */
-
-function buildQueue(photos, now) {
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const sameMonth = photos.filter((photo) => photo.month === month && photo.year < year);
-  const recent = photos.slice(0, 24);
-  const seen = new Set([...sameMonth.map((p) => p.id), ...recent.map((p) => p.id)]);
-  const rest = shuffle(photos.filter((p) => !seen.has(p.id)));
-
-  const head = [];
-  const used = new Set();
-  for (const photo of [...sameMonth.slice(0, 8), ...recent, ...rest]) {
-    if (used.has(photo.id)) continue;
-    used.add(photo.id);
-    head.push(photo);
-  }
-  return head;
-}
 
 /* ---------- 渲染 ---------- */
 
@@ -93,6 +77,10 @@ function makeLayer(photo) {
     markWhenReady(video, layer);
     video.addEventListener('loadeddata', () => { video.play().catch(() => {}); }, { once: true });
     video.addEventListener('ended', () => {
+      if (w.active && w.playing) next();
+    });
+    // 片子拉不下来时不能干等 45 秒的安全上限，直接走下一张
+    video.addEventListener('error', () => {
       if (w.active && w.playing) next();
     });
     layer.appendChild(video);
@@ -116,11 +104,19 @@ function schedule(ms) {
   }, ms);
 }
 
-function durationFor(photo) {
-  if (isMotion(photo)) {
-    return Math.min((Number(photo.duration) || 8) * 1000 + 1200, MAX_VIDEO_MS);
-  }
-  return Math.max(3000, w.interval * 1000);
+/**
+ * 这一张要排多长的定时器。
+ *
+ * 视频拿到的 `dwellMs` 是 0，意思是「不要按间隔切」——改成 45 秒的安全上限：
+ * 正常情况片子放完 `ended` 会推进，上限只兜住「卡死不 ended」。
+ * 以前视频也走间隔定时器，间隔比片长短时就会在放到一半被切走。
+ *
+ * A video's dwell is 0, meaning "do not cut on the interval"; it advances on
+ * `ended`, with 45 s as the only safety cap against a stalled clip.
+ */
+function timerFor(photo) {
+  const dwell = dwellMs(photo, { interval: w.interval, portrait: w.portraits.has(photo.id) });
+  return dwell === 0 ? VIDEO_SAFETY_MS : dwell;
 }
 
 function show(index) {
@@ -149,7 +145,7 @@ function show(index) {
     img.src = nextPhoto.view || nextPhoto.grid;
   }
 
-  if (w.playing) schedule(durationFor(photo));
+  if (w.playing) schedule(timerFor(photo));
 }
 
 function next() {
@@ -250,9 +246,39 @@ function showBar() {
 
 /* ---------- 版本更新 ---------- */
 
-function rebuildQueue(keepPosition = true) {
+const FALLBACK_TEXT = {
+  'picks-empty': '精选还没生成，先放全部',
+  'picks-stale': '精选里的照片都不在了，先放全部',
+  'year-empty': '这一年没有照片，先放全部',
+  'album-empty': '这个相册没有照片，先放全部',
+};
+
+/** 播放源下拉框的选项：年份与相册都从照片里现算，新内容进来不用改配置 */
+function paintSources() {
+  const r = cache();
+  if (!r.source) return;
+  const options = sourceOptions(w.photos);
+  const current = sourceToken(w.source);
+  r.source.replaceChildren(...options.map((item) => {
+    const option = document.createElement('option');
+    option.value = item.token;
+    option.textContent = item.label;
+    return option;
+  }));
+  r.source.value = options.some((item) => item.token === current) ? current : 'all';
+}
+
+function rebuildQueue(keepPosition = true, { notify = false } = {}) {
   const now = new Date();
-  const nextQueue = buildQueue(w.photos, now);
+  // 四源互斥就落在这里：池子只有一个，后面的队列只可能来自当前这一源
+  const pool = sourcePool(w.photos, w.source, { picks: w.picks });
+  if (pool.fallback) {
+    // 要的源没有料：退全部，并且说出来。默默放点别的照片装作正常是最差的做法
+    w.source = pool.source;
+    if (notify) showHint(FALLBACK_TEXT[pool.reason] || '这个源没有照片，先放全部');
+    paintSources();
+  }
+  const nextQueue = buildQueue(pool.photos, { now, shuffle });
   if (!nextQueue.length) return;
   const currentId = w.queue[w.index]?.id;
   w.queue = nextQueue;
@@ -265,11 +291,27 @@ function rebuildQueue(keepPosition = true) {
   }
 }
 
+/**
+ * 切换播放源。精选的策展产物（T-22）只在第一次真的选到「精选」时去拉——
+ * 不选就不发这个请求。
+ */
+async function applySource(token) {
+  const wanted = parseSource(token);
+  if (wanted.kind === 'picks' && w.picks === null) {
+    w.picks = (await w.hooks.loadPicks?.()) || [];
+  }
+  w.source = wanted;
+  rebuildQueue(false, { notify: true });
+  showBar();
+}
+
 function applyManifest(manifest) {
   const photos = Array.isArray(manifest.photos) ? manifest.photos : [];
   const known = new Set(w.photos.map((photo) => photo.id));
   const fresh = photos.filter((photo) => !known.has(photo.id));
   w.photos = photos;
+  // 新相册 / 新年份进来了，源下拉框要跟着长出来
+  paintSources();
   if (!fresh.length) return;
 
   // 新内容插到当前位置之后，不打断正在放的这一张
@@ -291,7 +333,17 @@ export function enterWall(photos, options = {}) {
   w.clock = options.clock !== false;
   if (options.night) w.nightWindow = options.night;
   w.dayKey = new Date().toDateString();
-  w.queue = buildQueue(photos, new Date());
+  // 播放源（T-25）：默认全部；人像 id 从语义索引来，索引没到位就退化成空集合
+  w.source = parseSource(options.source || 'all');
+  w.picks = Array.isArray(options.picks) ? options.picks : null;
+  w.portraits = options.portraits instanceof Set ? options.portraits : new Set(options.portraits || []);
+  paintSources();
+  {
+    const pool = sourcePool(photos, w.source, { picks: w.picks });
+    w.source = pool.source;
+    w.queue = buildQueue(pool.photos, { now: new Date(), shuffle });
+    if (pool.fallback) showHint(FALLBACK_TEXT[pool.reason] || '这个源没有照片，先放全部');
+  }
 
   r.interval.value = String(w.interval);
   r.clockToggle.classList.toggle('is-on', w.clock);
@@ -349,16 +401,18 @@ export function initWall() {
     w.playing = !w.playing;
     r.toggle.textContent = w.playing ? '暂停' : '播放';
     if (w.playing) {
-      schedule(durationFor(w.queue[w.index]));
+      schedule(timerFor(w.queue[w.index]));
     } else {
       clearTimeout(w.timer);
       w.remaining = Math.max(0, w.dueAt - performance.now());
     }
   });
 
+  r.source?.addEventListener('change', () => { applySource(r.source.value); });
+
   r.interval.addEventListener('change', () => {
     w.interval = Number(r.interval.value) || 10;
-    if (w.playing) schedule(durationFor(w.queue[w.index]));
+    if (w.playing) schedule(timerFor(w.queue[w.index]));
   });
 
   r.clockToggle.addEventListener('click', () => {
@@ -389,7 +443,7 @@ export function initWall() {
       event.preventDefault();
       w.playing = !w.playing;
       r.toggle.textContent = w.playing ? '暂停' : '播放';
-      if (w.playing) schedule(durationFor(w.queue[w.index]));
+      if (w.playing) schedule(timerFor(w.queue[w.index]));
       else clearTimeout(w.timer);
     }
   });
