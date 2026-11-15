@@ -35,8 +35,13 @@ test('五类失败：按用户能做什么分类', () => {
   assert.equal(classifyFailure(null), 'server');
 });
 
-test('五类失败：种类表与文案表一一对应，没有第六类', () => {
-  assert.deepEqual([...FAILURE_KINDS], ['network', 'auth', 'too-large', 'unsupported', 'server']);
+test('失败种类：种类表与文案表一一对应', () => {
+  // 原本是五类（T-21）。第六类 `unreadable` 是线上事故加的：系统把文件句柄
+  // 回收之后重试没有意义，只能让用户重新选，它与前五类的「下一步动作」都不同。
+  assert.deepEqual(
+    [...FAILURE_KINDS],
+    ['network', 'auth', 'too-large', 'unsupported', 'server', 'unreadable'],
+  );
   for (const kind of FAILURE_KINDS) {
     assert.equal(typeof FAILURE_LABELS[kind], 'string');
     assert.ok(FAILURE_LABELS[kind].length > 0);

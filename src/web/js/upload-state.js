@@ -145,7 +145,7 @@ export function mountUploadLegend(host) {
  * Five classes, chosen by what the user can actually do about it. The class only
  * picks a sentence, so no URLs, status codes or object keys may appear in it.
  */
-export const FAILURE_KINDS = Object.freeze(['network', 'auth', 'too-large', 'unsupported', 'server']);
+export const FAILURE_KINDS = Object.freeze(['network', 'auth', 'too-large', 'unsupported', 'server', 'unreadable']);
 
 export const FAILURE_LABELS = Object.freeze({
   network: '网络不稳定，换个网络或稍后再试',
@@ -153,6 +153,8 @@ export const FAILURE_LABELS = Object.freeze({
   'too-large': '文件太大，请换一个小一点的',
   unsupported: '格式不支持，请先导出成 JPEG',
   server: '服务暂时不可用，过一会儿再试',
+  // 系统把文件句柄回收了（见下方 resetPicker 的注释），只能重新选，重试没有意义
+  unreadable: '这张已经读不到了，请重新选一次',
 });
 
 /**
@@ -167,13 +169,45 @@ export function classifyFailure(err) {
   if (status === 413) return 'too-large';
   if (status === 415) return 'unsupported';
   if (status >= 500) return 'server';
-  if (err?.kind === 'too-large' || err?.kind === 'unsupported') return err.kind;
+  if (err?.kind === 'too-large' || err?.kind === 'unsupported' || err?.kind === 'unreadable') return err.kind;
   if (err?.retryable) return 'network';
   return 'server';
 }
 
 export function failureLabel(err) {
   return FAILURE_LABELS[classifyFailure(err)] || FAILURE_LABELS.server;
+}
+
+/**
+ * 把「文件读不到了」认出来 / Recognise a stale file reference.
+ *
+ * 真实事故（2026-11-15 线上验收）：选 22 张只成功 3 张，其余报 `The requested
+ * file could not be read …`。根因是我们自己在 change 里同步写了 `input.value = ''`，
+ * Chromium 立刻作废这批 `File` 的引用；已缓冲好的那几张还能读。
+ *
+ * 这里只做识别与话术，修法在 upload.js（见 canResetPicker）。
+ */
+const UNREADABLE = /could not be read|permission problems|not ?readable/i;
+
+export function asReadFailure(err) {
+  const name = String(err?.name || '');
+  if (name !== 'NotReadableError' && !UNREADABLE.test(String(err?.message || ''))) return null;
+  const wrapped = new Error(FAILURE_LABELS.unreadable);
+  wrapped.kind = 'unreadable';
+  wrapped.cause = err;
+  return wrapped;
+}
+
+/**
+ * 现在能不能安全地清空选择器 / May the picker be reset now?
+ *
+ * 清空 `<input type=file>` 会作废这一批 `File` 的引用，所以只在没人还需要它们时
+ * 才能清：没有进行中的批次，也没有留着等重试的条目。否则不清——代价只是「再选
+ * 同一批文件不会触发 change」，那是小事。
+ */
+export function canResetPicker({ busy = false, failed = [] } = {}) {
+  if (busy) return false;
+  return !(failed && failed.length);
 }
 
 /* ---------------- T-21：断点续传 ---------------- */

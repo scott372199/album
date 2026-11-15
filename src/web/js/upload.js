@@ -34,9 +34,12 @@ import { labelFor } from './upload-state.js';
 import { buildSuggestion, suggestionNote } from './upload-suggest.js';
 import {
   failureLabel, remainingParts, signedStillValid, photoIdFor,
+  asReadFailure, canResetPicker,
 } from './upload-state.js';
 
 const MAX_BATCH = 20;
+/** 两个选择器：照片与视频分开，各自走对应的系统选择器（见 index.html 注释） */
+const PICKER_IDS = ['upload-files', 'upload-videos'];
 /** 3 次重试的等待时间（毫秒），总补偿 ≈ 13 秒，压在预签名 15 分钟有效期之内 */
 const RETRY_DELAYS = [1200, 3500, 8000];
 const TOKEN_KEY = 'album.token';
@@ -594,6 +597,10 @@ async function selfCheck(uploadUrl) {
 }
 
 async function failureText(err) {
+  // 文件读不到（系统回收了句柄）不是「重试能好」的失败，也不是网络问题：
+  // 直接给一句能照做的话，别把浏览器那句 "permission problems" 端给用户。
+  const readFailure = asReadFailure(err);
+  if (readFailure) return readFailure.message;
   if (!err.retryable) return err.message;
   const total = Number(err.total) || 0;
   const percent = total ? Math.round(((Number(err.sent) || 0) / total) * 100) : 0;
@@ -644,8 +651,11 @@ async function run(album, entries) {
         state.ok += 1;
         state.lastSha = entry.sha256;
       } catch (err) {
-        entry.row.fail(await failureText(err));
-        state.failed.push(entry);
+        // 句柄失效的失败重试没有意义，只计数，不进「重试失败项」
+        const readFailure = asReadFailure(err);
+        entry.row.fail(readFailure ? readFailure.message : await failureText(err));
+        if (readFailure) state.bad += 1;
+        else state.failed.push(entry);
       }
     }
   }
@@ -729,7 +739,7 @@ async function uploadFiles(files) {
           row,
         });
       } catch (err) {
-        row.fail(err.message);
+        row.fail((asReadFailure(err) || err).message);
         state.bad += 1;
       }
     }
@@ -800,9 +810,17 @@ async function goSee() {
 
 /* ---------------- 装配 ---------------- */
 
+/** 清空两个选择器。只能在 canResetPicker 为真时调用：它会让 File 引用作废。 */
+function resetPickers() {
+  for (const id of PICKER_IDS) el(id).value = '';
+}
+
 function open() {
   el('upload').hidden = false;
   document.body.classList.add('is-uploading');
+  // 面板重开时才是清空选择器的安全时机：此时没有批次在跑、也没有留着重试的条目，
+  // 清掉之后「再选同一批文件」也能重新触发 change。
+  if (canResetPicker({ busy: state.busy, failed: state.failed })) resetPickers();
   if (tokenValid(state.token)) showPicker();
   else showLogin('');
 }
@@ -855,11 +873,16 @@ export function initUpload({ getLibrary } = {}) {
     el('upload-suggest').hidden = true;
   });
 
-  el('upload-files').addEventListener('change', (event) => {
+  // 两个选择器共用一个处理器。注意处理器里**不能**清空 input：
+  // `value = ''` 会让 Chromium 立刻作废这批 File 的引用，之后每次读取都抛
+  // NotReadableError（线上选 22 张只成功 3 张就是这么来的）。清空交给 resetPickers。
+  const onPick = (event) => {
     const files = [...(event.target.files || [])];
-    event.target.value = '';
     if (files.length) uploadFiles(files);
-  });
+  };
+
+  el('upload-files').addEventListener('change', onPick);
+  el('upload-videos').addEventListener('change', onPick);
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !el('upload').hidden) close();
   });

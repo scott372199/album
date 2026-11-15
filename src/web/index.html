@@ -322,11 +322,27 @@
           <span>放进哪个相册</span>
           <input id="upload-album" type="text" maxlength="40" autocomplete="off">
         </label>
-        <label class="upload-pick">
-          <input id="upload-files" type="file" accept="image/*,video/*" multiple hidden>
-          <span class="upload-pick-text">选择照片或视频</span>
-          <span class="upload-pick-hint">图片 30MB / 视频 200MB 以内，一次最多 20 个</span>
-        </label>
+        <!-- 照片与视频分两个入口。原因不是审美：`accept` 同时给 image/* 和 video/*
+             时，Android Chrome 会退回**文件管理器**，相册名一个都不显示（自建相册更
+             找不到）；只给 image/* 才会走系统相册选择器，那里才有相册列表。
+             照片走相册选择器，视频走它自己的选择器，两边都比混在一起更准。 -->
+        <!-- Two entries on purpose: with both image/* and video/* in one accept,
+             Chrome on Android falls back to the file manager, which lists folders
+             but no albums. A single-type accept is what reaches the system photo
+             picker, so photos and videos get their own. -->
+        <div class="upload-pick-row">
+          <label class="upload-pick">
+            <input id="upload-files" type="file" accept="image/*" multiple hidden>
+            <span class="upload-pick-text">选择照片</span>
+            <span class="upload-pick-hint">单张 30MB 以内</span>
+          </label>
+          <label class="upload-pick">
+            <input id="upload-videos" type="file" accept="video/*" multiple hidden>
+            <span class="upload-pick-text">选择视频</span>
+            <span class="upload-pick-hint">单条 200MB 以内</span>
+          </label>
+        </div>
+        <p class="upload-pick-note">一次最多 20 个</p>
         <ul class="upload-list" id="upload-list" aria-live="polite"></ul>
         <div class="upload-legend" id="upload-legend" role="group" aria-label="上传状态图例"></div>
         <div class="upload-foot">

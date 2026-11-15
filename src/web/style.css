@@ -2199,6 +2199,24 @@ body.is-uploading { overflow: hidden; }
   color: var(--c-danger);
 }
 
+/* 两个入口并排：照片与视频分开走各自的系统选择器（相册列表只在单类型 accept 时出现） */
+.upload-pick-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.upload-pick-row .upload-pick { margin-bottom: 0; }
+.upload-pick-note {
+  margin: 8px 0 14px;
+  font-size: 12px;
+  color: var(--ink-3);
+  text-align: center;
+}
+@media (max-width: 420px) {
+  .upload-pick-row { grid-template-columns: 1fr; gap: 8px; }
+  .upload-pick-note { margin-bottom: 12px; }
+}
+
 .upload-pick {
   display: block;
   margin-bottom: 14px;
