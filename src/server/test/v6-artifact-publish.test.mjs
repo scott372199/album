@@ -416,3 +416,50 @@ test('凭据取不到 = 没接模型：不请求、不抛错，日志里不出�
   assert.ok(logs.some((line) => line.includes('凭据读取失败')));
   assert.ok(logs.every((line) => !line.includes('super-secret')), '日志里不许出现密钥');
 });
+
+test('测试的 import 图里不许**静态**出现 @aws-sdk：CI 不装那个包', async () => {
+  // 来自一次真实事故：hero.mjs 顶层整包 import 了 store.mjs，而 store.mjs 顶层
+  // import 了 @aws-sdk/client-s3。那个包只在镜像的 package.json 里，CI 装的是
+  // 仓库根依赖——于是整份 v6-hero 测试在 CI 上整体失败（连一条断言都没跑到），
+  // 本地却全绿，因为本地 node_modules 恰好有 AWS SDK。这种「只在 CI 红」的错
+  // 最难查，所以用一条不执行代码的静态扫描把它挡在门口。
+  //
+  // 只看**静态** import：`await import(...)` 是运行期才加载的，正是修法本身
+  // （只有真要访问 S3 时才把 SDK 拉进来）。
+  const { readFile, readdir } = await import('node:fs/promises');
+  const path = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+
+  const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const testDirs = [path.join(here, 'server', 'test'), path.join(here, 'web', 'test')];
+  const offenders = [];
+
+  const specsOf = (source) => [
+    ...source.matchAll(/\bfrom\s*['"]([^'"]+)['"]/g),
+    ...source.matchAll(/^\s*import\s*['"]([^'"]+)['"]/gm),
+  ].map((match) => match[1]);
+
+  // 模块图里可能有环（A import B，B import A），走一遍就记下来，避免原地打转。
+  const seen = new Set();
+
+  async function walk(file, trail) {
+    if (seen.has(file)) return;
+    seen.add(file);
+    const source = await readFile(file, 'utf8');
+    for (const spec of specsOf(source)) {
+      if (spec.startsWith('@aws-sdk/')) {
+        offenders.push(`${trail} → ${spec}`);
+        continue;
+      }
+      if (!spec.startsWith('.')) continue;
+      await walk(path.resolve(path.dirname(file), spec), trail);
+    }
+  }
+
+  for (const dir of testDirs) {
+    for (const name of await readdir(dir)) {
+      if (name.endsWith('.test.mjs')) await walk(path.join(dir, name), name);
+    }
+  }
+  assert.deepEqual(offenders, [], '测试静态依赖了 CI 里不存在的 AWS SDK');
+});

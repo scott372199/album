@@ -351,6 +351,25 @@ by OAC, and the bucket policy allows it. A direct S3 REST call has none of them.
 *One image, two entrypoints selected by `image_config.command`. Built only on an amd64 runner
 because a locally built arm64 image simply refuses to start on Lambda.*
 
+#### 4.4a 两套 node_modules，一条静态 import 就能越界 / Two dependency sets, one import apart
+
+镜像里装的是 `src/server/package.json`（含 `@aws-sdk/*`），CI 在仓库根只装
+`sharp` + `exifr`。所以**测试跑得通的机器，依赖集合和 CI 不一样**——本地
+`node_modules` 恰好有 AWS SDK，`node --test` 全绿，推到 CI 上整份用例连一条断言都跑不到
+（`ERR_MODULE_NOT_FOUND`）。同一个坑还有一处：镜像只 `COPY src/server/`，`src/build/`
+里的东西在线上根本不存在。
+
+| 规则 / Rule | 为什么 / Why |
+| --- | --- |
+| 测试的静态 import 图里不许出现 `@aws-sdk/*` | CI 不装它；`v6-artifact-publish` 有一条静态扫描用例守着 |
+| 真要访问 S3 时才 `await import('./store.mjs')` | 延迟加载，把 SDK 挡在构建与测试之外 |
+| 线上的代码全在 `src/server/` 下 | 镜像只 `COPY src/server/`，`src/build/` 只是本地产物写入器 |
+
+*Two dependency sets: the image installs `src/server/package.json` (with `@aws-sdk/*`), CI
+installs only the repo root's `sharp` + `exifr`. A static import of the SDK therefore passes
+locally and kills the whole test file in CI — which is why a static-scan test now guards it,
+and why the SDK is only loaded via `await import()` when S3 work is actually needed.*
+
 ### 4.5 API Gateway 的四件事与三件不干的事 / What the gateway does and does not do
 
 干：**路由**（4 条 → 同一个函数，靠 `routeKey` 分发）、**CORS**（统一加头，否则浏览器

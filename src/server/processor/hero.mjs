@@ -20,8 +20,6 @@
  * of thing that ends up disagreeing with the real content.
  */
 
-import * as store from './store.mjs';
-
 export const HERO_KEY = 'data/hero.webp';
 /** 失效时用的路径，与 HERO_KEY 一一对应 / The invalidation path for HERO_KEY */
 export const HERO_PATH = '/data/hero.webp';
@@ -74,24 +72,41 @@ export function pickHeroPhoto(photos, preferredId = '') {
  * 同一个道理：装饰性产物不得阻塞内容上线）。
  *
  * `io` 默认就是 store，留出参数是为了单测能塞一个内存桶，不必真的连 S3。
+ * **store 是延迟加载的**：它顶层的 `@aws-sdk/client-s3` 只在镜像里装，
+ * 仓库根依赖没有，静态 import 会让 CI（以及任何没装 SDK 的机器）直接起不来。
  *
  * Copies the chosen photo's derivative to `data/hero.webp`. Returns a small
  * result object and never throws: a decorative artifact must not be able to
  * fail a publication. `io` defaults to the real store; tests inject an
- * in-memory bucket so they never touch S3.
+ * in-memory bucket so they never touch S3. The store is imported lazily for
+ * the same reason: its top-level `@aws-sdk/client-s3` only exists in the
+ * image, so a static import would break every environment without it.
  */
-export async function publishHero(siteBucket, manifest, { correlationId = '', io = store } = {}) {
+export async function publishHero(siteBucket, manifest, { correlationId = '', io = null } = {}) {
   const photo = pickHeroPhoto(manifest?.photos, manifest?.hero || '');
   if (!photo) return { written: false, reason: 'no-photo', correlationId };
+
+  // 只有真要写 S3 时才把 store（连同 AWS SDK）拉进来。
+  // Only pull the store (and the SDK with it) when there is real S3 work.
+  let bucket = io;
+  if (!bucket) {
+    try {
+      bucket = await import('./store.mjs');
+    } catch (err) {
+      return {
+        written: false, reason: 'no-store', photo: photo.id, correlationId, error: err?.code || err?.name || 'Error',
+      };
+    }
+  }
 
   for (const tier of HERO_TIERS) {
     const source = `photos/${photo.id}/${tier}`;
     try {
-      if (!(await io.head(siteBucket, source))) continue;
+      if (!(await bucket.head(siteBucket, source))) continue;
       // 先探再读：head 便宜，读一档不存在的 2048w 图会白拉一次 404 往返。
-      const body = await io.getBuffer(siteBucket, source);
+      const body = await bucket.getBuffer(siteBucket, source);
       if (!body || !body.length) continue;
-      await io.putBuffer(siteBucket, HERO_KEY, body, {
+      await bucket.putBuffer(siteBucket, HERO_KEY, body, {
         contentType: 'image/webp',
         cacheControl: HERO_CACHE,
       });
