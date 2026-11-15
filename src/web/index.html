@@ -172,7 +172,11 @@
     <button type="button" id="lb-prev" class="lb-btn lb-prev" aria-label="上一张">&#8249;</button>
     <figure class="lb-figure" id="lb-figure">
       <img id="lb-image" alt="">
-      <video id="lb-video" playsinline preload="metadata" hidden></video>
+      <!-- 视频走原生控件（T-20）：拖动进度、全屏、音量这些浏览器自带的实现比
+           自己糊一套稳，移动端还能拿到系统级全屏。播完不自动跳走，先给一个
+           重播按钮，把「再看一遍」和「看下一张」分开。 -->
+      <video id="lb-video" playsinline preload="metadata" controls controlslist="nodownload" hidden></video>
+      <button type="button" id="lb-replay" class="lb-replay" hidden>重新播放</button>
       <figcaption id="lb-meta" class="lb-meta"></figcaption>
     </figure>
     <button type="button" id="lb-next" class="lb-btn lb-next" aria-label="下一张">&#8250;</button>

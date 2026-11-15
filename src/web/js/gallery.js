@@ -2,6 +2,7 @@ import {
   groupByYearMonth, computeEditorialRows, layoutParams, normalizeDensity, albumSummary,
 } from './state.js';
 import { escapeHtml, photoAlt, srcsetFor, sizesFor, isTouch, reducedMotion, markWhenReady } from './ui.js';
+import { badgeText, spokenDuration } from './duration.js';
 
 /* ---------- 视频瓦片：全局只允许 1 个在播 ---------- */
 const media = { playing: null };
@@ -126,7 +127,9 @@ function createTile(photo, { width, height, kind, onOpen, index }) {
   tile.style.height = `${height}px`;
   tile.tabIndex = 0;
   tile.setAttribute('role', 'button');
-  tile.setAttribute('aria-label', photoAlt(photo));
+  // 时长进 aria-label：角标本身是装饰，读屏用户也该知道这条有 34 秒
+  const spoken = isMotion(photo) ? spokenDuration(photo.duration) : '';
+  tile.setAttribute('aria-label', spoken ? `${photoAlt(photo)}，视频 ${spoken}` : photoAlt(photo));
 
   const frame = document.createElement('div');
   frame.className = 'tile-frame';
@@ -150,7 +153,9 @@ function createTile(photo, { width, height, kind, onOpen, index }) {
     const badge = document.createElement('span');
     badge.className = 'tile-badge';
     badge.setAttribute('aria-hidden', 'true');
-    badge.textContent = '▶';
+    // 有 duration 就报真实时长，没有（历史数据 / 降级视频）只留一个 ▶
+    badge.textContent = badgeText(photo);
+    if (!photo.duration) badge.classList.add('is-plain');
     tile.appendChild(badge);
     if (!isTouch) {
       tile.addEventListener('pointerenter', () => startPreview(tile, photo));

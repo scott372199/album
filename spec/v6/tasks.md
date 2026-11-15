@@ -471,13 +471,39 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 
 ---
 
-### T-20 视频控件 + manifest `duration` 〔U-08〕
+### T-20 视频控件 + manifest `duration` 〔U-08〕 **done(代码)**
 
 **改动**：`~ src/server/processor/handler.mjs`（转码时写入 `duration`）、`~ src/server/manifest*.mjs`（字段放行）、`~ src/web/js/lightbox.js`、`~ src/web/js/gallery.js`（角标）
 
 ⚠️ 现状核查：manifest 与 processor 里**没有任何视频时长字段**（只有日志里的 `durationMs`），所以这是**新增字段**，不是消费既有数据。历史视频需要一次回填——回填方式（重跑转码 / 读既有转码产物元数据）在任务开工前定。
 
 **完成判定**：40 s 视频可拖到任意位置、可全屏、播完可重播；网格角标显示真实时长；无 `duration` 时回退 `▶`；manifest 断言：新增字段不含任何拍摄时刻信息（不变量 1）。
+
+**实施结果**
+
+| 判据 | 实测 |
+| --- | --- |
+| 可拖到任意位置 / 可全屏 | ✅ `#lb-video` 换成原生 `controls`（保留 `playsinline`）；进度、全屏、音量全部交给浏览器 |
+| 播完可重播 | ✅ `ended` 不再自动翻页，弹「重新播放」；只有开着「自动播放」时才连播下一张 |
+| 网格角标显示真实时长 | ✅ `▶ 0:34` 胶囊 + `tabular-nums`；时长同时进 `aria-label`（「视频 34 秒」） |
+| 无 `duration` 回退 `▶` | ✅ 缺失或 0（降级视频）都退成 `.is-plain` 圆点，**不渲染 0:00** |
+| 不含拍摄时刻 | ✅ `v6-video-duration.test.mjs`：字段表即白名单 + 记录里不出现带时分的时间串 |
+
+**现状核查有一处结论反了，先说清楚**：任务书说「manifest 与 processor 里没有任何视频时长字段」。实测**两侧都早就写了**——`src/build/video.mjs` → `src/build/manifest.mjs`，以及 `processor/video.mjs` → `videoRecord()`；`story.js` / `wall.js` 也一直在拿 `photo.duration` 排时长。所以 T-20 真正缺的不是字段，是**口径与展示**：
+
+1. **口径**：原来写 `Number(duration.toFixed(2))`，`30.02` 与 `30.03` 这种浮点差会让清单哈希飘、把客户端缓存白白废掉，而前端只显示到秒。现在统一走 `publicDuration()`：整数秒、`<=0` 视为未知、不足 1 秒向上取 1、按上限封顶。**构建期与 Lambda 共用同一份实现**（`build/video.mjs` 直接 import），两侧不会出现「本地 30.02 / 服务端 30」。
+2. **展示**：网格角标、灯箱元信息、`aria-label` 三处都走 `src/web/js/duration.js`，一个地方决定「不知道就不显示」。
+3. **控件**：`ended` 由「自动跳下一张」改成「给重播按钮」。
+
+**回填问题的结论：不需要回填，有实测为证。** 拉当前线上清单（`rev=a75ad99f29dd`，47 条）逐条核对：**13 条视频全部带 `duration`**，值分别是 `30 / 30 / 22 / 29.07 / 30 / 19.03 / 30 / 30 / 15.04 / 30 / 2.18 / 10.1 / 30`——注意其中 5 条是两位小数，正是「口径没统一」的现场证据，前端 `formatDuration` 对它们取整显示（`29.07 → 0:29`），下一次重处理就会写成整数。唯一没有 `duration` 的是**降级成静图**的条目，它们本来就按静图渲染，角标退成 ▶ 是对的。所以不做批量重转码。
+
+**一处行为变更，需在验收时确认**：以前视频播完会自动翻到下一张。现在默认停在原地并显示「重新播放」，理由是原生控件此刻正在显示重播按钮，直接跳走等于把人刚看到一半的片子抽走；想要连播的，开「自动播放」即可，那条路径保持原样（`playTimer` 在，`ended` 仍会 `navigate(1, { wrap: true })`）。
+
+**键盘让位**：焦点在原生控件上时，方向键与空格归视频（拖进度、播放暂停），不再被灯箱抢去翻页——否则键盘用户永远没法快进。`Escape` 仍能关门。
+
+**新增**：`+ src/server/processor/record.mjs`（`imageRecord` / `videoRecord` 从 handler 抽出，附字段白名单表）、`+ src/web/js/duration.js`（5 个纯函数）、`+ src/server/test/v6-video-duration.test.mjs`（10 条）、`+ src/web/test/v6-duration.test.mjs`（13 条，含 2 条标记层断言）。产物 91.3 → 93.8 KB gzip（22 个文件，预算 120 KB）。
+
+**为什么把记录构造抽出去**：这是公开产物的最后一道闸，凡是不能出站的东西都在这里被丢掉。抽成纯函数后，可以直接对着字段表断言「这条记录里一个时刻字符串都没有」，而不是靠人眼逐字段检查。`imageRecord` 一起搬走，避免两个构造器分裂在两处。
 
 ---
 

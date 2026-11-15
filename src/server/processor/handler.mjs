@@ -11,10 +11,11 @@ import {
   emptyManifest, normalizeManifest, upsertPhoto, countTypes,
 } from './manifest.mjs';
 import {
-  sha256, decodeKey, decodeAlbum, kindOf, parseIso, resolveYearMonth, tagsFor,
+  sha256, decodeKey, decodeAlbum, kindOf,
 } from './derive.mjs';
 import { recognizeGrid, publishRecognition } from './recognition.mjs';
 import { publishHero, HERO_PATH } from './hero.mjs';
+import { imageRecord, videoRecord } from './record.mjs';
 
 /**
  * 处理函数：源桶 `incoming/` 下的新对象 → 站点桶的产物 + 清单条目 → 删源图。
@@ -422,58 +423,6 @@ async function processObject({ bucket, key }) {
   } finally {
     await rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
-}
-
-function imageRecord({ id, album, image, meta, videoShotAt }) {
-  const { year, month } = resolveYearMonth({
-    takenAt: parseIso(meta.metadata['taken-at']),
-    exifShotAt: image.exifShotAt,
-    // 视频降级成静图时，拍摄时间来自视频容器标签（绝对时刻），不能塞进 exifShotAt
-    videoShotAt,
-    lastModified: meta.lastModified,
-  });
-
-  return {
-    id,
-    type: 'image',
-    album,
-    year,
-    month,
-    tags: tagsFor(album, year),
-    title: '',
-    caption: '',
-    ratio: image.ratio,
-    lqip: image.lqip,
-    featured: false,
-    thumb: `photos/${id}/thumb.webp`,
-    grid: `photos/${id}/grid.webp`,
-    view: `photos/${id}/view.webp`,
-  };
-}
-
-function videoRecord({ id, album, video, meta }) {
-  const { year, month } = resolveYearMonth({
-    takenAt: parseIso(meta.metadata['taken-at']),
-    videoShotAt: video.videoShotAt,
-    lastModified: meta.lastModified,
-  });
-
-  return {
-    id,
-    type: 'video',
-    album,
-    year,
-    month,
-    tags: tagsFor(album, year),
-    title: '',
-    caption: '',
-    ratio: video.ratio,
-    lqip: video.lqip,
-    featured: false,
-    poster: `photos/${id}/poster.webp`,
-    src: `photos/${id}/clip.mp4`,
-    duration: video.duration,
-  };
 }
 
 export async function handler(event) {

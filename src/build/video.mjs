@@ -3,6 +3,8 @@ import { copyFile, mkdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
+// 时长取整的函数与 Lambda 侧共用一份，避免「本地构建 30.02 / 服务端 30」两套口径
+import { publicDuration } from '../server/processor/video.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -188,7 +190,7 @@ export async function processVideo(photo, distRoot, tmpDir) {
     createdAt,
     meta: {
       ratio,
-      duration: Number(duration.toFixed(2)),
+      duration: publicDuration(duration, MAX_SECONDS),
       width: size.width,
       height: size.height,
       bytes,
@@ -201,7 +203,7 @@ export async function processVideo(photo, distRoot, tmpDir) {
         poster: `photos/${photo.id}/poster.webp`,
         lqip,
         ratio,
-        duration: Number(duration.toFixed(2)),
+        duration: publicDuration(duration, MAX_SECONDS),
       },
   };
 }
@@ -221,7 +223,7 @@ export async function convertAnimation(photo, distRoot, tmpDir) {
     const lqip = await makePoster(dest, outDir, Math.min(6, info.duration || 3), tmpDir);
     return {
       assets: { src: `photos/${photo.id}/clip.mp4`, poster: `photos/${photo.id}/poster.webp`, lqip },
-      meta: { ratio: width / height, duration: Number(Math.min(6, info.duration || 0).toFixed(2)) },
+      meta: { ratio: width / height, duration: publicDuration(Math.min(6, info.duration || 0), 6) },
     };
   } catch {
     const fallbackName = photo.ext === '.gif' ? 'anim.gif' : 'anim.webp';

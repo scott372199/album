@@ -739,23 +739,32 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
   to { opacity: 1; }
 }
 
+/* 角标：有时长就是「▶ 0:34」的胶囊，没有就缩回一个圆点（.is-plain）。
+   等宽数字让同一列的时长末尾对齐，不会因为 0:07 与 1:11 宽窄不一而跳动。 */
 .tile-badge {
   position: absolute;
   right: 8px;
   bottom: 8px;
-  display: grid;
-  place-items: center;
-  width: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 22px;
   height: 22px;
-  border-radius: 50%;
+  padding: 0 7px;
+  border-radius: 999px;
   background: rgb(var(--c-off-rgb) / 0.46);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   color: var(--c-inverse);
-  font-size: 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
   line-height: 1;
+  white-space: nowrap;
   pointer-events: none;
 }
+.tile-badge.is-plain { width: 22px; padding: 0; font-size: 9px; }
 
 /* 加载失败：占位卡替代图片，不改变格子尺寸（CLS 不变） */
 .tile.is-broken img { display: none; }
@@ -1002,6 +1011,7 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
 .lb-prev:hover, .lb-next:hover { color: var(--c-inverse); background: rgb(var(--c-on-rgb) / 0.08); }
 
 .lb-figure {
+  position: relative;
   flex: 1;
   min-height: 0;
   margin: 0;
@@ -1027,6 +1037,27 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
   touch-action: none;
 }
 .lb-figure img.is-grabbing { cursor: grabbing; transition: none; }
+
+/* 播完的「重新播放」：浮在画面中心上方一点，避开底部原生控件条 */
+.lb-replay {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 10px 24px;
+  border: 1px solid rgb(var(--c-on-rgb) / 0.3);
+  border-radius: 999px;
+  background: rgb(var(--c-off-rgb) / 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--c-inverse);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.lb-replay:hover { background: rgb(var(--c-off-rgb) / 0.72); border-color: var(--c-inverse); }
+.lb-replay[hidden] { display: none; }
 
 .lb-meta {
   flex: 0 0 auto;

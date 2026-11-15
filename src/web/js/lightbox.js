@@ -1,6 +1,7 @@
 import { state, PLAY_INTERVAL } from './state.js';
 import { el, photoAlt, reducedMotion } from './ui.js';
 import { createMonthStrip, monthStripPlan, prefetchTargets } from './month-strip.js';
+import { durationNote } from './duration.js';
 
 const refs = {};
 let list = [];
@@ -16,6 +17,7 @@ function cache() {
     root: el('lightbox'),
     image: el('lb-image'),
     video: el('lb-video'),
+    replay: el('lb-replay'),
     counter: el('lb-counter'),
     meta: el('lb-meta'),
     thumbs: el('lb-thumbs'),
@@ -33,6 +35,12 @@ function cache() {
 
 function current() {
   return list[state.lightbox.index] || null;
+}
+
+function paintMute() {
+  const { video, mute } = cache();
+  if (!mute) return;
+  mute.textContent = video.muted ? '取消静音' : '静音';
 }
 
 function isMotion(photo) {
@@ -185,7 +193,7 @@ function show(index) {
     const attempt = r.video.play();
     if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
     r.mute.hidden = false;
-    r.mute.textContent = r.video.muted ? '取消静音' : '静音';
+    paintMute();
     r.play.hidden = true;
   } else {
     r.image.src = photo.view || photo.grid || photo.poster || '';
@@ -196,8 +204,13 @@ function show(index) {
 
   r.counter.textContent = `${state.lightbox.index + 1} / ${total}`;
   const bits = [photoAlt(photo)];
+  // 时长只在知道的时候才加：未知的 0 不写成 0:00
+  const clock = durationNote(photo);
+  if (clock) bits.push(clock);
   if (photo.caption) bits.push(photo.caption);
   r.meta.textContent = bits.filter(Boolean).join(' · ');
+
+  r.replay.hidden = true;
 
   r.prev.hidden = total <= 1;
   r.next.hidden = total <= 1;
@@ -238,6 +251,7 @@ export function closeLightbox() {
   const r = cache();
   r.video.pause();
   r.video.removeAttribute('src');
+  r.replay.hidden = true;
   r.root.hidden = true;
   document.body.classList.remove('lb-open');
   state.lightbox.index = -1;
@@ -272,7 +286,7 @@ export function initLightbox(hooksIn = {}) {
   r.play.addEventListener('click', () => (playTimer ? stopAutoplay() : startAutoplay()));
   r.mute.addEventListener('click', () => {
     r.video.muted = !r.video.muted;
-    r.mute.textContent = r.video.muted ? '取消静音' : '静音';
+    paintMute();
   });
 
   r.image.addEventListener('dblclick', () => setZoom(state.lightbox.zoom > 1 ? 1 : 2));
@@ -326,14 +340,33 @@ export function initLightbox(hooksIn = {}) {
     navigate(delta < 0 ? 1 : -1);
   }, { passive: true });
 
+  // 播完不替用户翻页：原生控件此时就在显示重播按钮，直接跳走等于把人刚看到
+  // 一半的片子抽走。只有「自动播放」开着时才顺着走下去，那时用户要的就是连播。
   r.video.addEventListener('ended', () => {
     if (state.lightbox.index < 0) return;
-    navigate(1, { wrap: true });
+    if (playTimer) { navigate(1, { wrap: true }); return; }
+    r.replay.hidden = false;
+  });
+
+  r.video.addEventListener('play', () => { r.replay.hidden = true; });
+
+  // 原生控件里也能调音量/静音，按钮文案要跟着变，否则两处说法打架
+  r.video.addEventListener('volumechange', paintMute);
+
+  r.replay.addEventListener('click', () => {
+    r.replay.hidden = true;
+    try { r.video.currentTime = 0; } catch { /* 元数据还没到 */ }
+    const attempt = r.video.play();
+    if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
+    r.video.focus({ preventScroll: true });
   });
 
   document.addEventListener('keydown', (event) => {
     if (!opened) return;
     if (event.key === 'Escape') { event.preventDefault(); closeLightbox(); return; }
+    // 焦点在原生视频控件上时，方向键/空格归它：那是「拖进度」不是「翻照片」，
+    // 抢过来会让人永远没法用键盘快进。（Escape 仍要能关门）
+    if (event.target === r.video) return;
     if (event.key === 'ArrowLeft') { event.preventDefault(); navigate(-1); return; }
     if (event.key === 'ArrowRight') { event.preventDefault(); navigate(1); return; }
     if (event.key === ' ') {
