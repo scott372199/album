@@ -24,10 +24,12 @@
  */
 import {
   LEXICON, LEXICON_KEYS, TERM_ZH, TERM_KIND, COLOR_TERMS, COLOR_OBJECT_COMBINATIONS,
+  TERM_SUGGEST_OFF, zhLabel,
 } from './lexicon.generated.mjs';
 
 export {
   LEXICON, LEXICON_KEYS, TERM_ZH, TERM_KIND, COLOR_TERMS, COLOR_OBJECT_COMBINATIONS,
+  TERM_SUGGEST_OFF, zhLabel,
 };
 
 export function lookup(phrase) {

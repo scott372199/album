@@ -145,6 +145,7 @@
       "term": "head",
       "zh": "头",
       "kind": "object",
+      "suggest": false,
       "aliases": [
         "头部",
         "脑袋"
@@ -176,6 +177,7 @@
       "term": "face",
       "zh": "脸",
       "kind": "object",
+      "suggest": false,
       "aliases": [
         "面部",
         "脸蛋",
@@ -204,6 +206,7 @@
       "term": "sleeve",
       "zh": "袖子",
       "kind": "object",
+      "suggest": false,
       "aliases": [
         "衣袖",
         "短袖",
@@ -233,6 +236,7 @@
       "term": "sitting",
       "zh": "坐着",
       "kind": "object",
+      "suggest": false,
       "aliases": [
         "坐",
         "坐姿"
@@ -324,6 +328,7 @@
       "term": "black hair",
       "zh": "黑发",
       "kind": "object",
+      "suggest": false,
       "aliases": [
         "黑色头发"
       ]
@@ -384,6 +389,7 @@
       "term": "hair",
       "zh": "头发",
       "kind": "object",
+      "suggest": false,
       "aliases": [
         "发型"
       ]
@@ -425,6 +431,7 @@
       "term": "photography",
       "zh": "摄影",
       "kind": "object",
+      "suggest": false,
       "aliases": [
         "照片"
       ]
@@ -478,6 +485,7 @@
       "term": "art",
       "zh": "艺术",
       "kind": "object",
+      "suggest": false,
       "aliases": [
         "艺术品"
       ]
@@ -593,6 +601,7 @@
       "term": "text",
       "zh": "文字",
       "kind": "object",
+      "suggest": false,
       "aliases": [
         "字"
       ]
@@ -601,6 +610,7 @@
       "term": "advertisement",
       "zh": "广告",
       "kind": "object",
+      "suggest": false,
       "aliases": [
         "海报"
       ]

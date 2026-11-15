@@ -108,6 +108,13 @@ const QUERIES = [
   '人',
   '树',
   '灰色 汽车',
+  // 英文规范词：标签 chips 曾经就长这样，点一下必须能搜到（2026-11-16 验收）
+  // English canonical terms: chips used to look like this and had to be clickable.
+  'person',
+  'shorts',
+  'grey',
+  'blue sky',
+  'interior design',
 ];
 
 /* ---------- 一致性 / Parity ---------- */

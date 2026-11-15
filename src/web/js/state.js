@@ -140,18 +140,39 @@ export function normalizeDensity(value) {
   return Object.hasOwn(DENSITY, value) ? value : 'standard';
 }
 
+/**
+ * `maxPerRow` 必须跟着密度走。原来写死成 3，1280 宽下「紧凑 200 + 上限 3」与
+ * 「标准 340 + 上限 3」排出来完全一样，下拉框换了等于没换（2026-11-16 验收）。
+ * 上限与目标行宽成反比（以标准档为基准，标准档观感不变），地板取 2。
+ *
+ * The cap follows the density: a hard-coded 3 made 紧凑 and 标准 identical at
+ * 1280px. It scales inversely with the target width, anchored on 标准.
+ */
+function maxPerRowFor(target, base) {
+  return Math.max(2, Math.round((base * DENSITY.standard) / target));
+}
+
 export function layoutParams(containerWidth, density = 'standard') {
-  const target = DENSITY[normalizeDensity(density)];
+  const mode = normalizeDensity(density);
+  const target = DENSITY[mode];
   if (containerWidth >= 1200) {
-    return { gap: 20, target, maxPerRow: 3, featureMin: 320, featureMax: 780, featureEvery: 6 };
+    return {
+      gap: 20, target, maxPerRow: maxPerRowFor(target, 3), featureMin: 320, featureMax: 780, featureEvery: 6,
+    };
   }
   if (containerWidth >= 1024) {
-    return { gap: 16, target, maxPerRow: 3, featureMin: 280, featureMax: 700, featureEvery: 6 };
+    return {
+      gap: 16, target, maxPerRow: maxPerRowFor(target, 3), featureMin: 280, featureMax: 700, featureEvery: 6,
+    };
   }
   if (containerWidth >= 768) {
-    return { gap: 14, target, maxPerRow: 2, featureMin: 240, featureMax: 620, featureEvery: 5 };
+    return {
+      gap: 14, target, maxPerRow: maxPerRowFor(target, 2), featureMin: 240, featureMax: 620, featureEvery: 5,
+    };
   }
-  return { gap: 10, target, maxPerRow: 2, featureMin: 180, featureMax: 520, featureEvery: 4 };
+  return {
+    gap: 10, target, maxPerRow: maxPerRowFor(target, 2), featureMin: 180, featureMax: 520, featureEvery: 4,
+  };
 }
 
 function ratioOf(item) {

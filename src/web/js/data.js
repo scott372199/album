@@ -70,6 +70,31 @@ export async function loadArtifact(name, { rev = '', version = 1, fetchImpl = gl
   return null;
 }
 
+/** 流水线占位名，不算标签 / placeholder tag names from the pipeline */
+export const PLACEHOLDER_TAGS = new Set(['未分类', '未命名', 'uncategorized']);
+
+/**
+ * 「标签」筛选里值得给用户看的取值。
+ *
+ * 照片的 tags 是 `[相册名, 年份]`，相册基本都叫「未分类」——这一栏于是成了「年份」
+ * 的复制品，用户连问两次「它在筛什么」。纯年份与占位名剔掉；剩下的不足两个值时
+ * 调用方隐藏整栏，等真有自定义标签时它会自己长回来。
+ * Tags are `[album, year]` with album = "未分类", so the facet duplicated the
+ * year filter.
+ */
+export function usefulTags(tags, years = []) {
+  const yearSet = new Set((Array.isArray(years) ? years : []).map(String));
+  const seen = new Set();
+  const out = [];
+  for (const tag of Array.isArray(tags) ? tags : []) {
+    const value = String(tag ?? '').trim();
+    if (!value || seen.has(value) || yearSet.has(value) || PLACEHOLDER_TAGS.has(value)) continue;
+    seen.add(value);
+    out.push(value);
+  }
+  return out;
+}
+
 export function buildIndex(manifest) {
   const photos = Array.isArray(manifest.photos) ? manifest.photos : [];
   const albums = Array.isArray(manifest.albums) ? manifest.albums : [];
@@ -88,7 +113,7 @@ export function buildIndex(manifest) {
     photos,
     albums,
     byId,
-    tags: [...tags].sort((a, b) => a.localeCompare(b, 'zh')),
+    tags: usefulTags([...tags].sort((a, b) => a.localeCompare(b, 'zh')), [...years]),
     years: [...years].sort((a, b) => b - a),
     months: [...months].sort((a, b) => a - b),
     // 首屏那张的 id（V6 T-11）：只为把静态首屏的链接指过去，图片本身不靠它。

@@ -38,9 +38,32 @@ export const FORBIDDEN_FIELDS = [
  * The vocabulary is no longer hardcoded here: one JSON source, one generated
  * artifact per consumer, with a sync check in CI.
  */
-import { LEXICON, LEXICON_KEYS, TERM_ZH } from './lexicon.generated.js';
+import { LEXICON, LEXICON_KEYS, TERM_SUGGEST_OFF, zhLabel } from './lexicon.generated.js';
 
 export { LEXICON, LEXICON_KEYS };
+
+/** 像规范词的拉丁整串：字母开头、字母结尾、2–40 字符、可含空格与连字符 */
+const LATIN_TERM = /^[a-z][a-z '\-]*[a-z]$/i;
+
+/**
+ * 拉丁整串 → 规范词；不像规范词就 null。
+ *
+ * 索引里的 `labels[].term` 本来就是英文，词表没收录的词若一律判「没听懂」，
+ * 它的 chip 就成了死链——而它本可以用一次精确的 term 匹配命中。
+ * An unlisted English word must still be a literal lookup, not "unrecognised".
+ */
+function latinTerm(text) {
+  const value = String(text || '').trim().replace(/\s+/g, ' ');
+  if (value.length < 2 || value.length > 40) return null;
+  return LATIN_TERM.test(value) ? value.toLowerCase() : null;
+}
+
+/** 记入一个规范词 / Record one canonical term */
+function addTerm(term, input, ctx) {
+  if (!ctx.terms.includes(term)) ctx.terms.push(term);
+  if (!ctx.filters.tags.includes(term)) ctx.filters.tags.push(term);
+  ctx.explanation.push({ kind: 'term', input, mappedTo: term });
+}
 
 function scanChunk(chunk, ctx) {
   const before = ctx.explanation.length;
@@ -59,17 +82,18 @@ function scanChunk(chunk, ctx) {
     }
     i += key.length;
   }
-  // 整块一个词都没认出来 → 整块进 unmatched。
+  // 整块没认出来 → 拉丁词兜底，否则进 unmatched。英文词从此是直查而不是
+  // 「没听懂」，中文未知词仍然如实报错。
   //
-  // 以前这里是静默 `i += 1` 跳过：用户打「大象」，词表没有，terms 为空，
-  // 查询退化成「无条件」，结果是**返回全部照片**并且毫无提示——比返回 0 更
-  // 有害，因为它看起来像搜到了。现在把没认出来的原样交回去，由四态去说话。
-  //
-  // A chunk that yields zero matches is reported whole as unmatched. The old
-  // silent `i += 1` made an unknown word degrade to "no condition", i.e. return
-  // every photo with no hint — worse than returning nothing, because it looks
-  // like a successful search.
-  if (ctx.explanation.length === before) ctx.unmatched.push(chunk);
+  // 以前是静默 `i += 1`：词表没有就 terms 为空，查询退化成「无条件」返回全部
+  // 照片，比返回 0 更有害——它看起来像搜到了。
+  // Unmatched chunks fall back to a literal Latin term; Chinese unknowns still
+  // report as unmatched. The old silent skip degraded to "no condition".
+  if (ctx.explanation.length === before) {
+    const term = latinTerm(chunk);
+    if (term) addTerm(term, chunk, ctx);
+    else ctx.unmatched.push(chunk);
+  }
 }
 
 /**
@@ -111,6 +135,16 @@ export function parseQuery(raw, { page = 1, pageSize = 40 } = {}) {
   // Strip filler words, then longest-prefix match against the lexicon
   const unmatched = [];
   rest = rest.replace(/[的和与及了的\s,，、;；]+/g, ' ');
+
+  // 纯拉丁整句先按整串试一次：多词规范词（`interior design`）会被逐块扫描
+  // 的空格切碎，拼不回一个 term，而索引里存的就是整串。
+  // A purely Latin query is tried as ONE term first: multi-word terms would
+  // otherwise be split apart and never match the index.
+  const whole = /[\u4e00-\u9fa5]/.test(rest) ? null : latinTerm(rest);
+  if (whole) {
+    addTerm(whole, original.trim(), { explanation, terms, filters, unmatched });
+    rest = '';
+  }
   for (const chunk of rest.match(/[\u4e00-\u9fa5a-zA-Z0-9]+/g) || []) {
     scanChunk(chunk, { explanation, terms, filters, unmatched });
   }
@@ -188,7 +222,11 @@ export function sanitizeIndex(raw) {
       labels: Array.isArray(item.labels)
         ? item.labels.filter((l) => l && typeof l.term === 'string').map((l) => ({
           term: String(l.term),
-          zh: typeof l.zh === 'string' ? l.zh : '',
+          // 展示名在这里也归一一次：**已发布的旧索引**里大量 zh 就是英文原文，
+          // 光签发新索引救不了它们。灯箱 chips 读这个字段并拿它搜索。
+          // Normalised here too: published indexes carry English `zh`, and the
+          // lightbox chips search with this field.
+          zh: zhLabel(String(l.term), typeof l.zh === 'string' ? l.zh : ''),
           kind: typeof l.kind === 'string' ? l.kind : '',
           confidence: Number(l.confidence) || 0,
         }))
@@ -383,7 +421,10 @@ export function deriveSuggestions(index, { limit = 10, query = '' } = {}) {
   const rows = [];
   for (const [term, n] of freq) {
     if (inQuery.has(term)) continue;   // 已经在查询里的词不必再建议
-    const zh = TERM_ZH[term];
+    // 碎片词不占建议位：`头`/`脸`/`袖子` 点进去是同一批人脸，等于没建议。
+    // 想在词表里调，改 `src/shared/lexicon.json` 的 `suggest: false`。
+    if (TERM_SUGGEST_OFF.has(term)) continue;
+    const zh = zhLabel(term);
     if (!zh || zh === term) continue;  // 没有中文名就不建议：推荐一个搜不了的词没意义
     rows.push({ zh, n, coverage: n / total });
   }
