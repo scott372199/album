@@ -5,7 +5,7 @@ import {
   normalizeHeroSections, autoHeroSections, buildHeroSections,
   preloadPlan, srcsetForSection, detectLowPower, viewTransitionsSupported,
   motionProfile,
-} from '../js/hero.js';
+} from '../js/hero-data.js';
 
 /**
  * V5 hero 注册表的纯逻辑断言：上限、字段白名单、未知照片回退、自动生成、

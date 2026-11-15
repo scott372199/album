@@ -11,9 +11,11 @@ import {
   emptyManifest, normalizeManifest, upsertPhoto, countTypes,
 } from './manifest.mjs';
 import {
-  sha256, decodeKey, decodeAlbum, kindOf, parseIso, resolveYearMonth, tagsFor,
+  sha256, decodeKey, decodeAlbum, kindOf,
 } from './derive.mjs';
 import { recognizeGrid, publishRecognition } from './recognition.mjs';
+import { publishHero, HERO_PATH } from './hero.mjs';
+import { imageRecord, videoRecord } from './record.mjs';
 
 /**
  * 处理函数：源桶 `incoming/` 下的新对象 → 站点桶的产物 + 清单条目 → 删源图。
@@ -93,7 +95,13 @@ async function readVersionAndManifest(siteBucket) {
 }
 
 /**
- * 把一条记录并进清单，并推进指针。
+ * 把一条记录并进清单，并推进指针。返回合并后的清单本身，首屏选图（T-11）
+ * 要用它——再读一次既多一次往返，也可能读到别人刚写进来的版本。
+ *
+ * Merges a record into the manifest and advances the pointer. The merged
+ * manifest is returned because the static hero (T-11) is picked from it;
+ * re-reading would cost a round trip and could see a newer version.
+
  *
  * 并发上传时多个事件会同时跑：它们各自读到同一版清单，各自加一条，后写的
  * 会把先写的那条冲掉。原先靠「预留并发 = 1」把这里串起来，但新账号的总并发
@@ -146,7 +154,9 @@ async function commitManifest(siteBucket, record, correlationId) {
         assetId: record.id,
         attempt,
       });
-      return { rev, manifestKey, counts, attempts: attempt };
+      return {
+        rev, manifestKey, counts, attempts: attempt, manifest: next,
+      };
     } catch (err) {
       if (!store.isPreconditionFailed(err)) throw err;
       // 别人先写了一步，重读再合并。抖动一下，避免两个实例同步重试又撞上。
@@ -288,8 +298,34 @@ async function processObject({ bucket, key }) {
       }
     }
 
-    const { rev } = await commitManifest(siteBucket, record, correlationId);
+    const { rev, manifest } = await commitManifest(siteBucket, record, correlationId);
     const versionKey = env('VERSION_KEY', 'data/version.json');
+
+    // 首屏静态图（T-11）：清单已经指向新照片了，顺手把 data/hero.webp 换成
+    // 该当首屏的那张。best-effort——首屏是装饰，写不出来最多是旧图或空底，
+    // 绝不能因此让一张照片发布失败。
+    // Static hero (T-11): the pointer is on the new manifest, so refresh
+    // data/hero.webp from whichever photo should lead. Best-effort: the hero is
+    // decorative, and it must never be able to fail a publication.
+    const heroStartedAt = Date.now();
+    try {
+      const hero = await publishHero(siteBucket, manifest, { correlationId });
+      log.info('process.hero', {
+        id, correlationId, ...hero, durationMs: Date.now() - heroStartedAt,
+      });
+      trace({
+        event: 'hero.published', correlationId, stage: 'hero',
+        outcome: hero.written ? 'success' : 'skipped',
+        durationMs: Date.now() - heroStartedAt, assetId: id,
+      });
+    } catch (err) {
+      log.warn('process.hero_failed', { id, correlationId, ...errorFields(err) });
+      trace({
+        event: 'hero.failed', correlationId, stage: 'hero',
+        outcome: 'failed', durationMs: Date.now() - heroStartedAt,
+        assetId: id, errorClass: err?.name || 'Error',
+      });
+    }
 
     // 识别 + 索引发布：best-effort，任何失败只留日志，绝不阻塞照片上线
     // （FR-02、硬性不变量 2）。recognition=null 时索引仍重建，
@@ -334,12 +370,15 @@ async function processObject({ bucket, key }) {
     });
 
     // 失效失败不该让整次处理重来：version.json 本身就是 no-store，
-    // 最坏情况是极少数边缘节点多缓存几秒。
+    // 最坏情况是极少数边缘节点多缓存几秒。首屏图是固定名（10 分钟 TTL），
+    // 失效不到就旧图居多，也不会错位到别人的照片。
     try {
       const distributionId = env('DISTRIBUTION_ID', '');
       if (distributionId) {
         const invalidationStartedAt = Date.now();
-        await store.invalidate(distributionId, [`/${versionKey}`, '/data/search-index*'], {
+        await store.invalidate(distributionId, [
+          `/${versionKey}`, '/data/search-index*', HERO_PATH,
+        ], {
           correlationId,
         });
         trace({
@@ -384,58 +423,6 @@ async function processObject({ bucket, key }) {
   } finally {
     await rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
-}
-
-function imageRecord({ id, album, image, meta, videoShotAt }) {
-  const { year, month } = resolveYearMonth({
-    takenAt: parseIso(meta.metadata['taken-at']),
-    exifShotAt: image.exifShotAt,
-    // 视频降级成静图时，拍摄时间来自视频容器标签（绝对时刻），不能塞进 exifShotAt
-    videoShotAt,
-    lastModified: meta.lastModified,
-  });
-
-  return {
-    id,
-    type: 'image',
-    album,
-    year,
-    month,
-    tags: tagsFor(album, year),
-    title: '',
-    caption: '',
-    ratio: image.ratio,
-    lqip: image.lqip,
-    featured: false,
-    thumb: `photos/${id}/thumb.webp`,
-    grid: `photos/${id}/grid.webp`,
-    view: `photos/${id}/view.webp`,
-  };
-}
-
-function videoRecord({ id, album, video, meta }) {
-  const { year, month } = resolveYearMonth({
-    takenAt: parseIso(meta.metadata['taken-at']),
-    videoShotAt: video.videoShotAt,
-    lastModified: meta.lastModified,
-  });
-
-  return {
-    id,
-    type: 'video',
-    album,
-    year,
-    month,
-    tags: tagsFor(album, year),
-    title: '',
-    caption: '',
-    ratio: video.ratio,
-    lqip: video.lqip,
-    featured: false,
-    poster: `photos/${id}/poster.webp`,
-    src: `photos/${id}/clip.mp4`,
-    duration: video.duration,
-  };
 }
 
 export async function handler(event) {

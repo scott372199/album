@@ -60,6 +60,7 @@ import {
 } from '../v5/correlation.mjs';
 import { createIndex } from '../search/index.mjs';
 import { computeRev, indexObjectKey } from '../search/publish.mjs';
+import { publishArtifacts } from '../curation/publish.mjs';
 
 /** 标签持久层前缀 / labels persistence prefix. */
 export const LABELS_PREFIX = 'data/labels/';
@@ -320,9 +321,33 @@ export async function publishRecognition({
     cacheControl: ioStore.CACHE_NO_STORE,
   });
 
+  // 精选与故事文案：索引写完之后顺手发布，于是「新照片进索引」和「精选跟上」
+  // 是同一刻。这一步**失败不影响照片上线**——索引已经落盘了，产物只是下一层
+  // 装饰，返回值里的 artifacts 会记下它到底成没成。
+  //
+  // Curation and story copy: published right after the index so a new photo and
+  // its picks never disagree. Failure here is contained — the index is already
+  // written and `artifacts` reports whether the decoration made it.
+  let artifacts = null;
+  try {
+    artifacts = await publishArtifacts({
+      store: ioStore,
+      bucket: siteBucket,
+      rev,
+      photos: manifest.photos,
+      items: index.items,
+    });
+  } catch (err) {
+    log.warn('artifacts.failed', { correlationId: corr, message: err.message });
+    trace({
+      event: 'artifacts.failed', correlationId: corr, stage: 'index',
+      outcome: 'error', durationMs: Date.now() - startedAt, assetId,
+    });
+  }
+
   trace({
     event: 'index.published', correlationId: corr, stage: 'index',
     outcome: 'success', durationMs: Date.now() - startedAt, assetId,
   });
-  return { rev, items: index.items.length, recognized: items.length };
+  return { rev, items: index.items.length, recognized: items.length, artifacts };
 }

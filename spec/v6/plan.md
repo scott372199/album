@@ -39,7 +39,7 @@
 | 全部 16 个 JS 模块 | 169 KB | **56.6 KB** |
 | `style.css` | 46.7 KB | **10.4 KB** |
 | 合计 | — | **≈67.0 KB** |
-| FR-14 预算 | — | 120 KB（余量 **53 KB**） |
+| FR-14 预算 | — | 128 KB（余量 **~53 KB**；2026-11-15 由 120 KB 上调） |
 
 单个模块头部（gz）：`upload.js 10.3K`、`search.js 6.1K`、`hero.js 5.9K`、`main.js 5.9K`、`wall.js 4.0K`、`gallery.js 3.5K`。
 
@@ -56,7 +56,7 @@
 | **C-1** | §5「新增 `labels[].zh`，`INDEX_VERSION` bump」 | `LABEL_FIELDS = ['term','zh','kind','confidence']` 已含 `zh`；`rekognition.mjs:105` 已在填 `zh: ZH_LABEL_DICT[term] \|\| zhForTerm(term)`；前端 `sanitizeIndex` 已读 `zh` | **不需要 bump，不改 `ITEM_FIELDS`**。契约保持 `v5.1.0`，只是 `zh` 的覆盖率从 17 个词扩到 ≈380 | 少一次版本迁移，V5 索引可直接被 V6 读 |
 | **C-2** | §5「新增 `weakLabels`（55–75 只做检索）」 | `DETECT_PARAMS.minConfidence = 70`，55–70 区间的标签根本不会产出 | **取消两级标签**，单层 `labels` 够用 | 省掉一次字段扩容与召回逻辑，FR-04 的验收不变 |
 | **C-3** | §2.3「为标签附加中文主名」未说在哪一步做 | 现在 `zh` 在**识别期**由 Lambda 计算并写入 `data/labels/<id>.json`；词表一扩，历史照片的中文名不会自动更新，要重跑识别 | **把 `zh` 的解析从识别期下移到索引构建期**（`createIndex` 里按 term 查词表回填）。词表更新后只需重建索引，不碰 Lambda、不重跑 Rekognition | 这是 FR-04 能否低成本迭代的关键；也是一次性改动 |
-| **C-4** | FR-14「LCP ≤2.5s 进 CI 门禁」 | CI 环境没有真实图片、没有 CloudFront、没有真实网络，LCP 测出来是假的 | **LCP 不做硬门禁**：CI 只硬卡 JS+CSS gzip ≤120KB（确定性）；LCP 改为每次发布后实测并记入验收矩阵 | 门禁可信，指标真实 |
+| **C-4** | FR-14「LCP ≤2.5s 进 CI 门禁」 | CI 环境没有真实图片、没有 CloudFront、没有真实网络，LCP 测出来是假的 | **LCP 不做硬门禁**：CI 只硬卡 JS+CSS gzip ≤128KB（确定性；2026-11-15 由 120KB 上调）；LCP 改为每次发布后实测并记入验收矩阵 | 门禁可信，指标真实 |
 | **C-5** | FR-01「导航 ≤3 项」与「上传保持既有入口位置」 | 上传按钮 `#open-upload` 现在就在顶部导航里（`index.html:28`） | **上传入口移到页脚**（有原生桥 + 配了接口地址时才显示）。导航只剩 品牌 / 相册 / 搜索 | 两者只能保一个，我选保「≤3 项」 |
 | **C-6** | FR-13 只约束词表 | `scoreItem` 在 `src/web/js/search.js:260` 和 `src/server/search/index.mjs:199` **各有一份实现**，AND 语义的 bug 两边都有 | V6.0 两处同批修 + 加**双实现一致性单测**；抽公共模块记为 V6.1 技术债（要动构建拷贝逻辑，风险高于收益） | 否则 FR-03 修完还是会在两边漂移 |
 

@@ -17,6 +17,7 @@ import {
 import {
   computeRev, ownership, SEARCH_INDEX_OWNER,
 } from '../search/publish.mjs';
+import { ownership as artifactOwnership } from '../curation/publish.mjs';
 import { runVerticalSlice, defaultManifest, defaultLabels } from '../search/e2e.mjs';
 import { buildRecognitionEvent } from '../recognition/worker.mjs';
 import { buildRecognitionInput } from '../recognition/input.mjs';
@@ -266,6 +267,24 @@ test('searchIndex 契约：shape 约束、s3PrefixOwnership、iamBoundaries', ()
   for (const forbidden of raw.iamBoundaries.forbidden) {
     assert.equal(typeof forbidden, 'string');
   }
+});
+
+test('策展与故事产物在契约里有归属：同一个发布者写、不许删、IAM 覆盖三条路径', () => {
+  // V6 T-22/T-23 的两个产物由检索发布者顺手写出，所以不是新主体，只是在
+  // 既有策略上多两条资源。这里把「谁写、能不能删」钉住，防止哪天悄悄放宽。
+  for (const name of ['curation', 'story']) {
+    const owned = raw.s3PrefixOwnership[`data/${name}.<rev>.json`];
+    assert.ok(owned, `${name} 没登记进 s3PrefixOwnership`);
+    assert.equal(owned.writer, 'album-search-publisher');
+    assert.equal(owned.canDelete, false);
+    assert.deepEqual(artifactOwnership(name), owned);
+    assert.match(raw.iamBoundaries['album-search-publisher'], new RegExp(`data/${name}\\.\\*`));
+  }
+  // 发布者仍然碰不到照片、清单与版本文件——多了两个产物不等于扩大了主权
+  const policy = raw.iamBoundaries['album-search-publisher'];
+  assert.match(policy, /no delete/);
+  assert.doesNotMatch(policy, /photos\//);
+  assert.match(policy, /no version\.json\/manifest\/photos access/);
 });
 
 test('发布产物符合 searchIndex.shape：id 在 manifest、无重复、置信度单 float', async () => {

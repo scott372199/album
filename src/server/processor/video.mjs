@@ -62,6 +62,28 @@ export async function probeVideo(file) {
   };
 }
 
+/**
+ * 写进清单的时长只保留整数秒。
+ *
+ * 两个理由：一是前端角标只显示 m:ss，两位小数纯属噪声；二是浮点数会把
+ * 清单哈希变得飘忽——同一段视频在不同 ffmpeg 版本下探测出 30.02 与 30.03，
+ * 清单就换一个文件名，白白让所有客户端的缓存失效一次。
+ *
+ * 探测不到、或视频已降级成静图时返回 0，前端据此回退到纯 ▶ 角标；
+ * 不足 1 秒的有效视频向上取到 1，避免「有画面但角标说 0」。
+ *
+ * Whole seconds only: the grid badge shows m:ss (two decimals are noise), and a
+ * float makes the manifest hash wobble across ffmpeg versions, which would
+ * needlessly bust every client's cache. 0 means "unknown" (degraded video or a
+ * failed probe) so the frontend can fall back to a plain ▶; a real sub-second
+ * clip rounds up to 1 rather than reporting 0.
+ */
+export function publicDuration(seconds, max = MAX_SOURCE_SECONDS) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.max(1, Math.min(Math.round(value), max));
+}
+
 export function displayedSize({ width, height, rotation }) {
   const swapped = Math.abs(rotation) % 180 === 90;
   return swapped ? { width: height, height: width } : { width, height };
@@ -231,7 +253,7 @@ export async function processVideo({ srcPath, tmpDir, clipPath }) {
     clip: await readFile(clipPath),
     poster: poster.poster,
     lqip: poster.lqip,
-    duration: Number(duration.toFixed(2)),
+    duration: publicDuration(duration),
     ratio,
     bytes,
     width: size.width,

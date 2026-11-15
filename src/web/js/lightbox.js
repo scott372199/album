@@ -1,5 +1,7 @@
 import { state, PLAY_INTERVAL } from './state.js';
 import { el, photoAlt, reducedMotion } from './ui.js';
+import { createMonthStrip, monthStripPlan, prefetchTargets } from './month-strip.js';
+import { durationNote } from './duration.js';
 
 const refs = {};
 let list = [];
@@ -7,6 +9,7 @@ let hooks = { onNavigate: () => {}, onClose: () => {} };
 let playTimer = null;
 let opened = false;
 let thumbsBuilt = false;
+let monthStrip = null;
 
 function cache() {
   if (refs.root) return refs;
@@ -14,9 +17,11 @@ function cache() {
     root: el('lightbox'),
     image: el('lb-image'),
     video: el('lb-video'),
+    replay: el('lb-replay'),
     counter: el('lb-counter'),
     meta: el('lb-meta'),
     thumbs: el('lb-thumbs'),
+    month: el('lb-month'),
     zoom: el('lb-zoom'),
     play: el('lb-play'),
     mute: el('lb-mute'),
@@ -30,6 +35,12 @@ function cache() {
 
 function current() {
   return list[state.lightbox.index] || null;
+}
+
+function paintMute() {
+  const { video, mute } = cache();
+  if (!mute) return;
+  mute.textContent = video.muted ? '取消静音' : '静音';
 }
 
 function isMotion(photo) {
@@ -124,6 +135,42 @@ function updateThumbState() {
   }
 }
 
+/**
+ * 同月横条（T-19）：条目来自灯箱**当前列表**，所以点了一定跳得到；chips 来自
+ * 识别标签（`labels[].zh`），点一下就是按这个词搜索。
+ *
+ * 预取跟着横条走：同月左右各两张先拉 view，横滑时不用等。
+ *
+ * The same-month strip is built from the lightbox's current list, so every item
+ * is reachable; chips come from recognition labels and jump to a search. The
+ * neighbours are prefetched along with the strip.
+ */
+function renderMonthStrip(photo) {
+  const host = cache().month;
+  if (!host) return;
+  if (!monthStrip) {
+    monthStrip = createMonthStrip({
+      host,
+      onPick: (id) => {
+        const index = list.findIndex((item) => item.id === id);
+        if (index >= 0) show(index);
+      },
+      onChip: (term) => hooks.onChip?.(term),
+    });
+  }
+  const labels = typeof hooks.labelsFor === 'function' ? hooks.labelsFor(photo) : [];
+  monthStrip.render(list, photo, labels);
+
+  const plan = monthStripPlan(list, photo?.id);
+  for (const id of prefetchTargets(plan.items, plan.index)) {
+    const target = list.find((item) => item.id === id);
+    const url = target && (target.view || target.grid);
+    if (!url) continue;
+    const img = new Image();
+    img.src = url;
+  }
+}
+
 function show(index) {
   if (!list.length) return;
   const total = list.length;
@@ -132,6 +179,7 @@ function show(index) {
   const r = cache();
 
   r.image.hidden = false;
+  r.image.dataset.fallback = '';
   r.video.hidden = true;
   r.video.pause();
   r.video.removeAttribute('src');
@@ -146,7 +194,7 @@ function show(index) {
     const attempt = r.video.play();
     if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
     r.mute.hidden = false;
-    r.mute.textContent = r.video.muted ? '取消静音' : '静音';
+    paintMute();
     r.play.hidden = true;
   } else {
     r.image.src = photo.view || photo.grid || photo.poster || '';
@@ -157,8 +205,13 @@ function show(index) {
 
   r.counter.textContent = `${state.lightbox.index + 1} / ${total}`;
   const bits = [photoAlt(photo)];
+  // 时长只在知道的时候才加：未知的 0 不写成 0:00
+  const clock = durationNote(photo);
+  if (clock) bits.push(clock);
   if (photo.caption) bits.push(photo.caption);
   r.meta.textContent = bits.filter(Boolean).join(' · ');
+
+  r.replay.hidden = true;
 
   r.prev.hidden = total <= 1;
   r.next.hidden = total <= 1;
@@ -168,6 +221,7 @@ function show(index) {
   updateThumbState();
   prefetch(state.lightbox.index + 1);
   prefetch(state.lightbox.index - 1);
+  renderMonthStrip(photo);
   hooks.onNavigate(photo);
 }
 
@@ -198,6 +252,7 @@ export function closeLightbox() {
   const r = cache();
   r.video.pause();
   r.video.removeAttribute('src');
+  r.replay.hidden = true;
   r.root.hidden = true;
   document.body.classList.remove('lb-open');
   state.lightbox.index = -1;
@@ -232,10 +287,25 @@ export function initLightbox(hooksIn = {}) {
   r.play.addEventListener('click', () => (playTimer ? stopAutoplay() : startAutoplay()));
   r.mute.addEventListener('click', () => {
     r.video.muted = !r.video.muted;
-    r.mute.textContent = r.video.muted ? '取消静音' : '静音';
+    paintMute();
   });
 
   r.image.addEventListener('dblclick', () => setZoom(state.lightbox.zoom > 1 ? 1 : 2));
+
+  /**
+   * 离线降级（T-28）：Service Worker 只缓存 thumb，view 拿不到时这里会走到。
+   * 退到缩略图并**说明原因**——默默显示一张模糊的小图，用户会以为是画质坏了。
+   * `dataset.fallback` 先写再看：缩略图也失败时不会无限重试。
+   */
+  r.image.addEventListener('error', () => {
+    const photo = current();
+    if (!photo || r.image.dataset.fallback === photo.id) return;
+    const thumb = photo.thumb || photo.poster || '';
+    if (!thumb) return;
+    r.image.dataset.fallback = photo.id;
+    r.image.src = thumb;
+    r.meta.textContent = `${r.meta.textContent} · 离线，只有缩略图`;
+  });
 
   // 缩放后的拖动平移
   let dragging = null;
@@ -286,14 +356,33 @@ export function initLightbox(hooksIn = {}) {
     navigate(delta < 0 ? 1 : -1);
   }, { passive: true });
 
+  // 播完不替用户翻页：原生控件此时就在显示重播按钮，直接跳走等于把人刚看到
+  // 一半的片子抽走。只有「自动播放」开着时才顺着走下去，那时用户要的就是连播。
   r.video.addEventListener('ended', () => {
     if (state.lightbox.index < 0) return;
-    navigate(1, { wrap: true });
+    if (playTimer) { navigate(1, { wrap: true }); return; }
+    r.replay.hidden = false;
+  });
+
+  r.video.addEventListener('play', () => { r.replay.hidden = true; });
+
+  // 原生控件里也能调音量/静音，按钮文案要跟着变，否则两处说法打架
+  r.video.addEventListener('volumechange', paintMute);
+
+  r.replay.addEventListener('click', () => {
+    r.replay.hidden = true;
+    try { r.video.currentTime = 0; } catch { /* 元数据还没到 */ }
+    const attempt = r.video.play();
+    if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
+    r.video.focus({ preventScroll: true });
   });
 
   document.addEventListener('keydown', (event) => {
     if (!opened) return;
     if (event.key === 'Escape') { event.preventDefault(); closeLightbox(); return; }
+    // 焦点在原生视频控件上时，方向键/空格归它：那是「拖进度」不是「翻照片」，
+    // 抢过来会让人永远没法用键盘快进。（Escape 仍要能关门）
+    if (event.target === r.video) return;
     if (event.key === 'ArrowLeft') { event.preventDefault(); navigate(-1); return; }
     if (event.key === 'ArrowRight') { event.preventDefault(); navigate(1); return; }
     if (event.key === ' ') {

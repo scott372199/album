@@ -5,6 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light">
   <meta name="theme-color" content="#ffffff">
+  <!-- 主题必须在首次绘制前定下来，否则深色用户会看到一闪而过的白页。这里的判断
+       与 theme.js 的 decide() 完全一致：存储里的三档 + 系统偏好 → light|dark。
+       之后的一切切换由 theme.js 负责（含 meta 同步与持久化）。
+       The theme has to be settled before first paint, or dark users get a white
+       flash. This decision mirrors theme.js decide(); everything afterwards is
+       theme.js's job (meta sync and persistence included). -->
+  <script>
+    (function () {
+      try {
+        var c = localStorage.getItem('album.theme') || 'auto';
+        var dark = c === 'dark' || (c !== 'light'
+          && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        var t = dark ? 'dark' : 'light';
+        document.documentElement.dataset.theme = t;
+        document.documentElement.style.colorScheme = t;
+        var cs = document.querySelector('meta[name="color-scheme"]');
+        if (cs) cs.setAttribute('content', t);
+        var tc = document.querySelector('meta[name="theme-color"]');
+        if (tc) tc.setAttribute('content', dark ? '#121214' : '#ffffff');
+      } catch (e) { /* 存储被禁用时保持浅色，不影响任何功能 */ }
+    })();
+  </script>
   <!-- 接口地址在构建时注入；为空表示这套产物没有后端，上传入口不会出现 -->
   <!-- API base is injected at build time; empty means upload is unavailable -->
   <meta name="album-api" content="__API_BASE__">
@@ -17,15 +39,10 @@
 
   <nav class="site-nav" aria-label="主导航">
     <div class="nav-inner">
-      <a class="brand" href="#top">__TITLE__</a>
-      <div class="tabs" role="tablist" aria-label="视图">
-        <button type="button" class="tab is-active" data-view="timeline" role="tab" aria-selected="true">时间轴</button>
-        <button type="button" class="tab" data-view="album" role="tab" aria-selected="false">相册</button>
-      </div>
+      <!-- 品牌是按钮不是链接：删掉「时间轴」tab 之后，它是回时间流的唯一出口 -->
+      <button type="button" class="brand" id="brand">__TITLE__</button>
       <div class="nav-actions">
-        <button type="button" class="nav-action" id="open-story">故事</button>
-        <button type="button" class="nav-action" id="open-wall">照片墙</button>
-        <button type="button" class="nav-action" id="open-upload" hidden>上传</button>
+        <button type="button" class="nav-action" id="nav-albums">相册</button>
         <div class="nav-search-wrap" id="search-wrap">
           <label class="nav-search">
             <span class="sr-only">搜索照片</span>
@@ -44,38 +61,34 @@
     </div>
   </nav>
 
+  <!-- 首屏是**静态**的：图与文字都在 HTML 里，禁掉 JS 也照常可见，LCP 不等脚本。
+       图片地址是固定名 data/hero.webp，由处理函数在发布时写成最新的一张；
+       构建期（--target=all）也会补一份，方便本地预览。alt 留空是有意的：
+       这张图是装饰，标题已经把意思说完了；万一还没有照片，空 alt 也不会
+       露出破图图标，只留深色底与标题。
+       The hero is fully static: image and copy are in the HTML, so it renders
+       with JS disabled and the LCP never waits on the bundle. The URL is the
+       fixed name data/hero.webp, written by the processor at publish time (and
+       by a full build for local preview). The empty alt is deliberate: the
+       image is decorative, and an empty alt degrades silently when the bucket
+       has no photo yet — just the stage colour and the title. -->
   <header class="hero" id="top">
-    <div class="hero-stage" id="hero-stage" tabindex="0" aria-roledescription="章节轮播" aria-label="首页大图章节，可用左右方向键切换">
-      <img class="hero-media" id="hero-media" alt="" decoding="async" fetchpriority="high">
-      <img class="hero-media hero-media--next" id="hero-media-next" alt="" decoding="async" aria-hidden="true" hidden>
+    <a class="hero-stage" id="hero-stage" href="#catalog" aria-label="浏览全部照片">
+      <img class="hero-media" id="hero-media" src="data/hero.webp" alt="" decoding="async" fetchpriority="high">
       <div class="hero-scrim" aria-hidden="true"></div>
       <div class="hero-copy">
-        <p class="eyebrow" id="hero-eyebrow">PHOTO ARCHIVE</p>
+        <p class="eyebrow">PHOTO ARCHIVE</p>
         <h1 id="site-title">__TITLE__</h1>
-        <p class="hero-subtitle" id="site-subtitle"></p>
-        <a class="hero-cta" id="hero-cta" hidden></a>
-      </div>
-      <div class="hero-controls" id="hero-controls" hidden>
-        <button type="button" class="hero-arrow" id="hero-prev" aria-label="上一个章节">&#8249;</button>
-        <div class="hero-dots" id="hero-dots" role="tablist" aria-label="章节"></div>
-        <button type="button" class="hero-arrow" id="hero-next" aria-label="下一个章节">&#8250;</button>
+        <p class="hero-subtitle" id="site-subtitle">__SUBTITLE__</p>
       </div>
       <div class="hero-hint" aria-hidden="true">
         <span class="hero-hint-line"></span>
         <span>向下滚动</span>
       </div>
-    </div>
+    </a>
   </header>
 
   <main>
-    <section class="featured" id="featured" hidden aria-label="精选">
-      <div class="section-head">
-        <p class="section-kicker">SELECTED</p>
-        <h2 class="section-title">精选</h2>
-      </div>
-      <div class="featured-stream" id="featured-stream"></div>
-    </section>
-
     <section class="catalog" id="catalog">
       <div class="section-head section-head--row">
         <div>
@@ -101,6 +114,14 @@
             <span>月份</span>
             <select id="month"><option value="">全部</option></select>
           </label>
+          <label class="field">
+            <span>密度</span>
+            <select id="density">
+              <option value="compact">紧凑</option>
+              <option value="standard" selected>标准</option>
+              <option value="large">大图</option>
+            </select>
+          </label>
           <button type="button" id="clear" class="clear" hidden>清除筛选</button>
         </div>
       </div>
@@ -108,6 +129,8 @@
       <p class="search-empty" id="search-empty" role="status" aria-live="polite" hidden></p>
       <div id="content" class="content"></div>
       <div id="sentinel" class="sentinel" aria-hidden="true"></div>
+      <!-- 有位置记忆时才出现；点它清掉记忆并回顶部 -->
+      <button type="button" class="anchor-reset" id="anchor-reset" hidden>回到最近</button>
     </section>
 
     <section class="album-section" id="albums-section" hidden>
@@ -115,26 +138,13 @@
         <p class="section-kicker">ALBUMS</p>
         <h2 class="section-title">相册</h2>
       </div>
+      <!-- 按年份看：年度页（T-24）的入口。年份来自清单，新照片进来不用改配置 -->
+      <div class="year-nav" id="year-nav" role="group" aria-label="按年份看" hidden></div>
       <div class="album-grid" id="album-grid"></div>
     </section>
 
-    <section class="cta section--dark" id="story-cta">
-      <div class="cta-inner">
-        <p class="section-kicker section-kicker--dark">STORY</p>
-        <h2 class="cta-title">让它自己讲一遍。</h2>
-        <p class="cta-text">按年份分成章节，配上缓慢的推近与转场，像手机相册里的「回忆」。</p>
-        <button type="button" class="cta-button" id="story-cta-button">播放故事</button>
-      </div>
-    </section>
-
-    <section class="cta section--dark" id="wall-cta">
-      <div class="cta-inner">
-        <p class="section-kicker section-kicker--dark">PHOTO WALL</p>
-        <h2 class="cta-title">放在桌上，让它一直放。</h2>
-        <p class="cta-text">全屏轮播、屏幕常亮、夜里自动变暗。适合插着电的平板。</p>
-        <button type="button" class="cta-button" id="wall-cta-button">进入照片墙</button>
-      </div>
-    </section>
+    <!-- 年度页（T-24）：内容全由 year-page.js 装配，这里只是个占位容器 -->
+    <section class="year-page" id="year-page" aria-label="这一年" hidden></section>
 
     <section class="stats section--dark" aria-label="统计">
       <div class="stats-inner">
@@ -146,6 +156,14 @@
   </main>
 
   <footer class="site-footer section--dark">
+    <!-- 这些入口原来在导航里或大块 CTA 里；导航瘦到三项后，它们落到页脚 -->
+    <div class="footer-actions" id="footer-actions">
+      <button type="button" class="footer-action" id="open-wall">照片墙</button>
+      <button type="button" class="footer-action" id="open-wander">随便翻翻</button>
+      <button type="button" class="footer-action" id="open-upload" hidden>上传</button>
+      <!-- 三档：跟随系统 → 浅色 → 深色。放页脚而不是导航，导航保持三项 -->
+      <button type="button" class="footer-action" id="theme-toggle" aria-label="切换主题">主题：跟随系统</button>
+    </div>
     <p id="footer-meta"></p>
     <p class="footer-note">照片与视频已剥离定位与设备信息</p>
   </footer>
@@ -159,10 +177,17 @@
     <button type="button" id="lb-prev" class="lb-btn lb-prev" aria-label="上一张">&#8249;</button>
     <figure class="lb-figure" id="lb-figure">
       <img id="lb-image" alt="">
-      <video id="lb-video" playsinline preload="metadata" hidden></video>
+      <!-- 视频走原生控件（T-20）：拖动进度、全屏、音量这些浏览器自带的实现比
+           自己糊一套稳，移动端还能拿到系统级全屏。播完不自动跳走，先给一个
+           重播按钮，把「再看一遍」和「看下一张」分开。 -->
+      <video id="lb-video" playsinline preload="metadata" controls controlslist="nodownload" hidden></video>
+      <button type="button" id="lb-replay" class="lb-replay" hidden>重新播放</button>
       <figcaption id="lb-meta" class="lb-meta"></figcaption>
     </figure>
     <button type="button" id="lb-next" class="lb-btn lb-next" aria-label="下一张">&#8250;</button>
+    <!-- 同月横条与标签 chips（T-19）：容器先占位，内容由 month-strip.js 装。
+         没有同月照片也没有标签时整块 hidden，灯箱里不留空行。 -->
+    <div id="lb-month" class="lb-month" hidden></div>
     <div class="lb-bottom">
       <div class="lb-controls">
         <button type="button" id="lb-play" class="lb-play">自动播放</button>
@@ -182,7 +207,8 @@
         <p class="story-card-sub" id="story-card-sub"></p>
       </div>
       <div class="story-end" id="story-end" hidden>
-        <h2>这一段，走完了。</h2>
+        <!-- 结束语由构建期产物给出（T-23），运行时填入；没有产物就按首末章算一句 -->
+        <h2 id="story-end-title"></h2>
         <p id="story-end-stats"></p>
         <div class="story-end-actions">
           <button type="button" id="story-replay">再看一次</button>
@@ -214,6 +240,14 @@
     <div class="wall-bar" id="wall-bar">
       <button type="button" class="wall-btn" id="wall-prev" aria-label="上一张">&#8249;</button>
       <button type="button" class="wall-btn" id="wall-toggle">暂停</button>
+      <!-- 播放源（T-25）：四源互斥落在这一只下拉里。选项由 wall-source.js
+           从照片现算（全部 / 精选 / 每年 / 每相册），所以新内容进来不用改配置 -->
+      <label class="wall-field">
+        <span>播放</span>
+        <select id="wall-source">
+          <option value="all">全部</option>
+        </select>
+      </label>
       <label class="wall-field">
         <span>间隔</span>
         <select id="wall-interval">
@@ -258,6 +292,17 @@
       </form>
 
       <div class="upload-body" id="upload-body" hidden>
+        <!-- 归位建议（T-27）：选完照片、还没开始传时出现。采纳只是把值填进下面
+             的相册名，之后走的还是原来那条上传路径；「不用了」则与以前完全一致。 -->
+        <div class="upload-suggest" id="upload-suggest" hidden role="group" aria-labelledby="upload-suggest-title">
+          <p class="upload-suggest-title" id="upload-suggest-title"></p>
+          <p class="upload-suggest-note" id="upload-suggest-note"></p>
+          <div class="upload-suggest-tags" id="upload-suggest-tags"></div>
+          <div class="upload-suggest-actions">
+            <button type="button" class="upload-primary upload-suggest-accept" id="upload-suggest-accept">用这个</button>
+            <button type="button" class="upload-link" id="upload-suggest-skip">不用了</button>
+          </div>
+        </div>
         <label class="upload-field">
           <span>放进哪个相册</span>
           <input id="upload-album" type="text" maxlength="40" autocomplete="off">
@@ -271,6 +316,7 @@
         <div class="upload-legend" id="upload-legend" role="group" aria-label="上传状态图例"></div>
         <div class="upload-foot">
           <span class="upload-count" id="upload-count"></span>
+          <button type="button" class="upload-link" id="upload-open" hidden>去看看</button>
           <button type="button" class="upload-link upload-link--retry" id="upload-retry" hidden>重试失败项</button>
           <button type="button" class="upload-link" id="upload-logout">退出登录</button>
         </div>

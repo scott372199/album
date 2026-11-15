@@ -24,9 +24,14 @@ export const state = {
   wall: { index: 0, interval: 10, clock: true, playing: true, night: null },
   story: { index: 0, chapter: 0, paused: false },
   // V5 语义索引运行状态；不写入 URL，查询本身复用已有的 q 字段。
+  // suggestions 由 deriveSuggestions(index) 在索引载入时算一次，
+  // 不随输入变化——按键重算在 3 万张照片上是不能接受的。
   // V5 semantic-index runtime state; not serialized into the URL — the query
-  // keeps reusing the existing `q` field.
-  search: { status: 'idle', rev: '', index: null, error: '' },
+  // keeps reusing the existing `q` field. Suggestions are derived once per
+  // index load, not per keystroke.
+  search: {
+    status: 'idle', rev: '', index: null, error: '', suggestions: [],
+  },
 };
 
 /** 搜索结果每页条数（契约 pageSize 上限 100）/ Page size for search results */
@@ -63,9 +68,11 @@ export function parseHashString(raw, snapshot) {
   if (snapshot.lightbox) snapshot.lightbox.index = -1;
 
   const view = params.get('view');
-  if (view === 'album' || view === 'timeline') snapshot.view = view;
+  // 'year' 是 V6 T-24 的年度页：复用 view 键，年份复用 year 键，不新增 hash 键
+  if (view === 'album' || view === 'timeline' || view === 'year') snapshot.view = view;
   const mode = params.get('mode');
-  if (mode === 'story' || mode === 'wall') snapshot.mode = mode;
+  // 'search' 复用既有 mode 键：搜索态是视图状态，不是新的一层覆盖物，也不新增 hash 键
+  if (mode === 'story' || mode === 'wall' || mode === 'search') snapshot.mode = mode;
   const pace = params.get('pace');
   if (pace === 'slow' || pace === 'normal' || pace === 'fast') snapshot.pace = pace;
 
@@ -118,17 +125,33 @@ export function groupByYearMonth(list) {
 
 /* ---------------- 编辑式栅格 ---------------- */
 
-export function layoutParams(containerWidth) {
+/**
+ * 网格密度三档：修的是「一行想要多大」，不是「一行几张」。
+ * 每行几张由宽度和 `maxPerRow` 决定，密度只改目标行宽——所以照片永远不会被裁切，
+ * 只是行内会少放一张、整体变大。
+ *
+ * Density changes the target row width, not the crop: photos are never cut, the
+ * row simply holds fewer of them at a larger size.
+ */
+export const DENSITY = { compact: 200, standard: 340, large: 520 };
+export const DENSITY_KEY = 'album.density';
+
+export function normalizeDensity(value) {
+  return Object.hasOwn(DENSITY, value) ? value : 'standard';
+}
+
+export function layoutParams(containerWidth, density = 'standard') {
+  const target = DENSITY[normalizeDensity(density)];
   if (containerWidth >= 1200) {
-    return { gap: 20, target: 340, maxPerRow: 3, featureMin: 320, featureMax: 780, featureEvery: 6 };
+    return { gap: 20, target, maxPerRow: 3, featureMin: 320, featureMax: 780, featureEvery: 6 };
   }
   if (containerWidth >= 1024) {
-    return { gap: 16, target: 300, maxPerRow: 3, featureMin: 280, featureMax: 700, featureEvery: 6 };
+    return { gap: 16, target, maxPerRow: 3, featureMin: 280, featureMax: 700, featureEvery: 6 };
   }
   if (containerWidth >= 768) {
-    return { gap: 14, target: 260, maxPerRow: 2, featureMin: 240, featureMax: 620, featureEvery: 5 };
+    return { gap: 14, target, maxPerRow: 2, featureMin: 240, featureMax: 620, featureEvery: 5 };
   }
-  return { gap: 10, target: 200, maxPerRow: 2, featureMin: 180, featureMax: 520, featureEvery: 4 };
+  return { gap: 10, target, maxPerRow: 2, featureMin: 180, featureMax: 520, featureEvery: 4 };
 }
 
 function ratioOf(item) {
@@ -200,6 +223,58 @@ export function computeEditorialRows(items, width, opts = {}) {
   }
 
   return rows;
+}
+
+/* ---------------- 相册卡片 ---------------- */
+
+/**
+ * 相册卡片要说的三件事：时间跨度、封面、张数。
+ *
+ * 封面**不能用 `Math.random()`**——卡片在任何一次重绘（筛选、改密度、窗口缩放）
+ * 都会重新渲染，随机封面的结果是「同一张卡片每次都在换脸」。
+ * 这里用相册名的 FNV-1a 哈希取模选成员：同一个名字永远落在同一张。
+ *
+ * 哈希只做取模，不参与任何跨进程比较，所以不存在跨平台差异问题。
+ *
+ * The cover is chosen by a name hash, never at random: cards re-render on every
+ * filter / density / resize, and a random cover would visibly reshuffle.
+ */
+export function hashOf(text) {
+  let hash = 2166136261;
+  const value = String(text ?? '');
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+/** `2024.3–2024.5`；单月时只写一个；跨年时两端都带年 */
+export function formatAlbumSpan(members) {
+  const list = Array.isArray(members) ? members : [];
+  if (!list.length) return '';
+  const keys = list.map((photo) => (Number(photo.year) || 0) * 100 + (Number(photo.month) || 0));
+  const min = Math.min(...keys);
+  const max = Math.max(...keys);
+  const label = (key) => `${Math.floor(key / 100)}.${key % 100}`;
+  return min === max ? label(min) : `${label(min)}–${label(max)}`;
+}
+
+/**
+ * 一个相册的卡片事实：封面（确定性）、张数、时间跨度。
+ * 没有发布时间字段时**不编造**「最近更新」，只报张数（O-03 已定，不新增写路径）。
+ */
+export function albumSummary(album, members) {
+  const list = Array.isArray(members) ? members : [];
+  const count = Number.isFinite(album?.count) ? album.count : list.length;
+  const pick = list.length ? list[hashOf(album?.name) % list.length] : null;
+  return {
+    name: album?.name || '',
+    count,
+    span: formatAlbumSpan(list),
+    coverId: pick?.id || album?.cover || '',
+    cover: pick || null,
+  };
 }
 
 /* ---------------- 故事分章 ---------------- */

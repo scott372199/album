@@ -13,18 +13,30 @@
 
 import { el } from './ui.js';
 
-/** 契约里的示例查询 / Example queries from queryContract */
-export const EXAMPLE_QUERIES = [
-  '湖水', '山峰', '蓝天', '汽车', '摩托车', '红色衬衫',
-  '2025 年', '2025 年的蓝天和汽车',
-];
-
-/** 即时建议：按输入过滤示例词 / Instant suggestions: filter examples by input */
-export function suggestionsFor(input) {
+/**
+ * 即时建议：在**索引派生**出来的候选池里做纯过滤。
+ *
+ * 这里不再有示例词常量。旧实现里那份硬编码列表含「摩托车」——这批照片里
+ * 一张都没有，点一下就是空结果。候选池由 `deriveSuggestions(index)` 按实际
+ * 覆盖率给出（见 search.js），本函数只负责按输入筛。
+ *
+ * Pure filter over an index-derived pool. The old hardcoded example list
+ * offered words with zero photos in the corpus; the pool now comes from real
+ * coverage, so every suggestion leads somewhere.
+ */
+export function suggestionsFor(input, pool = []) {
+  const list = Array.isArray(pool) ? pool : [];
   const q = String(input || '').trim();
-  if (!q) return EXAMPLE_QUERIES.slice(0, 6);
-  const hits = EXAMPLE_QUERIES.filter((item) => item.includes(q) || q.includes(item));
-  return hits.length ? hits.slice(0, 6) : EXAMPLE_QUERIES.slice(0, 4);
+  if (!list.length) return [];
+  if (!q) return list.slice(0, 6);
+
+  // 排除与输入完全相同的词：用户已经打出来的东西不该再被「建议」一次
+  // Drop an exact match: suggesting back what the user already typed is noise.
+  const hits = list.filter((item) => item !== q && (item.includes(q) || q.includes(item)));
+  if (hits.length) return hits.slice(0, 6);
+
+  // 输入匹配不上任何候选时，退回前 4 个覆盖面较广的词，而不是空手
+  return list.filter((item) => item !== q).slice(0, 4);
 }
 
 /** 时间 chip：由 manifest 的公开年份派生 / Time chips from public manifest years */
@@ -32,6 +44,69 @@ export function yearChips(years) {
   return (Array.isArray(years) ? years : [])
     .slice(0, 6)
     .map((year) => ({ label: `${year} 年`, query: `${year} 年` }));
+}
+
+/**
+ * 输入调度器：把「每一次按键」收敛成「最多一次查询」。
+ *
+ * 三条规则，按优先级：
+ *   1. 拼音组合期间（`compositionstart` → `compositionend`）**一律不查**，
+ *      中间态是 `hu` `hu shui` 这种半成品，查了只会闪「没听懂」；
+ *   2. 组合结束时**立刻**查一次，不再等防抖——这时用户已经选完字了；
+ *   3. 非组合期按 `wait` 防抖，连打 10 个字符只查最后那一次。
+ *
+ * 为什么单独拆出来：这套时序用 DOM 事件测很啰嗦，拆成纯调度器后可以直接在
+ * Node 里断言「调用次数」，而 `initSearchUI` 只剩「把事件转过来」这一句。
+ *
+ * Collapses keystrokes into at most one query: no query while an IME
+ * composition is open, an immediate query when it closes, and a debounce
+ * otherwise. Kept free of DOM so call counts are assertable in Node.
+ */
+export function createQueryScheduler({ wait = 150, commit } = {}) {
+  let timer = null;
+  let composing = false;
+  let pending = null;
+  let commits = 0;
+
+  const cancel = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  const fire = (value) => {
+    cancel();
+    pending = null;
+    commits += 1;
+    commit?.(value);
+  };
+
+  return {
+    input(value) {
+      pending = value;
+      if (composing) return; // 组合期的中间态不查
+      cancel();
+      timer = setTimeout(() => fire(pending), wait);
+    },
+    compositionStart() {
+      composing = true;
+      cancel();
+    },
+    compositionEnd(value) {
+      composing = false;
+      if (value != null) pending = value;
+      fire(pending ?? '');
+    },
+    flush() {
+      if (pending === null) return;
+      fire(pending);
+    },
+    /** 测试用：已提交次数 / Test hook: number of commits so far */
+    get commits() { return commits; },
+    get composing() { return composing; },
+    get pending() { return pending; },
+  };
 }
 
 /** 把 explanation 翻成中文检索说明 / Human-readable query explanation */
@@ -110,14 +185,14 @@ export function initSearchUI({ onQuery, onRetry } = {}) {
   const wrap = el('search-wrap');
 
   let latest = {
-    q: '', status: 'idle', parse: null, total: 0,
-    degraded: false, years: [], error: '',
+    q: '', status: 'idle', queryStatus: 'idle', parse: null, total: 0,
+    degraded: false, years: [], error: '', suggestions: [],
   };
 
   function paintSuggestions(q) {
     if (!suggestions) return;
     suggestions.replaceChildren();
-    for (const item of suggestionsFor(q)) {
+    for (const item of suggestionsFor(q, latest.suggestions)) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'search-suggestion';
@@ -195,15 +270,30 @@ export function initSearchUI({ onQuery, onRetry } = {}) {
   }
 
   if (input) {
+    // 唯一所有者：输入 → 调度器 → onQuery。防抖后的提交与 refresh() 是同一条路径，
+    // 不另开「搜索专用」渲染分支。
+    // Single owner: input -> scheduler -> onQuery. The debounced commit goes
+    // through the very same path as refresh(); no separate search-only render.
+    const scheduler = createQueryScheduler({ wait: 150, commit: (value) => onQuery?.(value) });
+
     input.addEventListener('focus', open);
     input.addEventListener('input', (event) => {
       const q = event.target.value.trim();
       latest.q = q;
-      onQuery?.(q);
+      scheduler.input(q);
+      open();
+    });
+    input.addEventListener('compositionstart', () => scheduler.compositionStart());
+    input.addEventListener('compositionend', (event) => {
+      const q = event.target.value.trim();
+      latest.q = q;
+      scheduler.compositionEnd(q);
       open();
     });
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') { close(); input.blur(); }
+      // 回车立刻查，不等防抖
+      if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); scheduler.flush(); close(); }
     });
   }
   if (retry) retry.addEventListener('click', () => onRetry?.());

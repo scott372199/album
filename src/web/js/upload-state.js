@@ -126,3 +126,110 @@ export function mountUploadLegend(host) {
     host.appendChild(badge);
   }
 }
+
+/* ---------------- T-21：五类失败原因 ---------------- */
+
+/**
+ * 失败只有五类，别的都不该让用户看见。
+ *
+ * 分类依据是**用户能采取什么行动**，不是异常长什么样：
+ *   网络   → 换个网络 / 等一下重试
+ *   权限   → 重新登录
+ *   太大   → 换个小一点的，或分段拍
+ *   格式   → 先导出成 JPEG
+ *   服务   → 服务端的问题，等一会儿
+ *
+ * 分类结果只用来选一句话，所以它**不能带上任何实现细节**——URL、HTTP 状态码、
+ * 对象 key 都不出现在文案里（单测钉住）。
+ *
+ * Five classes, chosen by what the user can actually do about it. The class only
+ * picks a sentence, so no URLs, status codes or object keys may appear in it.
+ */
+export const FAILURE_KINDS = Object.freeze(['network', 'auth', 'too-large', 'unsupported', 'server']);
+
+export const FAILURE_LABELS = Object.freeze({
+  network: '网络不稳定，换个网络或稍后再试',
+  auth: '登录已过期，请重新登录后再传',
+  'too-large': '文件太大，请换一个小一点的',
+  unsupported: '格式不支持，请先导出成 JPEG',
+  server: '服务暂时不可用，过一会儿再试',
+});
+
+/**
+ * 归类。判据只有 `status` 与 `retryable` 这两个我们自己写上去的字段：
+ * 不去啃服务端的错误字符串——那是最容易夹带内部信息的地方。
+ */
+export function classifyFailure(err) {
+  const status = Number(err?.status);
+  // 0 = 连接层失败（断网、被重置、超时），浏览器不区分，我们也别假装能区分
+  if (status === 0) return 'network';
+  if (status === 401 || status === 403) return 'auth';
+  if (status === 413) return 'too-large';
+  if (status === 415) return 'unsupported';
+  if (status >= 500) return 'server';
+  if (err?.kind === 'too-large' || err?.kind === 'unsupported') return err.kind;
+  if (err?.retryable) return 'network';
+  return 'server';
+}
+
+export function failureLabel(err) {
+  return FAILURE_LABELS[classifyFailure(err)] || FAILURE_LABELS.server;
+}
+
+/* ---------------- T-21：断点续传 ---------------- */
+
+export const PART_SIZE_HINT = 8 * 1024 * 1024;
+
+/**
+ * 续传的边界：**能续，但只在同一次签名有效期内**。
+ *
+ * 服务端每次取地址都会 `CreateMultipartUpload`，所以 uploadId 是新的，旧 etag
+ * 对新 uploadId 无效。真正跨刷新的续传需要服务端 `ListParts` 复用 uploadId ——
+ * 那是接口改动，不在本任务范围内。这里做的是**同一次上传内**的续传：重试时
+ * 沿用同一批预签名地址（15 分钟有效），已经拿过 etag 的分片直接跳过。
+ *
+ * 所以「重试时又传了一遍全量」这个最费流量的问题被解决了，而刷新页面后重选
+ * 同一个文件仍会从头传——这一点在界面上不承诺，也不会假装能做到。
+ *
+ * Resume is bounded by one signing session: the server creates a new multipart
+ * uploadId per request, so old etags are invalid for a new one. Real
+ * cross-reload resume needs a server-side ListParts, which is out of scope;
+ * within one session already-uploaded parts are skipped.
+ */
+export function remainingParts(parts, etags) {
+  const done = new Set((Array.isArray(etags) ? etags : []).map((item) => Number(item?.partNumber)));
+  return (Array.isArray(parts) ? parts : []).filter((part) => !done.has(Number(part?.partNumber)));
+}
+
+/** 这一轮实际要发的字节数；用来验证「续传字节数 < 全量」 */
+export function bytesForParts(totalBytes, partSize, parts) {
+  const total = Number(totalBytes) || 0;
+  const size = Number(partSize) || 0;
+  if (!total || !size) return 0;
+  let sum = 0;
+  for (const part of Array.isArray(parts) ? parts : []) {
+    const start = (Number(part.partNumber) - 1) * size;
+    const end = Math.min(start + size, total);
+    if (end > start) sum += end - start;
+  }
+  return sum;
+}
+
+/** 预签名地址的有效期（服务端 15 分钟）；留 1 分钟余量再判定过期 */
+export const SIGNED_TTL_MS = 14 * 60 * 1000;
+
+export function signedStillValid(signedAt, now = Date.now(), ttl = SIGNED_TTL_MS) {
+  const at = Number(signedAt);
+  if (!Number.isFinite(at) || at <= 0) return false;
+  return now - at < ttl;
+}
+
+/**
+ * 照片 ID 就是**内容哈希前 12 位**——和 `handler.mjs` 里的 `sha.slice(0, 12)`
+ * 是同一条规则。放在这里是为了能被单测钉住：这条规则一旦和服务端分开演化，
+ * 「去看看」就会稳定地跳到一个不存在的 ID。
+ */
+export function photoIdFor(sha) {
+  const text = String(sha || '');
+  return /^[0-9a-f]{12,}$/i.test(text) ? text.slice(0, 12) : '';
+}

@@ -1,7 +1,10 @@
 import { buildStory, PACE } from './state.js';
 import { el, photoAlt, reducedMotion, markWhenReady } from './ui.js';
+import { loadArtifact } from './data.js';
 
 const CARD_MS = 2200;
+/** 故事文案产物版本（T-23）；对不上就当作没有 */
+const STORY_VERSION = 1;
 const MAX_VIDEO_MS = 32000;
 
 const s = {
@@ -22,6 +25,45 @@ const s = {
 
 const refs = {};
 
+/** 构建期文案（T-23）：章节标题/副标题 + 结束语；缺了就用派生文案 */
+const copy = { chapters: new Map(), ending: '' };
+
+/** 章节卡文案：产物有就用产物的，没有就用既有的「年份 / N 张」 */
+export function chapterLine(chapter) {
+  const hit = chapter ? copy.chapters.get(chapter.key) : null;
+  return {
+    title: hit?.title || chapter?.label || '',
+    subtitle: hit?.subtitle || (chapter ? `${chapter.items.length} 张` : ''),
+  };
+}
+
+/** 结束语：产物有就用产物的；没有就按首末章算一句——由数据得出，不是套话 */
+export function endingLine(chapters, total) {
+  if (copy.ending) return copy.ending;
+  if (!chapters.length) return '';
+  const first = chapters[0].label;
+  const last = chapters[chapters.length - 1].label;
+  return chapters.length === 1 ? `${first}，共 ${total} 张` : `${first} 到 ${last}，共 ${total} 张`;
+}
+
+/** 装上产物文案；结构不认识就当作没有 */
+export function applyStoryCopy(doc) {
+  if (!doc || !Array.isArray(doc.chapters)) return false;
+  copy.ending = typeof doc.ending === 'string' ? doc.ending : '';
+  for (const chapter of doc.chapters) {
+    if (chapter && typeof chapter.key === 'string') copy.chapters.set(chapter.key, chapter);
+  }
+  return true;
+}
+
+/** 拉一次产物；回来了补画当前卡与结束卡，不打断正在播的故事 */
+async function loadCopy(rev) {
+  const doc = await loadArtifact('story', { rev, version: STORY_VERSION });
+  if (!applyStoryCopy(doc) || !s.active) return;
+  if (refs.card && !refs.card.hidden) paintCard(s.chapters[s.chapter]);
+  if (refs.endTitle && !refs.end.hidden) refs.endTitle.textContent = endingLine(s.chapters, s.slides.length);
+}
+
 function cache() {
   if (refs.root) return refs;
   Object.assign(refs, {
@@ -32,6 +74,7 @@ function cache() {
     cardTitle: el('story-card-title'),
     cardSub: el('story-card-sub'),
     end: el('story-end'),
+    endTitle: el('story-end-title'),
     endStats: el('story-end-stats'),
     chapter: el('story-chapter'),
     progress: el('story-progress'),
@@ -185,12 +228,18 @@ function showSlide(index) {
   }
 }
 
+function paintCard(chapter) {
+  const r = cache();
+  const line = chapterLine(chapter);
+  r.cardTitle.textContent = line.title;
+  r.cardSub.textContent = line.subtitle;
+}
+
 function showCard(chapter) {
   const r = cache();
   r.card.hidden = false;
   r.cardIndex.textContent = String(s.chapters.indexOf(chapter) + 1).padStart(2, '0');
-  r.cardTitle.textContent = chapter.label;
-  r.cardSub.textContent = `${chapter.items.length} 张`;
+  paintCard(chapter);
   r.card.classList.add('is-visible');
 
   clearTimer();
@@ -245,6 +294,7 @@ function finish() {
   const years = s.slides.map((slide) => slide.photo.year);
   const min = Math.min(...years);
   const max = Math.max(...years);
+  r.endTitle.textContent = endingLine(s.chapters, s.slides.length);
   r.endStats.textContent = `${s.slides.length} 张 · ${s.chapters.length} 章 · ${min === max ? min : `${min}–${max}`}`;
   r.pause.hidden = true;
 }
@@ -254,8 +304,10 @@ function resetStage() {
   s.node = null;
 }
 
-export function openStory(list, { onClose, pace = 'normal' } = {}) {
+export function openStory(list, { onClose, pace = 'normal', rev = '' } = {}) {
   if (!list.length) return;
+  // 文案产物非阻塞拉取：拿到了补画，拿不到就一直用派生文案
+  loadCopy(rev).catch(() => {});
   const r = cache();
   s.hooks.onClose = onClose || (() => {});
   s.pace = PACE[pace] ? pace : 'normal';

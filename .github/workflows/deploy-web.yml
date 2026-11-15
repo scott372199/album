@@ -72,6 +72,13 @@ jobs:
       - name: 结构断言 / Structure assertions
         run: npm run verify
 
+      # 体积门禁（T-12）：同样必须在构建之后。它量的是 dist/ 的 gzip 之和，
+      # 所以不能塞进 `npm run verify`——verify 在干净检出上跑，那时还没有 dist。
+      # Budget gate (T-12) also runs after the build; it measures dist/, so it
+      # cannot live inside `verify`, which runs on a clean checkout.
+      - name: 体积门禁 / Size budget
+        run: node scripts/check-budget.mjs
+
       - name: 单测 / Unit tests
         run: npm test
 
@@ -147,14 +154,27 @@ jobs:
             --content-type "text/html; charset=utf-8" \
             --metadata-directive REPLACE
 
-      # data/version.json 由处理函数在加照片时失效；前端发布只改了入口页，
-      # 失效它一个路径就够，不必连带打 /。
+      # 第三段：Service Worker（V6 T-28）必须放在桶根才有全站作用域：
+      # 放进 assets/ 只能控制 assets/ 下的请求，导航请求轮不到它。
+      # 文件名不带哈希，所以按不缓存处理——SW 更新检查本身会绕开 HTTP 缓存，
+      # 但桶里那份被 CDN 缓存住会让新版本迟迟不生效。
+      - name: 上传 sw.js / Upload sw.js
+        run: |
+          set -euo pipefail
+          aws s3 cp dist/sw.js "s3://${SITE_BUCKET}/sw.js" \
+            --region "${AWS_REGION}" \
+            --cache-control "no-cache, must-revalidate" \
+            --content-type "text/javascript; charset=utf-8" \
+            --metadata-directive REPLACE
+
+      # data/version.json 由处理函数在加照片时失效；前端发布改了入口页与 sw.js，
+      # 失效这两个路径就够，不必连带打 /。
       - name: 失效 CDN / Invalidate
         run: |
           set -euo pipefail
           aws cloudfront create-invalidation \
             --distribution-id "${DISTRIBUTION_ID}" \
-            --paths "/index.html"
+            --paths "/index.html" "/sw.js"
 
       - name: 摘要 / Summary
         run: |
@@ -162,7 +182,7 @@ jobs:
             echo "### 前端已发布 / Web deployed"
             echo ""
             echo "- 站点 / site: https://${{ vars.SITE_DOMAIN }}"
-            echo "- 桶前缀 / prefixes: \`assets/\`（可删）、\`index.html\`"
+            echo "- 桶前缀 / prefixes: \`assets/\`（可删）、\`index.html\`、\`sw.js\`"
             echo "- 未触碰 / untouched: \`photos/\`、\`data/\`"
             echo "- 提交 / commit: \`${{ github.sha }}\`"
           } >> "$GITHUB_STEP_SUMMARY"

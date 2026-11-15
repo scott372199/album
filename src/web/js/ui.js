@@ -73,6 +73,13 @@ export function srcsetFor(photo, kind) {
     if (photo.grid) set.push(`${photo.grid} 768w`);
     return set.join(', ');
   }
+  if (kind === 'picks') {
+    // 每月精选的九宫格：格小但很密，给两档就够（320w / 768w）
+    const set = [];
+    if (photo.thumb) set.push(`${photo.thumb} 320w`);
+    if (photo.grid) set.push(`${photo.grid} 768w`);
+    return set.join(', ');
+  }
   if (kind === 'feature') {
     const set = [];
     if (photo.grid) set.push(`${photo.grid} 768w`);
@@ -87,6 +94,7 @@ export function srcsetFor(photo, kind) {
 
 export function sizesFor(kind) {
   if (kind === 'feature') return '100vw';
+  if (kind === 'picks') return '(max-width: 768px) 30vw, 11vw';
   if (kind === 'thumb') return '(max-width: 768px) 30vw, 3.4vw';
   return '(max-width: 768px) 46vw, (max-width: 1200px) 31vw, 470px';
 }

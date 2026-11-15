@@ -15,6 +15,7 @@
     "test:web": "node --test \"src/web/test/*.test.mjs\"",
     "hash-key": "node scripts/hash-key.mjs",
     "check:repo": "node scripts/check-repo.mjs",
+    "check:budget": "node scripts/check-budget.mjs",
     "hook:install": "node scripts/install-hooks.mjs",
     "check:lexicon": "node scripts/gen-lexicon.mjs --check"
   },

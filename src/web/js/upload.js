@@ -31,6 +31,11 @@ import { labelFor } from './upload-state.js';
  *      hash, the presigned URL lives 15 minutes), so retry instead of surfacing it.
  */
 
+import { buildSuggestion, suggestionNote } from './upload-suggest.js';
+import {
+  failureLabel, remainingParts, signedStillValid, photoIdFor,
+} from './upload-state.js';
+
 const MAX_BATCH = 20;
 /** 3 次重试的等待时间（毫秒），总补偿 ≈ 13 秒，压在预签名 15 分钟有效期之内 */
 const RETRY_DELAYS = [1200, 3500, 8000];
@@ -47,6 +52,14 @@ const state = {
   /** 连 blob 都拿不到的失败（HEIC 解不开等），只能计数，无法重试 */
   bad: 0,
   ok: 0,
+  /** 用户是否自己动过相册名：动过就不再给建议，不和人的输入抢方向盘 */
+  albumTouched: false,
+  /** 归位建议面板挂着时，外部（关闭面板）也能把它结掉，避免 await 永远不回 */
+  settleSuggestion: null,
+  /** 由 main.js 注入：拿既有相册名与语义索引，纯读 */
+  getLibrary: () => ({ albums: [], items: [] }),
+  /** 最近一次上传成功的内容哈希：ID 就藏在里面（见 goSee） */
+  lastSha: '',
 };
 
 function apiBase() {
@@ -481,10 +494,22 @@ async function uploadWhole(album, entry, first) {
 async function uploadParts(entry, signed) {
   const { key, uploadId, partSize, parts } = signed;
   const total = entry.blob.size;
-  const etags = [];
-  let uploaded = 0;
+  // 续传（T-21）：上次已经拿到 etag 的分片直接跳过，只发剩下的。
+  // etag 挂在 entry 上而不是内存局部变量，跨「重试失败项」仍然有效。
+  const etags = Array.isArray(entry.etags) ? [...entry.etags] : [];
+  const todo = remainingParts(parts, etags);
+  let uploaded = parts.length - todo.length === 0
+    ? 0
+    : parts.filter((part) => !todo.some((left) => left.partNumber === part.partNumber))
+      .reduce((sum, part) => {
+        const start = (part.partNumber - 1) * partSize;
+        return sum + Math.max(0, Math.min(start + partSize, total) - start);
+      }, 0);
+  if (etags.length) {
+    entry.row.set(`续传 ${etags.length}/${parts.length} 片`, uploaded / total);
+  }
 
-  for (const part of parts) {
+  for (const part of todo) {
     const start = (part.partNumber - 1) * partSize;
     const end = Math.min(start + partSize, total);
     const size = end - start;
@@ -497,6 +522,7 @@ async function uploadParts(entry, signed) {
       });
       if (!etag) throw new Error('分片没有返回 ETag');
       etags.push({ partNumber: part.partNumber, etag });
+      entry.etags = etags;
     }).catch((err) => {
       // 让失败文案能说清「挂在哪一片」，而不是只报一个 8MB 的数字
       err.part = part.partNumber;
@@ -579,34 +605,51 @@ async function failureText(err) {
   console.warn('upload.failed', {
     status: err.status, sent: err.sent, total, tries: err.tries, ms: err.ms, part: err.part, probe,
   });
-  return `${err.message}（${tries}）· ${where}已发 ${percent}%（${fmtBytes(err.sent)}/${fmtBytes(total)}）· ${elapsed} · ${probe}`;
+  // 开头一句是「你该做什么」，后面才是现场数据；两类都不夹带 URL / 状态码 / 对象 key
+  return `${failureLabel(err)}（${err.message}，${tries}）· ${where}已发 ${percent}%（${fmtBytes(err.sent)}/${fmtBytes(total)}）· ${elapsed} · ${probe}`;
 }
 
 async function run(album, entries) {
   for (const batch of chunk(entries, MAX_BATCH)) {
-    let signed;
-    try {
-      signed = await requestUrls(album, batch);
-    } catch (err) {
-      for (const entry of batch) {
-        entry.row.fail(err.message);
-        state.failed.push(entry);
+    // 续传（T-21）：预签名还没过期的条目不再重新取地址。
+    // 重新取地址 = 新的 uploadId = 之前的分片白传，这是「重试就从头再来」的根因。
+    const signed = new Map();
+    for (const entry of batch) {
+      if (entry.signed && signedStillValid(entry.signedAt)) signed.set(entry, entry.signed);
+    }
+    const fresh = batch.filter((entry) => !signed.has(entry));
+    if (fresh.length) {
+      try {
+        const items = await requestUrls(album, fresh);
+        fresh.forEach((entry, index) => {
+          entry.signed = items[index];
+          entry.signedAt = Date.now();
+          signed.set(entry, items[index]);
+        });
+      } catch (err) {
+        for (const entry of fresh) {
+          entry.row.fail(failureLabel(err));
+          state.failed.push(entry);
+        }
       }
-      continue;
     }
 
-    for (let index = 0; index < batch.length; index += 1) {
-      const entry = batch[index];
+    for (const entry of batch) {
+      const permission = signed.get(entry);
+      if (!permission) continue;
       try {
-        await uploadOne(album, entry, signed[index]);
+        await uploadOne(album, entry, permission);
         entry.row.done();
+        entry.signed = null;
         state.ok += 1;
+        state.lastSha = entry.sha256;
       } catch (err) {
         entry.row.fail(await failureText(err));
         state.failed.push(entry);
       }
     }
   }
+  el('upload-open').hidden = !state.lastSha;
 }
 
 function updateCount() {
@@ -615,8 +658,60 @@ function updateCount() {
   el('upload-retry').hidden = state.failed.length === 0;
 }
 
+/**
+ * 展示归位建议，等用户选「用这个」或「不用了」。
+ * 关闭面板 / 按 Esc 也当成「不用了」——绝不能让上传卡在一个没人回答的
+ * Promise 上。
+ */
+function askSuggestion(suggestion) {
+  const panel = el('upload-suggest');
+  el('upload-suggest-title').textContent = `建议放进「${suggestion.album.name}」`;
+  el('upload-suggest-note').textContent = suggestionNote(suggestion);
+  el('upload-suggest-accept').textContent = `用「${suggestion.album.name}」`;
+
+  const tags = el('upload-suggest-tags');
+  tags.replaceChildren(...suggestion.tags.map((tag) => {
+    const chip = document.createElement('span');
+    chip.className = 'upload-suggest-tag';
+    chip.textContent = tag.zh;
+    return chip;
+  }));
+  tags.hidden = suggestion.tags.length === 0;
+
+  panel.hidden = false;
+  const accept = el('upload-suggest-accept');
+  const skip = el('upload-suggest-skip');
+
+  return new Promise((resolve) => {
+    const finish = (choice) => {
+      accept.removeEventListener('click', onAccept);
+      skip.removeEventListener('click', onSkip);
+      panel.hidden = true;
+      state.settleSuggestion = null;
+      resolve(choice);
+    };
+    const onAccept = () => finish('accept');
+    const onSkip = () => finish('skip');
+    accept.addEventListener('click', onAccept);
+    skip.addEventListener('click', onSkip);
+    state.settleSuggestion = finish;
+    accept.focus({ preventScroll: true });
+  });
+}
+
 async function uploadFiles(files) {
   if (state.busy) return;
+
+  // 归位建议（T-27）：用户自己改过相册名就不打扰；只读内存，不发请求
+  if (!state.albumTouched && files.length >= 2) {
+    const library = state.getLibrary() || {};
+    const suggestion = buildSuggestion({ files, albums: library.albums, items: library.items });
+    if (suggestion && !suggestion.weak) {
+      const choice = await askSuggestion(suggestion);
+      if (choice === 'accept') el('upload-album').value = suggestion.album.name;
+    }
+  }
+
   state.busy = true;
   el('upload-retry').hidden = true;
 
@@ -665,6 +760,44 @@ async function retryFailed() {
   }
 }
 
+/* ---------------- 去看看（T-21） ---------------- */
+
+/**
+ * 等这张出现在清单里。处理是异步的（几秒），立刻跳过去只会撞一个空 ID。
+ * 四轮 × 2.5 秒，约 10 秒；还不行就明说「还在处理」，而不是假装成功。
+ */
+async function lookupPhoto(id, attempts = 4) {
+  for (let round = 0; round < attempts; round += 1) {
+    try {
+      const version = await fetch(`data/version.json?_=${Date.now()}`, { cache: 'no-store' })
+        .then((response) => (response.ok ? response.json() : null));
+      const url = version?.manifest || 'data/manifest.json';
+      const manifest = await fetch(url, { cache: 'no-cache' })
+        .then((response) => (response.ok ? response.json() : null));
+      if (Array.isArray(manifest?.photos) && manifest.photos.some((photo) => photo.id === id)) return true;
+    } catch { /* 网络抖动：下一轮再试 */ }
+    if (round < attempts - 1) await sleep(2500);
+  }
+  return false;
+}
+
+async function goSee() {
+  const id = photoIdFor(state.lastSha);
+  if (!id) return;
+  const button = el('upload-open');
+  button.disabled = true;
+  try {
+    if (await lookupPhoto(id)) {
+      close();
+      location.hash = `#p=${id}`;
+    } else {
+      toast('还在处理，过几秒刷新就能看到');
+    }
+  } finally {
+    button.disabled = false;
+  }
+}
+
 /* ---------------- 装配 ---------------- */
 
 function open() {
@@ -675,6 +808,8 @@ function open() {
 }
 
 function close() {
+  // 面板被关掉时建议还挂着：当成「不用了」，否则上传会停在那里等一个不会再来的点击
+  state.settleSuggestion?.('skip');
   el('upload').hidden = true;
   document.body.classList.remove('is-uploading');
 }
@@ -690,7 +825,8 @@ function close() {
  * escape hatch that only affects visibility — authorisation lives on the server,
  * where no token means no upload URL.
  */
-export function initUpload() {
+export function initUpload({ getLibrary } = {}) {
+  if (typeof getLibrary === 'function') state.getLibrary = getLibrary;
   const base = apiBase();
   if (!base) return;
   if (!hasNativeBridge() && !new URLSearchParams(location.search).has('upload')) return;
@@ -702,6 +838,7 @@ export function initUpload() {
   el('upload-close').addEventListener('click', close);
   el('upload-login').addEventListener('submit', login);
   el('upload-retry').addEventListener('click', retryFailed);
+  el('upload-open').addEventListener('click', goSee);
   el('upload-logout').addEventListener('click', () => {
     clearTokens();
     el('upload-list').replaceChildren();
@@ -712,6 +849,12 @@ export function initUpload() {
     state.ok = 0;
     showLogin('');
   });
+  // 用户一动手就永久退出「建议」：之后的上传不再弹面板
+  el('upload-album').addEventListener('input', () => {
+    state.albumTouched = true;
+    el('upload-suggest').hidden = true;
+  });
+
   el('upload-files').addEventListener('change', (event) => {
     const files = [...(event.target.files || [])];
     event.target.value = '';

@@ -389,6 +389,14 @@
       "writer": "album-search-publisher",
       "canDelete": false
     },
+    "data/curation.<rev>.json": {
+      "writer": "album-search-publisher",
+      "canDelete": false
+    },
+    "data/story.<rev>.json": {
+      "writer": "album-search-publisher",
+      "canDelete": false
+    },
     "photos/<id>/{320,768,2048,grid,view}.webp": {
       "writer": "album-processor",
       "canDelete": false
@@ -647,7 +655,7 @@
   "iamBoundaries": {
     "album-mgmt-container": "no long-lived credentials; read adapters use a dedicated read-only task role",
     "album-search-recognition": "rekognition:DetectLabels only + read photos/<id>/grid.webp",
-    "album-search-publisher": "s3:PutObject on data/search-index.*.json only",
+    "album-search-publisher": "s3:PutObject on data/search-index.*.json, data/curation.*.json and data/story.*.json only; no delete, no version.json/manifest/photos access",
     "terraform-apply": "OIDC short-lived role, manual dispatch with double confirmation",
     "forbidden": [
       "iam:*",
