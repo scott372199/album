@@ -432,50 +432,7 @@ export function createCatalog({ container, onOpen, initialBatch = 60, chunk = 60
 
 /* ---------- 精选 ---------- */
 
-export function renderFeatured(host, photos, { onOpen }) {
-  host.replaceChildren();
-  if (!photos.length) return false;
 
-  photos.slice(0, 4).forEach((photo, index) => {
-    const block = document.createElement('figure');
-    block.className = 'feature-block';
-    block.classList.add(index % 2 ? 'is-right' : 'is-left');
-
-    // 竖图不铺满整幅，否则一张图就吃掉一屏半；给它一个窄栏居中
-    const ratio = Number(photo.ratio) || 1.5;
-    if (ratio < 0.95) block.classList.add('is-portrait');
-
-    const frame = document.createElement('div');
-    frame.className = 'feature-frame';
-    frame.style.aspectRatio = String(ratio);
-    if (photo.lqip) frame.style.backgroundImage = `url("${photo.lqip}")`;
-
-    const img = document.createElement('img');
-    img.alt = photoAlt(photo);
-    img.loading = index === 0 ? 'eager' : 'lazy';
-    img.decoding = 'async';
-    img.src = photo.view || photo.grid || photo.poster;
-    const srcset = srcsetFor(photo, 'feature');
-    if (srcset) img.srcset = srcset;
-    img.sizes = '100vw';
-    markWhenReady(img, img, 'is-loaded');
-
-    frame.appendChild(img);
-    block.appendChild(frame);
-
-    if (photo.title || photo.caption) {
-      const caption = document.createElement('figcaption');
-      caption.className = 'feature-caption';
-      caption.innerHTML = `${escapeHtml(photo.title || '')}${photo.caption ? `<span>${escapeHtml(photo.caption)}</span>` : ''}`;
-      block.appendChild(caption);
-    }
-
-    block.addEventListener('click', () => onOpen(photo));
-    host.appendChild(block);
-  });
-
-  return true;
-}
 
 /* ---------- 相册卡片 ---------- */
 

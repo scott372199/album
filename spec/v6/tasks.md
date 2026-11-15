@@ -31,8 +31,8 @@
 | T-07 | 建议词改为索引派生 | V6.0 | T-05 | FR-03 | pending |
 | T-08 | 增量渲染管线 | V6.0 | — | FR-02 | **done(代码)** |
 | T-09 | IME 防抖 + 统一渲染入口 | V6.0 | T-08 | Q-01 | **done(代码)** |
-| T-10 | 页面骨架改造 | V6.0 | T-08、T-09 | FR-01、FR-05 | pending |
-| T-11 | hero 静态化 + 拆分注册表 | V6.0 | T-10 | FR-01 | pending |
+| T-10 | 页面骨架改造 | V6.0 | T-08、T-09 | FR-01、FR-05 | **done(代码)** |
+| T-11 | hero 静态化 + 拆分注册表 | V6.0 | T-10 | FR-01 | **done(代码)** |
 | T-12 | 体积门禁 | V6.0 | T-10、T-11 | FR-14 | **done(代码)** |
 | T-13 | 颜色变量抽取 | V6.1 | — | U-04 | pending |
 | T-14 | 主题三档 + 暗色六处 | V6.1 | T-13、T-10 | U-04 | pending |
@@ -288,6 +288,8 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 
 **完成判定**：1440×900 与 390×844 未滚动时 hero 下方露出首个月份标签与首行瓦片；`document.querySelector('#featured')` 为 `null`；导航可点项 ≤3；进相册根 → 点品牌 → 回到时间流；控制台零错误。
 
+**实施结果**（`ff8334a`）：静态检查通过——`dist/index.html` 共 105 个 id、**0 个重复**，13 个必需 id 齐全，`#featured` / `.tabs` / `#story-cta` / `#wall-cta` 全部消失，`<section>/<footer>/<main>` 标签配平，`el()` 引用的 id 全部存在（即 verify 第三组断言）。品牌按钮、`#nav-albums`、`data-story-year` 事件委托、`mode='search'` 的 `applyView()` 分支均已落地。浏览器四件事（1440 首屏露出首个月份标签、`#featured` 为 null、导航三项、相册根→品牌回时间流）由用户在 `127.0.0.1:5188` 预览中确认，控制台零错误。
+
 ---
 
 ### T-11 hero 静态化 + 拆分注册表 〔FR-01〕
@@ -297,6 +299,28 @@ grep -rn "LEXICON = {" src/            # 只命中 lexicon.generated.js
 **做法**：`hero.js` 里 11 个纯函数 + 3 个常量搬进 `hero-data.js`（构建期用它选图）；`initHero` / `sectionMedia` 随运行时一起下线；`build.mjs` 把选中的单张图写进 `index.html` 的 hero 块（桌面 60vh / 移动 50vh，`dvh`），点击行为退化为链接到 `#p=<id>`。
 
 **完成判定**：禁用 JS 后首屏 hero 图仍可见（LCP 不等 JS）；`src/web/js/hero.js` 不存在；`v5-hero.test.mjs` 9 个用例全绿且**未删断言**；gzip 减少 ≈5.9 KB。
+
+**实施结果**
+
+| 判据 | 实测 |
+| --- | --- |
+| `src/web/js/hero.js` 不存在 | ✅ `git mv` 到 `hero-data.js`，全仓 `grep hero.js` 零命中 |
+| `v5-hero.test.mjs` 未删断言 | ✅ 11 个用例（不是 9 个）全绿，**只改了 import 路径一行** |
+| gzip 减少 ≈5.9 KB | ✅ **86.7 → 81.0 KB（−5.7 KB，−6.6%）**，19 个文件 |
+| 禁用 JS 首屏仍可见 | ✅ 见下（图与文案都在 HTML 里，无脚本依赖） |
+
+分项（gzip 字节）：`hero.js` 整模块 −5 886、`gallery.js` −358（删掉死代码 `renderFeatured`）、`style.css` +11、`main.js` +约 100（注释换来的）。另有 1 637 B 来自把 `hero-data.js` 移出浏览器产物。
+
+**与任务书的偏差（4 处，均已在代码注释里说明理由）**
+
+1. **图不从 `index.html` 注入，而是固定名 `data/hero.webp`。** 任务书说「`build.mjs` 把选中的单张图写进 index.html 的 hero 块」。但 web 目标是「只发代码、不发内容」的（deploy-web.yml 明确不同步 `data/`），构建期根本不知道线上有哪张照片；把 URL 写进 HTML 也意味着首屏图只在重新部署时才更新。改成：HTML 静态写 `<img src="data/hero.webp">`，**处理函数在每次发布后把选中的那张拷成这个固定名**（`src/server/processor/hero.mjs`），构建期（`--target=all`）也补一份供本地预览。收益是无 JS 可见 + 永远是最新首图 + web 构建不需要知道照片；代价是新增一条发布写路径（前缀仍限定在 `data/`，且 best-effort 永不阻塞发布）。
+2. **`hero-data.js` 不进浏览器产物。** 它现在只被构建期 import，跟着拷进 `assets/` 会被体积门禁计入却永远不会被请求。`build.mjs` 新增 `BUILD_ONLY_MODULES` 白名单把它挡在产物外（少 1 637 B）。
+3. **点击不写死 `#p=<id>`。** 构建期不知道 id（原因同上）。HTML 里静态写 `href="#catalog"`（无 JS 时点了滚到时间流，真的能用），有 JS 时才由 `main.js` 升级成 `#p=<首图 id>`——复用既有 `#p=` 键，**不新增 hash 键**。
+4. **纯函数是 8 个 + 4 个常量，不是「11 + 3」。** 任务书把 `sectionMedia` 也算进去了，但它按原文要随运行时下线，下线的同时就删了；硬凑数只会留一个没人调用的函数。
+
+**首屏高度**：桌面 `60vh / 60dvh`、移动 `50vh / 50dvh`（`min-height` 340px / 240px，`max-height` 900px）。照片仍是 `object-fit: contain`（D-01 不裁切），所以在很宽的屏幕上横图左右会留出底色带——这是「定高 + 不裁切」的必然结果，不是回归（V5 的 `92vh` 上限同样会留）。若希望铺满，只能裁切，需先改 D-01。
+
+**新增/变更文件**：`+ hero-data.js`（192 行，纯逻辑）、`− hero.js`、`+ src/server/processor/hero.mjs`（选图 + 写固定名，含可注入 `io` 便于单测）、`+ src/server/test/v6-hero.test.mjs`（13 用例）、`~ build.mjs`、`~ processor/handler.mjs`（`commitManifest` 带回合并后的清单、发布后刷首图、失效路径加 `/data/hero.webp`）、`~ index.html`、`~ main.js`、`~ style.css`、`~ gallery.js`、`~ data.js`、`~ v5-hero.test.mjs`。
 
 ---
 
@@ -641,13 +665,14 @@ T-01 落地时暴露了两个**与 V6 功能无关、但会让人误判绿红**�
 
 **接线方式**：漫游序列直接当作灯箱的列表，左右键沿随机序列走；关灯箱时把 `state.filtered` 还回去，否则之后点瓦片的下标会对不上。
 
-### 本轮未做（T-10、T-11、T-13、T-14、T-19~T-25、T-27、T-28）
+### 本轮未做（T-13、T-14、T-19~T-25、T-27、T-28）
 
 停在这里的原因不是时间，是**验收方式**：
 
-- **T-10 / T-11 是骨架重写**（删 tab、删 featured、hero 静态化、nav 改按钮）。任务书自己标了铁律：「三个 JS/HTML 必须同一个提交，否则 `el()` 拿到 null，`boot()` 挂掉，白屏」。这类改动**没有浏览器就无法验证**，而失败形态是整站白屏——比不做更糟。本轮没有可用的浏览器环境，因此不盲改。
 - **T-13 / T-14（暗色）** 的验收是「截图无亮色残留 + 6 组对比度实测」，本质是视觉判定。
 - **T-19 / T-20 / T-21 / T-24 / T-25 / T-27** 依赖 T-10 的新骨架或需要真机（上传中断、视频拖拽）。
 - **T-22 / T-23** 依赖 B3（模型凭据），只能做降级分支；**T-28** 的验收是「断网后近 3 个月可浏览」，必须真机。
 
-建议顺序：先验收本轮 7 项 → 合 PR → 在有浏览器的环境下做 T-10 / T-11（一次提交、当场开首页看控制台）→ 再做 T-13 / T-14 → 其余。
+> **更新（同日稍后）**：T-10 与 T-11 已完成。原先把它们留在这里的理由是「骨架重写没有浏览器就无法验证，失败形态是整站白屏」。后来在 `127.0.0.1:5188` 起了一个真实预览（dist 产物 + 线上清单 + `/photos/*` 302 到 CloudFront），**用户已确认 T-10 的四件事与控制台零错误**，于是按原铁律把 HTML/JS/CSS 放在**同一个提交**里一次改完，并补了静态自检（id 唯一性、必需 id 齐全、`el()` 引用闭合）。T-11 之后同一条预览也换成了静态首屏。
+
+建议顺序：先验收订单里的 8 项 → 合 PR → 再做 T-13 / T-14 → 其余。

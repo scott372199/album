@@ -247,11 +247,20 @@ h1, h2, h3, p { margin: 0; }
 
 .hero-stage {
   position: relative;
+  display: block;           /* 现在是一个 <a>，整块可点 */
   width: 100%;
-  height: min(92vh, calc(100vw / var(--hero-ratio, 1.5)));
+  /* 桌面 60vh / 移动 50vh（T-11）。dvh 跟随移动端的地址栏收放，
+     先用 vh 兜底，再让支持的浏览器取 dvh。 */
+  /* 60vh on desktop, 50vh on mobile (T-11). dvh tracks the mobile URL bar;
+     vh is the fallback for browsers that do not know dvh. */
+  height: 60vh;
+  height: 60dvh;
   min-height: 340px;
+  max-height: 900px;
   overflow: hidden;
   background: var(--stage);
+  color: #fff;
+  text-decoration: none;
 }
 
 .hero-media {
@@ -299,6 +308,9 @@ h1, h2, h3, p { margin: 0; }
   line-height: 1.02;
   text-wrap: balance;
 }
+
+/* 副标题没配置时不留一段空白：空元素不参与排版 */
+.hero-subtitle:empty { display: none; }
 
 .hero-subtitle {
   margin: 20px 0 0;
@@ -1427,10 +1439,8 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
 }
 
 @media (max-width: 860px) {
-  .hero-stage { max-height: 76vh; }
   .hero-hint { display: none; }
-  .featured-stream { gap: 48px; }
-  .stats-inner { grid-template-columns: 1fr; gap: 26px; }
+    .stats-inner { grid-template-columns: 1fr; gap: 26px; }
 }
 
 @media (max-width: 720px) {
@@ -1451,8 +1461,8 @@ body.is-empty .hero-copy { position: static; color: var(--ink); }
   .nav-search input { width: 100%; }
   .nav-search input:focus { width: 100%; }
 
-  /* 手机上不设最小高度，让照片正好铺满一行，下方不留底色带 */
-  .hero-stage { min-height: 0; }
+  /* 手机上矮一些：50dvh，仍然不铺满一屏，下面露出时间流的第一行 */
+  .hero-stage { height: 50vh; height: 50dvh; min-height: 240px; }
   .hero-copy { padding: 0 var(--pad) 26px; }
   .hero-subtitle { font-size: 15px; }
 
@@ -1849,83 +1859,20 @@ body.is-uploading { overflow: hidden; }
 .hero-stage {
   background: radial-gradient(130% 90% at 50% 8%, #2b2b32 0%, var(--stage) 72%);
 }
-.hero-media--next { opacity: 0; pointer-events: none; }
-
 .hero-copy { padding-bottom: clamp(36px, 5vw, 88px); }
 .hero-copy h1 { letter-spacing: -0.055em; }
 
-.hero-cta {
-  display: inline-block;
-  margin-top: 26px;
-  padding: 12px 26px;
-  border-radius: 999px;
-  background: #fff;
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 500;
-  text-decoration: none;
-  transition: transform 0.24s var(--ease), background 0.24s var(--ease);
-}
-.hero-cta:hover { transform: translateY(-2px); background: #f2f2f4; }
-body.is-empty .hero-cta { display: none; }
-
-.hero-controls {
-  position: absolute;
-  right: clamp(20px, 3vw, 44px);
-  top: 50%;
-  z-index: 4;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-}
-.hero-arrow {
-  width: 40px;
-  height: 40px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.3);
-  color: #fff;
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-  transition: background 0.24s var(--ease), transform 0.24s var(--ease);
-}
-.hero-arrow:hover { background: rgba(0, 0, 0, 0.55); transform: scale(1.06); }
-.hero-dots { display: flex; flex-direction: column; gap: 9px; }
-.hero-dot {
-  width: 8px;
-  height: 8px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.45);
-  cursor: pointer;
-  transition: background 0.24s var(--ease), transform 0.24s var(--ease);
-}
-.hero-dot.is-active { background: #fff; transform: scale(1.3); }
-
-/* View Transitions 可用时给大图一个克制的交叠；不支持时内容直接可见。
-   A restrained crossfade when View Transitions exist; otherwise static. */
-::view-transition-old(hero-media),
-::view-transition-new(hero-media) {
-  animation-duration: 0.5s;
-  animation-timing-function: var(--ease);
-}
+/* 首屏现在只是一张图 + 一段文字（T-11），没有切换控件。
+   指针落上去给一点点反馈，说明整块可点。 */
+.hero-stage { cursor: pointer; }
+.hero-media { transition: transform 0.6s var(--ease); }
+.hero-stage:hover .hero-media { transform: scale(1.012); }
 
 @media (max-width: 768px) {
-  .hero-controls {
-    top: auto;
-    bottom: 16px;
-    right: 16px;
-    flex-direction: row;
-    transform: none;
-    gap: 10px;
-  }
-  .hero-dots { flex-direction: row; }
   .hero-hint { display: none; }
   .search-panel { right: -8px; width: min(340px, 92vw); }
+  /* 触屏没有 hover，别留一条永远触发不了的过渡 */
+  .hero-media, .hero-stage:hover .hero-media { transition: none; transform: none; }
 }
 
 /* ---------- V5.3 上传五态图例 ---------- */
@@ -1959,13 +1906,8 @@ body.is-empty .hero-cta { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .hero-media,
-  .hero-cta,
-  .hero-arrow,
-  .hero-dot,
   .search-suggestion,
   .search-chip { transition: none !important; animation: none !important; }
-  ::view-transition-old(hero-media),
-  ::view-transition-new(hero-media) { animation: none !important; }
 }
 
 /* 回到上次位置：只在有记忆时出现的悬浮按钮（T-17） */

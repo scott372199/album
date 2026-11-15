@@ -19,7 +19,6 @@ import { wanderOrder } from './wander.js';
 import {
   ANCHOR_KEY, serializeAnchor, parseAnchor, nearestAnchor,
 } from './anchor.js';
-import { initHero } from './hero.js';
 import { mountUploadLegend } from './upload-state.js';
 
 const ctx = {
@@ -29,7 +28,6 @@ const ctx = {
   lastHash: null,
   rev: '',
   scrollBeforeMode: 0,
-  hero: null,
   searchUI: null,
   wanderBase: null,
 };
@@ -233,11 +231,20 @@ function renderStats() {
   el('footer-meta').textContent = `${photos.length} 张 · ${albums.length} 个相册 · ${formatSpan(photos)}`;
 }
 
+/**
+ * 首屏（T-11）是静态 HTML，运行时只把 href 从构建期写死的 #catalog 升级成
+ * 「打开首图那张」的深链接——复用既有的 #p= 键，不新增 hash 键。
+ * The static hero only gets its href upgraded to the hero photo's deep link,
+ * reusing the existing #p= key (no new hash keys).
+ */
+function paintHeroLink() {
+  const link = el('hero-stage');
+  if (link) link.setAttribute('href', ctx.index.hero ? `#p=${ctx.index.hero}` : '#catalog');
+}
+
 function renderSite() {
-  // 数据驱动的多章节 hero：无配置自动生成，首屏同步可见。
-  // Data-driven multi-section hero: auto-generated when unconfigured, first
-  // paint is synchronous so the hero is never blank.
-  ctx.hero = initHero(state.data, ctx.index.byId);
+  paintHeroLink();
+  document.body.classList.toggle('is-empty', ctx.index.photos.length === 0);
   renderStats();
 
   renderAlbums(el('album-grid'), ctx.index.albums, {
@@ -459,7 +466,7 @@ function launchWall(push = true) {
       ctx.index = buildIndex(manifest);
       fillFilters();
       renderStats();
-      ctx.hero?.update(manifest, ctx.index.byId);
+      paintHeroLink();
       state.filtered = computeFiltered().items;
       ctx.catalog.update(state.filtered, { reset: true });
     },

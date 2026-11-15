@@ -39,27 +39,31 @@
     </div>
   </nav>
 
+  <!-- 首屏是**静态**的：图与文字都在 HTML 里，禁掉 JS 也照常可见，LCP 不等脚本。
+       图片地址是固定名 data/hero.webp，由处理函数在发布时写成最新的一张；
+       构建期（--target=all）也会补一份，方便本地预览。alt 留空是有意的：
+       这张图是装饰，标题已经把意思说完了；万一还没有照片，空 alt 也不会
+       露出破图图标，只留深色底与标题。
+       The hero is fully static: image and copy are in the HTML, so it renders
+       with JS disabled and the LCP never waits on the bundle. The URL is the
+       fixed name data/hero.webp, written by the processor at publish time (and
+       by a full build for local preview). The empty alt is deliberate: the
+       image is decorative, and an empty alt degrades silently when the bucket
+       has no photo yet — just the stage colour and the title. -->
   <header class="hero" id="top">
-    <div class="hero-stage" id="hero-stage" tabindex="0" aria-roledescription="章节轮播" aria-label="首页大图章节，可用左右方向键切换">
-      <img class="hero-media" id="hero-media" alt="" decoding="async" fetchpriority="high">
-      <img class="hero-media hero-media--next" id="hero-media-next" alt="" decoding="async" aria-hidden="true" hidden>
+    <a class="hero-stage" id="hero-stage" href="#catalog" aria-label="浏览全部照片">
+      <img class="hero-media" id="hero-media" src="data/hero.webp" alt="" decoding="async" fetchpriority="high">
       <div class="hero-scrim" aria-hidden="true"></div>
       <div class="hero-copy">
-        <p class="eyebrow" id="hero-eyebrow">PHOTO ARCHIVE</p>
+        <p class="eyebrow">PHOTO ARCHIVE</p>
         <h1 id="site-title">__TITLE__</h1>
-        <p class="hero-subtitle" id="site-subtitle"></p>
-        <a class="hero-cta" id="hero-cta" hidden></a>
-      </div>
-      <div class="hero-controls" id="hero-controls" hidden>
-        <button type="button" class="hero-arrow" id="hero-prev" aria-label="上一个章节">&#8249;</button>
-        <div class="hero-dots" id="hero-dots" role="tablist" aria-label="章节"></div>
-        <button type="button" class="hero-arrow" id="hero-next" aria-label="下一个章节">&#8250;</button>
+        <p class="hero-subtitle" id="site-subtitle">__SUBTITLE__</p>
       </div>
       <div class="hero-hint" aria-hidden="true">
         <span class="hero-hint-line"></span>
         <span>向下滚动</span>
       </div>
-    </div>
+    </a>
   </header>
 
   <main>

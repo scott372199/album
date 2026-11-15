@@ -66,10 +66,10 @@ export function buildIndex(manifest) {
     tags: [...tags].sort((a, b) => a.localeCompare(b, 'zh')),
     years: [...years].sort((a, b) => b - a),
     months: [...months].sort((a, b) => a - b),
+    // 首屏那张的 id（V6 T-11）：只为把静态首屏的链接指过去，图片本身不靠它。
+    // The hero photo id (V6 T-11): only used to point the static hero's link;
+    // the image itself does not depend on it.
     hero: manifest.hero || photos[0]?.id || '',
-    // V5：hero 章节配置（缺省空数组，由 hero.js 按需自动生成）
-    // V5: hero sections (empty by default; hero.js auto-generates on demand)
-    heroSections: Array.isArray(manifest.heroSections) ? manifest.heroSections : [],
   };
 }
 

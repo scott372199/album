@@ -8,6 +8,7 @@ import { readTakenAt } from './exif.mjs';
 import { processEntry } from './media.mjs';
 import { buildManifest, loadTagOverrides } from './manifest.mjs';
 import { loadSite, resolveHero, resolveFeatured, resolveHeroSections } from './site.mjs';
+import { buildHeroSections } from '../web/js/hero-data.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const PHOTOS = path.join(ROOT, 'photos');
@@ -141,10 +142,23 @@ async function collectFiles(dir, base = '') {
  * - 有 src/web/js/ 时：整目录按内容哈希落盘（目录名即版本号），模块间相对 import 自然解析
  * - 没有时：退回 v2 的单文件 app.js，保证中间状态仍可构建
  */
+/**
+ * 只在构建期使用的模块，不拷进浏览器产物。
+ *
+ * hero-data.js 现在只剩「选首屏图」这件事（T-11），运行时首屏是静态 HTML，
+ * 早就不需要它；它若跟着拷进 assets/，浏览器不会请求，但会白白占体积预算。
+ *
+ * Modules used only at build time, never shipped. hero-data.js now only picks
+ * the hero at build time (T-11) — the runtime hero is static HTML. Copying it
+ * into assets/ costs budget for a file the browser never requests.
+ */
+const BUILD_ONLY_MODULES = new Set(['hero-data.js']);
+
 async function copyWebAssets() {
   const jsDir = path.join(WEB, 'js');
   if (await fileExists(jsDir)) {
-    const files = await collectFiles(jsDir);
+    const files = (await collectFiles(jsDir))
+      .filter((rel) => !BUILD_ONLY_MODULES.has(rel));
     const hash = createHash('sha256');
     for (const rel of files) hash.update(rel).update(await readFile(path.join(jsDir, rel)));
     const dirName = `assets/js.${hash.digest('hex').slice(0, 8)}`;
@@ -164,6 +178,31 @@ async function copyWebAssets() {
   const name = `assets/app.${hashOf(js)}.js`;
   await writeFile(path.join(DIST, name), js);
   return { src: name, kind: 'legacy', files: [path.join(DIST, name)] };
+}
+
+/**
+ * 把选中照片的衍生图拷成固定名 `data/hero.webp`。
+ *
+ * 优先 view（2048w）：这张要铺满整屏；没有就退 grid / thumb / poster。
+ * 返回是否写成功——写不出来不算构建失败，首屏会退化成深色底 + 标题。
+ *
+ * Copy the chosen photo's derivative to the fixed-name `data/hero.webp`.
+ * `view` (2048w) first because the hero spans the viewport, then the smaller
+ * tiers. A miss is not a build failure: the hero degrades to stage + title.
+ */
+async function writeStaticHero(photoId) {
+  if (TARGET !== 'all' || !photoId) return false;
+  for (const name of ['view.webp', 'grid.webp', 'thumb.webp', 'poster.webp']) {
+    const from = path.join(DIST, 'photos', photoId, name);
+    try {
+      await access(from);
+    } catch {
+      continue;
+    }
+    await copyFile(from, path.join(DIST, 'data', 'hero.webp'));
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -328,10 +367,26 @@ async function main() {
   // content.
   const html = template
     .replaceAll('__TITLE__', SITE.title)
+    // 首屏副标题也写进 HTML（T-11）：禁用 JS 时它同样要出现。
+    // 用函数替换而不是字符串，避免副标题里的 $& 被当成替换模式。
+    // The hero subtitle is baked in too (T-11) so it survives without JS.
+    // A function replacement keeps `$&` in the text from being reinterpreted.
+    .replaceAll('__SUBTITLE__', () => SITE.subtitle || '')
     .replaceAll('__STYLE__', `assets/${cssName}`)
     .replaceAll('__API_BASE__', API_BASE)
     .replaceAll('__APP__', app.src);
   await writeFile(path.join(DIST, 'index.html'), html);
+
+  // 首屏静态图（V6 T-11）：HTML 里写死的固定名 data/hero.webp。
+  // 选图逻辑复用 hero-data.js 的注册表——manifest.heroSections 的第一个章节
+  // 就是首屏那张；配置为空时它退回 manifest.hero，与 resolveHero 同源。
+  // 只在 all 目标写：web 目标没有照片，且发布流水线不同步 data/，线上那份
+  // 由处理函数写入，两边不会互相覆盖。
+  // Static hero (V6 T-11): the fixed-name data/hero.webp the HTML hard-codes.
+  // Selection reuses the hero-data registry; only the all target can write it,
+  // since the web target has no photos and the deploy never syncs data/.
+  const heroForFile = buildHeroSections(manifest)[0]?.photo || hero;
+  const heroWritten = await writeStaticHero(heroForFile);
 
   // web 目标没有产出照片目录，清理旧目录既无意义也有风险
   // The web target produces no photo directories, so sweeping them is pointless
@@ -383,6 +438,7 @@ async function main() {
       videoBytes,
       galleryBytesEstimate: galleryBytes,
       manifestBytes: Buffer.byteLength(manifestJson),
+      heroWritten,
       webAssets: app.kind,
     }, null, 2),
   );
@@ -395,6 +451,9 @@ async function main() {
     console.log(`视频 ${videos.length} 条（${videoSeconds.toFixed(1)}s，${(videoBytes / 1024 / 1024).toFixed(1)}MB），Live Photo ${report.livePairs} 对`);
     console.log(`无 EXIF 走兜底 ${report.timeFallback.length} 条，清理旧目录 ${removedDirs} 个`);
     console.log(`相册 ${manifest.albums.length} 个，manifest ${(Buffer.byteLength(manifestJson) / 1024).toFixed(1)}KB，产物在 dist/`);
+    console.log(heroWritten
+      ? `首屏静态图 data/hero.webp ← ${heroForFile}`
+      : '首屏静态图未写入（没有可用照片），线上由处理函数补');
   } else {
     console.log('未读取 photos/：web 目标只产出前端外壳，清单与照片由服务端提供。');
     console.log('Photos were not read: the web target ships the shell only; content comes from the server.');
