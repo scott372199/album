@@ -34,26 +34,23 @@ export function ageOf(photo, nowYear) {
   return Math.max(0, nowYear - year);
 }
 
-/** 权重上限：2019 年的照片不该压过 2025 年的 8 倍以上，否则漫游全是老照片 */
-const MAX_AGE_BONUS = 8;
-
 /**
- * 每张照片的抽样权重 = `岁数 + 1`（封顶 9）。
+ * 每张照片的抽样权重 = `1/(岁数+1)`：今年 1.0，去年 0.5，五年前 ≈0.167。
  *
- * ⚠️ 与 `tasks.md` 原文的 `1/(岁数+1)` **方向相反**，这是刻意的：
- * 那条公式让 5 年前的照片权重只剩 1/6，而同一节的验收条件要求
- * 「老照片命中率**高于**线性随机」——两者不可能同时成立。
- * 实测 `1/(岁数+1)` 时老照片占比 8%（线性随机是 25%，反而更低）。
+ * 按 `tasks.md` 原文实现（用户 2026-11-15 决定：**照原计划写、上线、用真实老照片验收**）。
  *
- * 这里按**验收条件**实现：越老权重越高，封顶 9 倍，避免十年老照片垄断。
- * 决策记在 `tasks.md` 的 T-26 里。
+ * ⚠️ 已知矛盾，留给真实语料判定：同一节的验收条件写的是「老照片命中率**高于**
+ * 线性随机」，而这条公式方向相反——在「今年 60 张 + 五年前 20 张」的合成夹具上，
+ * 前 20 个里老照片只占 8%，线性随机是 25%。合成夹具说服不了任何人，
+ * 所以这里不做「猜哪个才是本意」的改动，只把公式与其可观测后果都钉在测试里。
  *
- * Per-photo weight = `age + 1` (capped at 9). This deliberately inverts the
- * `1/(age+1)` in tasks.md, which contradicts that same task's acceptance
- * criterion (old photos must beat uniform random); measured 8% vs 25% uniform.
+ * Weight is `1/(age+1)` as written in tasks.md (user's call on 2026-11-15: ship the
+ * formula, judge it against real old photos). The known conflict with the task's
+ * own acceptance criterion is measured and recorded in the test, not "fixed" by
+ * guessing which sentence was intended.
  */
 export function weightOf(photo, nowYear) {
-  return Math.min(ageOf(photo, nowYear), MAX_AGE_BONUS) + 1;
+  return 1 / (ageOf(photo, nowYear) + 1);
 }
 
 /**

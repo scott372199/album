@@ -23,14 +23,14 @@ function pool() {
   return out;
 }
 
-test('岁数与权重：今年 1，去年 2，五年前 6（封顶 9）', () => {
+test('岁数与权重：今年 1.0，去年 0.5，五年前 1/6', () => {
   assert.equal(ageOf(photo('a', 2026), 2026), 0);
   assert.equal(ageOf(photo('a', 2025), 2026), 1);
   assert.equal(ageOf(photo('a', 2030), 2026), 0, '未来时间按 0 岁处理');
   assert.equal(weightOf(photo('a', 2026), 2026), 1);
-  assert.equal(weightOf(photo('a', 2025), 2026), 2);
-  assert.equal(weightOf(photo('a', 2021), 2026), 6);
-  assert.equal(weightOf(photo('a', 1996), 2026), 9, '封顶 9，老照片不能垄断');
+  assert.equal(weightOf(photo('a', 2025), 2026), 0.5);
+  assert.ok(Math.abs(weightOf(photo('a', 2021), 2026) - 1 / 6) < 1e-12);
+  assert.ok(Math.abs(weightOf(photo('a', 2016), 2026) - 1 / 11) < 1e-12, '十年老照片权重 1/11');
 });
 
 test('一轮 20 个不重复', () => {
@@ -46,18 +46,26 @@ test('整轮覆盖全部照片，且每张只出现一次', () => {
   assert.equal(new Set(order.map((p) => p.id)).size, list.length);
 });
 
-test('老照片命中率高于线性随机（权重不是摆着看的）', () => {
+/**
+ * ⚠️ 已知矛盾（用户 2026-11-15 决定：照原文 `1/(岁数+1)` 上线，用真实老照片验收）。
+ *
+ * 这条测试不再宣称「老照片更常出现」——按原文公式恰恰相反。它的作用是把公式的
+ * **可观测后果**量出来并钉住：合成夹具（今年 60 张 + 五年前 20 张）里，前 20 个
+ * 老照片只占约 8%，而线性随机是 25%。真实语料的数量分布完全不同，结论以线上漫游为准。
+ */
+test('权重公式的可观测后果：老照片占比低于线性随机（已知矛盾，待真实语料判定）', () => {
   const list = pool();
   const oldShare = (seed) => {
     const head = wanderOrder(list, { nowYear: 2026, seed, limit: 20 });
     return head.filter((p) => p.id.startsWith('old')).length / 20;
   };
 
-  // 线性随机下老照片只占 20/80 = 25%；加权后应明显更高
   let total = 0;
   for (let seed = 1; seed <= 40; seed += 1) total += oldShare(seed);
   const average = total / 40;
-  assert.ok(average > 0.3, `前 20 个里老照片平均占 ${(average * 100).toFixed(0)}%，加权没生效`);
+
+  assert.ok(average < 0.25, `老照片占 ${(average * 100).toFixed(0)}%，与 1/(岁数+1) 的方向不符`);
+  assert.ok(average > 0, '老照片不能完全不出现');
 });
 
 test('同种子同序列；换种子换序列', () => {
