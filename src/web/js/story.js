@@ -1,6 +1,7 @@
 import { buildStory, PACE } from './state.js';
 import { el, photoAlt, reducedMotion, markWhenReady } from './ui.js';
 import { loadArtifact } from './data.js';
+import { ageLabel, bornAt, monthLine, parseMonthKey } from './family.js';
 
 const CARD_MS = 2200;
 /** 故事文案产物版本（T-23）；对不上就当作没有 */
@@ -28,22 +29,43 @@ const refs = {};
 /** 构建期文案（T-23）：章节标题/副标题 + 结束语；缺了就用派生文案 */
 const copy = { chapters: new Map(), ending: '' };
 
-/** 章节卡文案：产物有就用产物的，没有就用既有的「年份 / N 张」 */
+/**
+ * 章节卡：**手写的一句话优先**，其次产物文案，最后回退「年份 / N 张」。副标题补上
+ * 月龄——「这一年他几岁」，长辈一眼看得出来。
+ * Hand copy wins over generated copy, which wins over the plain count.
+ */
 export function chapterLine(chapter) {
-  const hit = chapter ? copy.chapters.get(chapter.key) : null;
-  return {
-    title: hit?.title || chapter?.label || '',
-    subtitle: hit?.subtitle || (chapter ? `${chapter.items.length} 张` : ''),
-  };
+  if (!chapter) return { title: '', subtitle: '' };
+  const key = String(chapter.key || '');
+  const written = monthLine(key);
+  const hit = copy.chapters.get(key);
+  const title = written || hit?.title || chapter.label || '';
+  const at = parseMonthKey(key);
+  const age = at ? ageLabel(bornAt(), at.year, at.month) : '';
+  const subtitle = written && at
+    ? [`${at.year} · ${at.month} 月`, age].filter(Boolean).join(' · ')
+    : (hit?.subtitle || `${chapter.items.length} 张`);
+  return { title, subtitle };
 }
 
-/** 结束语：产物有就用产物的；没有就按首末章算一句——由数据得出，不是套话 */
+/** 结束语用月龄说：「从 4 岁 1 个月，长到 4 岁 11 个月」，比「1 月到 11 月」像人话 */
 export function endingLine(chapters, total) {
-  if (copy.ending) return copy.ending;
   if (!chapters.length) return '';
-  const first = chapters[0].label;
-  const last = chapters[chapters.length - 1].label;
-  return chapters.length === 1 ? `${first}，共 ${total} 张` : `${first} 到 ${last}，共 ${total} 张`;
+  if (copy.ending) return copy.ending;
+  const first = parseMonthKey(chapters[0].key);
+  const last = parseMonthKey(chapters[chapters.length - 1].key);
+  if (first && last) {
+    const from = ageLabel(bornAt(), first.year, first.month);
+    const to = ageLabel(bornAt(), last.year, last.month);
+    if (from && to) {
+      return from === to
+        ? `${from}这一年，共 ${total} 张`
+        : `从 ${from}，长到 ${to}，共 ${total} 张`;
+    }
+  }
+  const head = chapters[0].label;
+  const tail = chapters[chapters.length - 1].label;
+  return chapters.length === 1 ? `${head}，共 ${total} 张` : `${head} 到 ${tail}，共 ${total} 张`;
 }
 
 /** 装上产物文案；结构不认识就当作没有 */
