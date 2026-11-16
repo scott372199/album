@@ -71,6 +71,9 @@ interface StoryDao {
     @Query("UPDATE stories SET photoCount = :photoCount, videoCount = :videoCount WHERE id = :id")
     fun updateCounts(id: String, photoCount: Int, videoCount: Int)
 
+    @Query("UPDATE stories SET aiNote = '本地导入完成 · 自动整理尚未接入' WHERE aiNote = 'AI 还没有整理这批照片，请稍后确认'")
+    fun normalizeLegacyImportNotes(): Int
+
     @Query("SELECT COUNT(*) FROM stories")
     fun count(): Int
 
