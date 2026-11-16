@@ -27,6 +27,8 @@ on:
       - 'site.json'
       - 'package.json'
       - 'package-lock.json'
+      - 'children-growth/*.html'
+      - 'spec/v7/**'
       - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
 
@@ -142,6 +144,21 @@ jobs:
             --size-only \
             --cache-control "public, max-age=31536000, immutable"
 
+      # V7 Browser 端独立发布到 kids/，不触碰 V6 根路径、photos/ 或 data/。
+      # Publish V7 Browser pages under kids/; never touch the V6 root, photos/, or data/.
+      - name: 构建并同步 V7 Browser 页面 / Publish V7 Browser pages
+        run: |
+          set -euo pipefail
+          rm -rf dist/kids
+          mkdir -p dist/kids
+          cp children-growth/*.html dist/kids/
+          test "$(find dist/kids -maxdepth 1 -type f -name '*.html' | wc -l | tr -d ' ')" -eq 9
+          aws s3 sync dist/kids/ "s3://${SITE_BUCKET}/kids/" \
+            --region "${AWS_REGION}" \
+            --delete \
+            --cache-control "no-cache, must-revalidate" \
+            --content-type "text/html; charset=utf-8"
+
       # 第二段：入口页单独覆盖为不缓存。
       # 不用 --exclude 把入口页排除在第一段之外——AWS CLI 的 --exclude 会
       # 连带影响 --delete 的判定，入口页会被当成「源站已不存在」而删掉。
@@ -174,7 +191,7 @@ jobs:
           set -euo pipefail
           aws cloudfront create-invalidation \
             --distribution-id "${DISTRIBUTION_ID}" \
-            --paths "/index.html" "/sw.js"
+            --paths "/index.html" "/sw.js" "/kids/*"
 
       - name: 摘要 / Summary
         run: |
@@ -182,7 +199,7 @@ jobs:
             echo "### 前端已发布 / Web deployed"
             echo ""
             echo "- 站点 / site: https://${{ vars.SITE_DOMAIN }}"
-            echo "- 桶前缀 / prefixes: \`assets/\`（可删）、\`index.html\`、\`sw.js\`"
+            echo "- 桶前缀 / prefixes: \`assets/\`（可删）、\`index.html\`、\`sw.js\`、\`kids/\`（V7 Browser）"
             echo "- 未触碰 / untouched: \`photos/\`、\`data/\`"
             echo "- 提交 / commit: \`${{ github.sha }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
