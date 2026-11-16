@@ -134,11 +134,13 @@
 <div class="wrap">
 
   <div class="steps">
-    <div class="st done"><span class="n">1</span>上传 286 张 · 8 段视频</div>
+    <div class="st done"><span class="n">1</span>上传 <span id="picked-count">0</span> 个新文件</div>
     <span class="line"></span>
     <div class="st done"><span class="n">2</span>自动识别</div>
     <span class="line"></span>
     <div class="st now"><span class="n">3</span>确认草稿</div>
+    <button class="btn sm" id="pick-files" type="button">选择照片 / 视频</button>
+    <input id="file-picker" type="file" accept="image/*,video/*" multiple hidden>
   </div>
 
   <div class="sum">
@@ -416,6 +418,13 @@
     this.textContent = '已发布 · 去相册看看';
     this.style.background = '#3B6D11';
     this.style.borderColor = '#3B6D11';
+  });
+
+  var picker = document.getElementById('file-picker');
+  document.getElementById('pick-files').addEventListener('click', function(){ picker.click(); });
+  picker.addEventListener('change', function(){
+    document.getElementById('picked-count').textContent = picker.files.length;
+    if (picker.files.length) src.textContent = '正在导入 ' + picker.files.length + ' 个文件到本机…';
   });
 
   // 先读本地数据库（bootstrap 出摘要，drafts 出列表）；不是 App 环境时退回演示数据

@@ -1,11 +1,15 @@
 package family.ourkids.app.net
 
 import android.content.Context
+import android.net.Uri
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import family.ourkids.app.data.AppDatabase
+import family.ourkids.app.data.MediaImporter
 import family.ourkids.app.data.Story
 import family.ourkids.app.data.StoryMedia
+import java.io.File
+import java.io.FileInputStream
 import java.io.ByteArrayInputStream
 import java.time.Instant
 import java.time.LocalDate
@@ -21,7 +25,23 @@ import java.time.format.DateTimeFormatter
 class ApiServer(context: Context) {
 
     private val appContext = context.applicationContext
+    private val importer = MediaImporter(appContext)
     private fun db() = AppDatabase.get(appContext)
+
+    /** File chooser callback runs on the UI thread; Room work happens in the importer thread. */
+    fun importFiles(uris: List<Uri>) {
+        Thread { importer.import(uris) }.start()
+    }
+
+    fun media(path: String): WebResourceResponse {
+        val id = path.removePrefix("/media/").takeIf { it.matches(Regex("md_import_[a-f0-9]{12}")) }
+            ?: return error(404, "media not found")
+        val file = File(appContext.filesDir, "imports/$id")
+        if (!file.isFile) return error(404, "media not found")
+        val type = db().mediaDao().byId(id)?.type
+        val mime = if (type == "video") "video/mp4" else "image/jpeg"
+        return WebResourceResponse(mime, null, 200, "OK", mapOf("Cache-Control" to "no-cache"), FileInputStream(file))
+    }
 
     fun handle(request: WebResourceRequest): WebResourceResponse {
         val path = request.url.path ?: "/"
