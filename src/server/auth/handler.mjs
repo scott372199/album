@@ -156,6 +156,34 @@ async function uploadUrl(event) {
  * A separate route from /upload-url because it mutates state: completing a merge
  * creates the object in the source bucket, unlike merely signing URLs.
  */
+async function v7PublishUrl(event) {
+  const startedAt = Date.now();
+  const claims = await authorize(event);
+  if (!claims) return json(401, { error: 'unauthorized' });
+  const body = readJson(event);
+  if (!body) return json(400, { error: 'invalid_request' });
+  const result = await presignUploads(body, {
+    bucket: env('V7_SITE_BUCKET'),
+    prefix: env('V7_PUBLISH_PREFIX', 'kids/media/'),
+  });
+  if (result.error) return json(400, { error: result.error });
+  log.info('v7.publish.presigned', { count: result.items.length });
+  return json(200, { items: result.items }, { 'x-v7-publish': '1' });
+}
+
+async function v7PublishComplete(event) {
+  const claims = await authorize(event);
+  if (!claims) return json(401, { error: 'unauthorized' });
+  const body = readJson(event);
+  if (!body) return json(400, { error: 'invalid_request' });
+  const result = await completeMultipart(body, {
+    bucket: env('V7_SITE_BUCKET'),
+    prefix: env('V7_PUBLISH_PREFIX', 'kids/media/'),
+  });
+  if (result.error) return json(400, { error: result.error });
+  return json(200, { ok: true, key: result.key, parts: result.parts });
+}
+
 async function uploadComplete(event) {
   const startedAt = Date.now();
   const claims = await authorize(event);
@@ -195,6 +223,10 @@ async function dispatch(event) {
       return uploadUrl(event);
     case 'POST /upload-complete':
       return uploadComplete(event);
+    case 'POST /v7/publish-url':
+      return v7PublishUrl(event);
+    case 'POST /v7/publish-complete':
+      return v7PublishComplete(event);
     case 'GET /health':
       return json(200, { ok: true, v: '4' });
     default:

@@ -138,20 +138,19 @@ async function presignParts(bucket, entry, expiresIn) {
   };
 }
 
-export async function presignUploads(body) {
+export async function presignUploads(body, options = {}) {
+  const prefix = options.prefix || env('INCOMING_PREFIX', 'incoming/');
+  const bucket = options.bucket || env('SOURCE_BUCKET');
   const plan = planFiles(body.files, {
     maxFiles: envInt('MAX_FILES', 20),
     maxImage: envInt('MAX_IMAGE_BYTES', 30 * 1024 * 1024),
     maxVideo: envInt('MAX_VIDEO_BYTES', 200 * 1024 * 1024),
-    prefix: env('INCOMING_PREFIX', 'incoming/'),
+    prefix,
     album: body.album,
   });
   if (plan.error) return plan;
 
-  const bucket = env('SOURCE_BUCKET');
   const expiresIn = envInt('PRESIGN_TTL', 900);
-
-  // 分片计划本身也可能失败（片太小 / 片太多），整批同样拒绝
   const items = await Promise.all(plan.items.map(async (entry) => {
     const item = entry.size > multipartThreshold()
       ? await presignParts(bucket, entry, expiresIn)
@@ -161,7 +160,6 @@ export async function presignUploads(body) {
 
   const failure = items.find((item) => item.failed);
   if (failure) return { error: failure.error, max: failure.max };
-
   return { items };
 }
 
@@ -173,12 +171,14 @@ export async function presignUploads(body) {
  * CompleteMultipartUpload runs server-side: presigning an XML body for the browser
  * is impractical. Request validation lives in rules.mjs as a pure function.
  */
-export async function completeMultipart(body) {
-  const parsed = parseComplete(body, env('INCOMING_PREFIX', 'incoming/'));
+export async function completeMultipart(body, options = {}) {
+  const prefix = options.prefix || env('INCOMING_PREFIX', 'incoming/');
+  const bucket = options.bucket || env('SOURCE_BUCKET');
+  const parsed = parseComplete(body, prefix);
   if (parsed.error) return parsed;
 
   const result = await s3().send(new CompleteMultipartUploadCommand({
-    Bucket: env('SOURCE_BUCKET'),
+    Bucket: bucket,
     Key: parsed.key,
     UploadId: parsed.uploadId,
     MultipartUpload: { Parts: parsed.parts },
