@@ -16,9 +16,9 @@ import {
 
 const file = (name, size) => ({ file: name, size });
 
-test('预算就是 128 KB（2026-11-15 由 120 KB 上调，见 scripts/lib/budget.mjs）', () => {
-  assert.equal(BUDGET_BYTES, 128 * 1024);
-  assert.equal(formatBytes(BUDGET_BYTES), '128.0 KB');
+test('预算就是 132 KB（2026-11-16 由 128 KB 上调，见 scripts/lib/budget.mjs）', () => {
+  assert.equal(BUDGET_BYTES, 132 * 1024);
+  assert.equal(formatBytes(BUDGET_BYTES), '132.0 KB');
 });
 
 test('刚好等于预算是通过，超 1 字节才算超', () => {

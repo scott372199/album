@@ -13,7 +13,7 @@ import { installBackBridge } from './native.js';
 import { initUpload } from './upload.js';
 import { el, toast, formatSpan } from './ui.js';
 import {
-  parseQuery, runSearch, indexUrl, isIndexUsable, sanitizeIndex, INDEX_VERSION,
+  parseQuery, runSearch, isIndexUsable, sanitizeIndex, INDEX_VERSION,
   deriveSuggestions,
 } from './search.js';
 import { initSearchUI } from './search-ui.js';
@@ -23,6 +23,7 @@ import {
 } from './anchor.js';
 import { mountUploadLegend } from './upload-state.js';
 import { watchHeroMedia } from './hero-media.js';
+import { ageLabel, bornAt, loadFamily } from './family.js';
 import { initTheme, themeLabel } from './theme.js';
 import { createYearPage, renderYearNav, buildYearSummary } from './year-page.js';
 import { portraitIds } from './wall-source.js';
@@ -109,11 +110,15 @@ async function loadIndex() {
   state.search.error = '';
   ctx.searchUI?.render({ q: state.q, status: 'loading', years: ctx.index?.years || [] });
 
+  // 只取固定名那份：索引文件名用的是**索引自身内容哈希**，不是清单 rev，
+  // 先请求 search-index.<清单 rev>.json 必然 403 —— 白花一个往返。
+  // Fixed name only: the index is named by its own content hash, so asking for
+  // search-index.<manifest rev>.json could only ever 403.
   let raw = null;
   try {
-    raw = await loadSearchIndex(indexUrl(ctx.rev));
+    raw = await loadSearchIndex('data/search-index.json');
   } catch {
-    try { raw = await loadSearchIndex('data/search-index.json'); } catch { raw = null; }
+    raw = null;
   }
   const clean = sanitizeIndex(raw);
   state.search.index = null;
@@ -257,6 +262,7 @@ function renderSite() {
   paintHeroLink();
   document.body.classList.toggle('is-empty', ctx.index.photos.length === 0);
   renderStats();
+  paintHeroAge();
 
   renderAlbums(el('album-grid'), ctx.index.albums, {
     photos: ctx.index.photos,
@@ -268,6 +274,22 @@ function renderSite() {
       syncUrl(true);
     },
   });
+}
+
+/**
+ * 首屏副标题补一句「他 4 岁 11 个月了 · 53 个瞬间」。月龄按**最新一张照片的月份**
+ * 算而不是今天：相册不更新时它不会自己长大，年龄与照片永远是同一个时点。
+ */
+function paintHeroAge() {
+  const sub = el('site-subtitle');
+  if (!sub || sub.textContent.trim() || !ctx.index.photos.length) return;
+  const latest = ctx.index.photos.reduce((best, photo) => (
+    !best || photo.year > best.year || (photo.year === best.year && photo.month > best.month)
+      ? photo : best
+  ), null);
+  const age = latest ? ageLabel(bornAt(), latest.year, latest.month) : '';
+  if (!age) return;
+  sub.textContent = `他 ${age}了 · ${ctx.index.photos.length} 个瞬间`;
 }
 
 /* ---------- 筛选器 ---------- */
@@ -775,6 +797,8 @@ function registerOffline() {
 async function boot() {
   // 先取 version.json 再取清单：前端产物不再包含任何清单地址
   // Fetch version.json first; the shell no longer embeds a manifest URL
+  // 文案同时取回来（只影响首屏那句话与章节卡，失败无所谓），与清单并行
+  const familyReady = loadFamily();
   let source;
   try {
     source = await resolveManifest();
@@ -797,6 +821,8 @@ async function boot() {
   }
 
   state.data = manifest;
+  // 首屏月龄要用文案里的生日；上面已并行发出，这里只多等一次本地小文件
+  await familyReady;
   ctx.index = buildIndex(manifest);
   state.filtered = ctx.index.photos;
 
