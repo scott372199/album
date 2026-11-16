@@ -49,9 +49,9 @@ class MainActivity : AppCompatActivity() {
 
     private val fileChooser =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            pendingFile?.onReceiveValue(
-                WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
-            )
+            val selected = WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+            if (selected != null) api.importFiles(selected.toList())
+            pendingFile?.onReceiveValue(selected)
             pendingFile = null
         }
 
@@ -124,6 +124,9 @@ class MainActivity : AppCompatActivity() {
                 // /api/* 交给本地数据接口，其余静态资源仍由 assets 提供
                 if (url.host == ASSET_HOST && (url.path ?: "").startsWith("/api/")) {
                     return api.handle(request)
+                }
+                if (url.host == ASSET_HOST && (url.path ?: "").startsWith("/media/")) {
+                    return api.media(url.path ?: "")
                 }
                 return loader.shouldInterceptRequest(url)
             }
