@@ -65,6 +65,12 @@ interface StoryDao {
     @Query("UPDATE stories SET title = :title WHERE id = :id")
     fun rename(id: String, title: String)
 
+    @Query("UPDATE stories SET status = 'merged' WHERE id = :id")
+    fun markMerged(id: String)
+
+    @Query("UPDATE stories SET photoCount = :photoCount, videoCount = :videoCount WHERE id = :id")
+    fun updateCounts(id: String, photoCount: Int, videoCount: Int)
+
     @Query("SELECT COUNT(*) FROM stories")
     fun count(): Int
 
@@ -92,6 +98,9 @@ interface StoryDao {
 interface StoryMediaDao {
     @Query("SELECT * FROM story_media WHERE storyId = :storyId ORDER BY orderNo")
     fun of(storyId: String): List<StoryMedia>
+
+    @Query("DELETE FROM story_media WHERE storyId = :storyId AND mediaId = :mediaId")
+    fun delete(storyId: String, mediaId: String)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertAll(list: List<StoryMedia>)
