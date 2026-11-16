@@ -9,6 +9,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
 import java.util.Locale
 
 /**
@@ -68,36 +70,40 @@ class MediaImporter(context: Context) {
         }
         if (media.isEmpty()) return
         database.mediaDao().insertAll(media)
-        val now = System.currentTimeMillis()
-        val startAt = media.minOf { it.takenAt }
-        val endAt = media.maxOf { it.takenAt }
-        val photoCount = media.count { it.type == "photo" }
-        val videoCount = media.count { it.type == "video" }
-        val storyId = "st_import_${now}"
-        database.storyDao().insertAll(
-            listOf(
-                Story(
-                    id = storyId,
-                    title = "新导入的照片",
-                    candidates = "新导入的照片|这一批照片|未命名合集",
-                    startAt = startAt,
-                    endAt = endAt,
-                    cover = "https://appassets.androidplatform.net/media/${media.first().id}",
-                    photoCount = photoCount,
-                    videoCount = videoCount,
-                    confidence = "low",
-                    status = "draft",
-                    batch = 1,
-                    aiNote = "本地导入完成 · AI 整理功能尚未接入",
-                    deck = "",
-                    body = "",
-                    pull = ""
-                )
+        val groups = media.groupBy { item ->
+            Instant.ofEpochMilli(item.takenAt).atZone(ZoneId.systemDefault()).toLocalDate()
+        }
+        val stories = ArrayList<Story>(groups.size)
+        val links = ArrayList<StoryMedia>(media.size)
+        groups.entries.sortedBy { it.key }.forEach { (day, items) ->
+            val storyId = "st_import_${day.toString().replace('-', '_')}_${items.first().id.removePrefix("md_import_")}"
+            val startAt = items.minOf { it.takenAt }
+            val endAt = items.maxOf { it.takenAt }
+            val photoCount = items.count { it.type == "photo" }
+            val videoCount = items.count { it.type == "video" }
+            stories += Story(
+                id = storyId,
+                title = if (items.size == 1) "这一张照片" else "这一日的照片",
+                candidates = "这一日的照片|这段时间的照片|未命名合集",
+                startAt = startAt,
+                endAt = endAt,
+                cover = "https://appassets.androidplatform.net/media/${items.first().id}",
+                photoCount = photoCount,
+                videoCount = videoCount,
+                confidence = "low",
+                status = "draft",
+                batch = 1,
+                aiNote = "仅按拍摄时间分组 · 自动整理尚未接入",
+                deck = "",
+                body = "",
+                pull = ""
             )
-        )
-        database.storyMediaDao().insertAll(
-            media.mapIndexed { index, item -> StoryMedia(storyId, item.id, index, if (index == 0) "lead" else "archive") }
-        )
+            items.forEachIndexed { index, item ->
+                links += StoryMedia(storyId, item.id, index, if (index == 0) "lead" else "archive")
+            }
+        }
+        database.storyDao().insertAll(stories)
+        database.storyMediaDao().insertAll(links)
     }
 
     private fun takenAt(uri: Uri, mime: String): Pair<Long, String> {
