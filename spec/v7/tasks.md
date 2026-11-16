@@ -113,9 +113,9 @@
 
 ### A-04 Android 结构验证
 
-- **状态**：⚠️ 源码检查通过，未编译
+- **状态**：✅
 - **内容**：检查壳层返回、文件选择、长按存图、视频点击播放、旋转和站外链接分流；本机若无 JDK/SDK，明确记录未编译。
-- **证据**：`python3 scripts/check-android.py` 通过；源码包含上述行为。当前机器有 JDK 21，但没有 Gradle、Android SDK 或 `ANDROID_HOME`，因此未完成 APK 编译。
+- **证据**：`python3 scripts/check-android.py` 通过；`ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew assembleDebug` 构建成功，产物为 `app/build/outputs/apk/debug/app-debug.apk`。
 - **验收**：可编译则运行构建与安装验证；不可编译则完成源码结构检查并记录阻塞原因。
 
 ## 发布与生产 Terraform
