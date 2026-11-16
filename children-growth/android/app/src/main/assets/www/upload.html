@@ -205,7 +205,7 @@
   var src = document.getElementById('src');
   var bulkBtn = document.getElementById('bulk');
   var tabs = document.querySelectorAll('.tab');
-  var state = { total:0, high:0, live:false, tab:'all', items:[] };
+  var state = { total:0, high:0, live:false, tab:'all', items:[], pickedFiles:[] };
 
   function esc(t){
     return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -414,7 +414,70 @@
       .catch(function(){ finish(remainHigh()); });
   });
 
-  document.getElementById('finish').addEventListener('click', function(){
+  async function publishImage(file){
+    var bitmap = await createImageBitmap(file);
+    var scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
+    var canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    return new Promise(function(resolve, reject){
+      canvas.toBlob(function(blob){ blob ? resolve(blob) : reject(new Error('image encode failed')); }, 'image/jpeg', .86);
+    });
+  }
+  async function publishSelected(){
+    if (location.hostname !== 'appassets.androidplatform.net' || !state.pickedFiles.length) return false;
+    var images = state.pickedFiles.filter(function(file){ return /^image\//.test(file.type); });
+    var videos = state.pickedFiles.filter(function(file){ return /^video\//.test(file.type); });
+    if (!images.length) { window.alert('本轮没有可发布的照片；视频发布将在视频展示图处理接入后开放。'); return false; }
+    if (videos.length) window.alert('本轮先发布照片，视频已保留在本机，视频发布将在展示图处理接入后开放。');
+    var phone = window.prompt('手机号');
+    var key = window.prompt('共享密钥');
+    if (!phone || !key) return false;
+    var base = 'https://3y07fqxete.execute-api.ap-southeast-1.amazonaws.com';
+    var auth = await fetch(base + '/auth', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({phone:phone,key:key}) });
+    if (!auth.ok) throw new Error('登录失败');
+    var authJson = await auth.json();
+    var prepared = [];
+    for (var i=0; i<images.length; i++) {
+      var blob = await publishImage(images[i]);
+      var buffer = await blob.arrayBuffer();
+      var digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buffer))).map(function(x){ return x.toString(16).padStart(2,'0'); }).join('');
+      prepared.push({ name:'import-' + i + '.jpg', blob:blob, buffer:buffer, sha256:digest });
+    }
+    var signed = await fetch(base + '/v7/publish-url', { method:'POST', headers:{'content-type':'application/json', authorization:'Bearer ' + authJson.token}, body:JSON.stringify({files:prepared.map(function(x){ return {name:x.name,size:x.buffer.byteLength,sha256:x.sha256}; })}) });
+    if (!signed.ok) throw new Error('无法取得发布地址');
+    var items = (await signed.json()).items || [];
+    if (items.some(function(x){ return x.multipart; })) throw new Error('存在过大的照片，请稍后使用分片发布');
+    for (var j=0; j<items.length; j++) {
+      var put = await fetch(items[j].url, { method:'PUT', headers:items[j].headers, body:prepared[j].buffer });
+      if (!put.ok) throw new Error('照片发布失败');
+    }
+    return true;
+  }
+
+  document.getElementById('finish').addEventListener('click', async function(){
+    if (state.pickedFiles.length && location.hostname === 'appassets.androidplatform.net') {
+      this.disabled = true;
+      this.textContent = '发布中…';
+      try {
+        var published = await publishSelected();
+        if (published) {
+          this.textContent = '已发布到 V7';
+          this.style.background = '#3B6D11';
+          this.style.borderColor = '#3B6D11';
+        } else {
+          this.disabled = false;
+          this.textContent = '完成并发布到相册';
+        }
+      } catch (e) {
+        window.alert(e.message || '发布失败');
+        this.disabled = false;
+        this.textContent = '完成并发布到相册';
+      }
+      return;
+    }
     this.textContent = '已发布 · 去相册看看';
     this.style.background = '#3B6D11';
     this.style.borderColor = '#3B6D11';
@@ -425,7 +488,8 @@
   picker.addEventListener('change', function(){
     var beforePhotos = Number(document.getElementById('n-photo').textContent || 0);
     var beforeVideos = Number(document.getElementById('n-video').textContent || 0);
-    document.getElementById('picked-count').textContent = picker.files.length;
+    state.pickedFiles = state.pickedFiles.concat(Array.prototype.slice.call(picker.files));
+    document.getElementById('picked-count').textContent = state.pickedFiles.length;
     if (picker.files.length) {
       src.textContent = '正在导入 ' + picker.files.length + ' 个文件到本机…';
       watchImport(0, beforePhotos, beforeVideos);
