@@ -43,7 +43,7 @@ data class Story(
     val photoCount: Int = 0,
     val videoCount: Int = 0,
     val confidence: String = "high",   // high | mid | low
-    val status: String = "draft",      // draft | published
+    val status: String = "draft",      // draft | published | merged
     val batch: Int = 0,                // 1 = 本次上传批次，0 = 往年已在相册里的
     val aiNote: String = "",           // AI 给自己这一条写的说明，直接显示在标题上方
     val deck: String = "",

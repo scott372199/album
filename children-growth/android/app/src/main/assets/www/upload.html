@@ -63,6 +63,7 @@
   .btn.solid{background:var(--ink);color:#fff;border-color:var(--ink);}
   .btn.solid:hover{background:#000;}
   .btn.sm{padding:4px 10px;font-size:.75rem;}
+  .btn.mg{color:var(--warn);border-color:#DDA84C;}
   .src{font-size:.6875rem;color:#9A958C;font-family:var(--mono);letter-spacing:.02em;}
 
   /* 草稿行 */
@@ -202,7 +203,7 @@
   var src = document.getElementById('src');
   var bulkBtn = document.getElementById('bulk');
   var tabs = document.querySelectorAll('.tab');
-  var state = { total:0, high:0, live:false, tab:'all' };
+  var state = { total:0, high:0, live:false, tab:'all', items:[] };
 
   function esc(t){
     return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -243,7 +244,8 @@
       '</div>' +
       '<div class="right">' +
         '<span class="conf ' + esc(s.confidence) + '"><span class="dot"></span>' + confText(s.confidence) + '</span>' +
-        '<div class="acts"><button class="btn sm ok">接受</button><button class="btn sm rn">改名</button></div>' +
+        '<div class="acts"><button class="btn sm ok">接受</button><button class="btn sm rn">改名</button>' +
+        ((s.aiNote || '').indexOf('可能重复') > -1 ? '<button class="btn sm mg">合并</button>' : '') + '</div>' +
       '</div>' + warn +
     '</div>';
   }
@@ -312,6 +314,21 @@
       row.querySelector('.tchips').insertBefore(chip, row.querySelector('.tchip'));
       rename(row.dataset.id, next);
     });
+    var mg = row.querySelector('.mg');
+    if (mg) mg.addEventListener('click', function(){
+      var choices = state.items.filter(function(s){ return s.id !== row.dataset.id && s.status !== 'merged'; });
+      if (!choices.length) return;
+      var answer = window.prompt('输入要并入的故事标题：\\n' + choices.map(function(s){ return s.title; }).join(' / '), choices[0].title);
+      if (!answer) return;
+      var target = choices.find(function(s){ return s.title === answer.trim() || s.id === answer.trim(); });
+      if (!target) { window.alert('没有找到这个故事'); return; }
+      merge(row.dataset.id, target.id, function(){
+        state.total = Math.max(0, state.total - 1);
+        row.classList.add('hide', 'merged');
+        refreshCounts();
+        applyTab();
+      });
+    });
   }
 
   function accept(id, done){
@@ -328,6 +345,15 @@
           { method:'POST' }).catch(function(){});
   }
 
+  function merge(id, into, done){
+    if (!state.live) { window.alert('演示数据不能合并，请在 App 内操作'); return; }
+    fetch(API + '/drafts/' + encodeURIComponent(id) + '/merge?into=' + encodeURIComponent(into),
+          { method:'POST' })
+      .then(function(r){ if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+      .then(function(){ done(); })
+      .catch(function(){ window.alert('合并失败，请稍后重试'); });
+  }
+
   function fillStats(st){
     if (!st) return;
     var set = function(id, v){ var el = document.getElementById(id); if (el && v != null) el.textContent = v; };
@@ -341,6 +367,7 @@
     state.total = payload.total || (payload.items || []).length;
     state.high = payload.highConfidence || 0;
     var items = payload.items || [];
+    state.items = items;
     list.innerHTML = items.map(rowHtml).join('');
     list.querySelectorAll('.row').forEach(bindRow);
     refreshCounts();

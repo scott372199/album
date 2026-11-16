@@ -5,6 +5,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import family.ourkids.app.data.AppDatabase
 import family.ourkids.app.data.Story
+import family.ourkids.app.data.StoryMedia
 import java.io.ByteArrayInputStream
 import java.time.Instant
 import java.time.LocalDate
@@ -63,6 +64,12 @@ class ApiServer(context: Context) {
                     }
                 }
 
+                path.startsWith("/api/drafts/") && path.endsWith("/merge") && method == "POST" -> {
+                    val id = path.removePrefix("/api/drafts/").removeSuffix("/merge")
+                    val into = request.url.getQueryParameter("into")?.trim().orEmpty()
+                    merge(id, into)
+                }
+
                 path == "/api/people" && method == "GET" -> ok(people())
 
                 path == "/api/today" && method == "GET" -> ok(today())
@@ -75,6 +82,33 @@ class ApiServer(context: Context) {
     }
 
     /* ---------------- 各接口 ---------------- */
+
+    private fun merge(sourceId: String, targetId: String): WebResourceResponse {
+        if (sourceId.isBlank() || targetId.isBlank()) return error(400, "into required")
+        if (sourceId == targetId) return error(400, "cannot merge into itself")
+        val database = db()
+        val source = database.storyDao().byId(sourceId) ?: return error(404, "source story not found")
+        val target = database.storyDao().byId(targetId) ?: return error(404, "target story not found")
+        if (target.status == "merged") return error(409, "target story is merged")
+        if (source.status == "merged") return ok("""{"ok":true,"id":"${esc(sourceId)}","into":"${esc(targetId)}","moved":0}""")
+
+        val sourceMedia = database.storyMediaDao().of(sourceId)
+        val targetMedia = database.storyMediaDao().of(targetId)
+        val offset = (targetMedia.maxOfOrNull { it.orderNo } ?: -1) + 1
+        database.runInTransaction {
+            sourceMedia.forEachIndexed { index, item ->
+                database.storyMediaDao().delete(sourceId, item.mediaId)
+                database.storyMediaDao().insertAll(listOf(StoryMedia(targetId, item.mediaId, offset + index, item.role)))
+            }
+            database.storyDao().updateCounts(
+                targetId,
+                target.photoCount + source.photoCount,
+                target.videoCount + source.videoCount
+            )
+            database.storyDao().markMerged(sourceId)
+        }
+        return ok("""{"ok":true,"id":"${esc(sourceId)}","into":"${esc(targetId)}","moved":${sourceMedia.size}}""")
+    }
 
     private fun bootstrap(): String {
         val storyDao = db().storyDao()
