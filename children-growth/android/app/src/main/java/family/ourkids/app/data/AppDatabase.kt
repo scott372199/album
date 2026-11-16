@@ -240,7 +240,7 @@ object Seed {
             cover = "https://picsum.photos/seed/rv06/300/380",
             people = "爸爸", scenes = "家里",
             photoCount = 26, confidence = "mid", status = "draft", batch = 1,
-            aiNote = "AI 建议标题 · 与已有的「洗澡这件事」可能重复，建议合并",
+            aiNote = "AI 建议标题 · 与已有的「洗澡这件事」可能重复，稍后可合并",
             deck = "每次洗澡都要把水泼到镜子上。",
             pull = "他管这叫下雨。"
         )

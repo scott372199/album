@@ -95,26 +95,27 @@
 
 ### A-01 同源资产同步
 
-- **状态**：⬜
+- **状态**：✅
 - **内容**：将冻结后的 6 个产品页按 ASCII 文件名同步到 `android/app/src/main/assets/www`，只允许文件名映射差异。
 - **验收**：`python3 children-growth/scripts/sync-assets.py --check` 通过；页面 DOM 与 Browser 版一致。
 
 ### A-02 Room 四表与 Seed
 
-- **状态**：⬜
+- **状态**：✅
 - **内容**：实现 people/media/stories/story_media 四表、幂等 Seed 和 V7 字段白名单，不输出原始路径、EXIF 原文或凭据。
 - **验收**：静态字段检查通过；Seed 数字与页面摘要一致；重复初始化不重复插入。
 
 ### A-03 `/api/*` 读写接口
 
-- **状态**：⬜
+- **状态**：✅
 - **内容**：实现 bootstrap、drafts、accept、accept-all、rename、stories、story detail、people、today；写接口幂等；merge 留到 V7.3。
 - **验收**：接口形状符合 plan §5.3；页面在 App 数据源下不改 DOM 逻辑；无凭据进入页面。
 
 ### A-04 Android 结构验证
 
-- **状态**：⬜
+- **状态**：⚠️ 源码检查通过，未编译
 - **内容**：检查壳层返回、文件选择、长按存图、视频点击播放、旋转和站外链接分流；本机若无 JDK/SDK，明确记录未编译。
+- **证据**：`python3 scripts/check-android.py` 通过；源码包含上述行为。当前机器有 JDK 21，但没有 Gradle、Android SDK 或 `ANDROID_HOME`，因此未完成 APK 编译。
 - **验收**：可编译则运行构建与安装验证；不可编译则完成源码结构检查并记录阻塞原因。
 
 ## 发布与生产 Terraform
