@@ -64,15 +64,16 @@ class MediaImporter(context: Context) {
         val now = System.currentTimeMillis()
         val photoCount = media.count { it.type == "photo" }
         val videoCount = media.count { it.type == "video" }
+        val storyId = "st_import_${now}"
         database.storyDao().insertAll(
             listOf(
                 Story(
-                    id = "st_import_${now}",
+                    id = storyId,
                     title = "新导入的照片",
                     candidates = "新导入的照片|这一批照片|未命名合集",
                     startAt = now,
                     endAt = now,
-                    cover = media.first().uri,
+                    cover = "https://appassets.androidplatform.net/media/${media.first().id}",
                     photoCount = photoCount,
                     videoCount = videoCount,
                     confidence = "low",
@@ -84,6 +85,9 @@ class MediaImporter(context: Context) {
                     pull = ""
                 )
             )
+        )
+        database.storyMediaDao().insertAll(
+            media.mapIndexed { index, item -> StoryMedia(storyId, item.id, index, if (index == 0) "lead" else "archive") }
         )
     }
 
