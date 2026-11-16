@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 相框 -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M32,38 L76,38 L76,70 L32,70 Z"
+        android:strokeColor="#B4795A"
+        android:strokeWidth="2.4" />
+
+    <!-- 远山 -->
+    <path
+        android:fillColor="#B4795A"
+        android:pathData="M36,66 L48,52 L57,61 L64,54 L72,63 L72,66 Z" />
+
+    <!-- 太阳 -->
+    <path
+        android:fillColor="#B4795A"
+        android:pathData="M65,46 m-3.2,0 a3.2,3.2 0 1,0 6.4,0 a3.2,3.2 0 1,0 -6.4,0" />
+
+</vector>

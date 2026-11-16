@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我们的孩子 · 2019—2026</title>
+<style>
+  :root{
+    --bg:#FFFFFF;
+    --bg-alt:#FAF8F4;
+    --ink:#111111;
+    --mute:#767676;
+    --rule:#E8E8E8;
+    --accent:#B4795A;
+    --serif:"Source Han Serif SC","Noto Serif SC","Songti SC",SimSun,serif;
+    --sans:"Helvetica Neue",Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;
+    --mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
+  }
+  html{font-size:16px;scroll-behavior:smooth;}
+  html.lg{font-size:18px;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:1.0625rem;line-height:1.85;-webkit-font-smoothing:antialiased;overflow-x:hidden;}
+  img{display:block;max-width:100%;}
+  a{color:inherit;text-decoration:none;}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
+
+  /* ---------- 顶栏 ---------- */
+  .hd{position:fixed;top:0;left:0;right:0;height:44px;background:rgba(255,255,255,.94);
+    backdrop-filter:saturate(180%) blur(8px);border-bottom:1px solid var(--rule);z-index:60;}
+  .hd-in{max-width:1440px;height:100%;margin:0 auto;padding:0 4vw;display:flex;align-items:center;}
+  .brand{font-weight:700;font-size:.875rem;letter-spacing:.02em;}
+  .nav{margin-left:auto;display:flex;align-items:center;gap:1.5em;font-size:.75rem;}
+  .nav a,.nav button{color:var(--ink);letter-spacing:.02em;padding-bottom:2px;border-bottom:1px solid transparent;}
+  .nav a:hover,.nav button:hover{border-bottom-color:var(--ink);}
+  .nav .dim{color:#9A9A9A;}
+  .nav .big{border:1px solid var(--rule);padding:3px 7px;border-bottom:1px solid var(--rule);}
+  .nav .big:hover{border-color:var(--ink);}
+
+  /* ---------- 首屏 ---------- */
+  .hero{height:100vh;height:100svh;position:relative;display:flex;flex-direction:column;
+    justify-content:center;align-items:center;padding:44px 4vw 0;}
+  .hstage{position:relative;width:100%;height:calc(100vh - 132px);height:calc(100svh - 132px);
+    display:flex;align-items:center;justify-content:center;}
+  .himg{max-width:76vw;max-height:100%;width:auto;height:auto;object-fit:contain;
+    filter:sepia(.1) saturate(.94) contrast(.98);opacity:0;transition:opacity .28s ease;}
+  .himg.on{opacity:1;}
+  .noload{width:56%;height:70%;border:1px dashed #DCDCDC;background:var(--bg-alt);
+    display:grid;place-items:center;font-family:var(--mono);font-size:.6875rem;color:#A8A8A8;}
+  .arw{position:absolute;top:50%;transform:translateY(-50%);font-size:1.5rem;color:rgba(0,0,0,.18);
+    line-height:1;padding:12px;transition:color .2s;}
+  .arw:hover{color:rgba(0,0,0,.62);}
+  .arw.l{left:-2px}.arw.r{right:-2px}
+  .hcap{position:absolute;bottom:26px;left:4vw;right:4vw;display:flex;gap:2.2em;
+    font-size:.75rem;color:var(--mute);letter-spacing:.02em;}
+  .hcap b{font-family:var(--mono);font-weight:400;color:var(--ink);}
+  .hint{position:fixed;left:50%;bottom:76px;transform:translateX(-50%);font-size:.75rem;color:#8C8C8C;
+    border:1px solid var(--rule);background:#fff;padding:7px 14px;letter-spacing:.04em;
+    opacity:0;transition:opacity .6s;pointer-events:none;z-index:40;}
+  .hint.on{opacity:1;}
+  .cue{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:.6875rem;
+    color:#B5B0A8;letter-spacing:.14em;}
+
+  /* ---------- 通用区块 ---------- */
+  .sec{max-width:1280px;margin:0 auto;padding:110px 4vw;}
+  .sec.tight{padding:80px 4vw;}
+  .lb{font-size:.6875rem;letter-spacing:.18em;color:var(--mute);text-transform:uppercase;}
+  h2{font-family:var(--serif);font-weight:300;font-size:2.125rem;line-height:1.45;letter-spacing:.02em;}
+  h3{font-family:var(--serif);font-weight:400;font-size:1.25rem;line-height:1.6;}
+  .rv{opacity:0;transform:translateY(24px);transition:opacity .7s cubic-bezier(.22,.61,.36,1),transform .7s cubic-bezier(.22,.61,.36,1);}
+  .rv.in{opacity:1;transform:none;}
+
+  /* S2 */
+  .s2{text-align:center;padding:120px 4vw 90px;}
+  .s2 h2{max-width:720px;margin:26px auto 0;}
+
+  /* 今天 */
+  .today{background:var(--bg-alt);padding:86px 4vw 90px;text-align:center;}
+  .today h3{font-family:var(--serif);font-weight:300;font-size:1.625rem;line-height:1.5;
+    margin:18px auto 34px;max-width:640px;}
+  .today figure{max-width:780px;margin:0 auto;}
+  .today img{width:100%;aspect-ratio:16/9;object-fit:cover;filter:sepia(.1) saturate(.94);cursor:zoom-in;}
+  .today figcaption{font-size:.75rem;color:#9A958C;font-family:var(--mono);margin-top:12px;}
+  .today .more{margin-top:26px;}
+
+  /* S3 */
+  .s3-hd{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:42px;flex-wrap:wrap;gap:14px;}
+  .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:26px;}
+  .card img{width:100%;aspect-ratio:3/4;object-fit:cover;filter:sepia(.1) saturate(.94);
+    transition:transform .5s ease;cursor:zoom-in;}
+  .card:hover img{transform:scale(1.015);}
+  .card .lb{margin-top:16px;}
+  .card .t{font-family:var(--serif);font-size:.9375rem;margin-top:6px;}
+  .card .n{font-size:.75rem;color:var(--mute);margin-top:4px;font-family:var(--mono);}
+  .card{display:block;}
+  .card .t{transition:color .2s;}
+  .card:hover .t{color:var(--accent);}
+  .card .go{margin-top:10px;font-size:.75rem;color:var(--accent);opacity:0;transform:translateY(-3px);
+    transition:opacity .25s,transform .25s;}
+  .card:hover .go{opacity:1;transform:none;}
+
+  /* S4 */
+  .serie{display:grid;grid-template-columns:1.5fr 1fr;gap:44px;align-items:center;padding:28px 0;}
+  .serie.r2{grid-template-columns:1fr 1.5fr;padding-left:12%;}
+  .serie.r2 .txt{order:1}.serie.r2 .ph{order:2}
+  .serie.r3{padding-left:6%;}
+  .serie img{width:100%;aspect-ratio:16/10;object-fit:cover;filter:sepia(.1) saturate(.94);
+    transition:transform .5s ease;cursor:zoom-in;}
+  .serie:hover img{transform:scale(1.012);}
+  .serie h3{margin:10px 0 10px;}
+  .serie p{font-size:.9375rem;color:var(--mute);line-height:1.9;}
+  .more{display:inline-block;margin-top:16px;font-size:.8125rem;color:var(--ink);
+    border-bottom:1px solid #D8D4CC;padding-bottom:2px;}
+  .more:hover{border-bottom-color:var(--ink);}
+
+  /* S5 */
+  .tlwrap{position:relative;margin-top:44px;}
+  .tlrow{display:grid;grid-template-columns:repeat(3,1fr);gap:26px;}
+  .tlrow img{width:100%;aspect-ratio:3/4;object-fit:cover;filter:sepia(.1) saturate(.94);cursor:zoom-in;}
+  .tlline{position:relative;height:1px;background:#DEDAD2;margin:52px 0 0;}
+  .tlline i{position:absolute;top:-3px;width:7px;height:7px;border-radius:50%;background:var(--ink);}
+  .tllabels{display:grid;grid-template-columns:repeat(3,1fr);gap:26px;margin-top:14px;}
+  .tllabels div{font-family:var(--mono);font-size:.6875rem;color:var(--mute);}
+
+  /* S6 */
+  .lead{font-size:.9375rem;color:var(--mute);margin:12px 0 34px;max-width:540px;}
+  .g6{display:grid;grid-template-columns:repeat(6,1fr);gap:20px;}
+  .p img{width:100%;aspect-ratio:1/1;object-fit:cover;filter:sepia(.1) saturate(.94);cursor:zoom-in;}
+  .p .nm{font-family:var(--serif);font-size:.875rem;margin-top:12px;}
+  .p .ct{font-size:.6875rem;color:var(--mute);font-family:var(--mono);}
+
+  /* S7 */
+  .quote{background:var(--bg-alt);padding:96px 4vw;text-align:center;}
+  .quote .mk{font-family:var(--serif);font-size:4.5rem;color:#DCD6CA;line-height:.5;display:block;}
+  .quote p{font-family:var(--serif);font-weight:300;font-size:1.375rem;line-height:2;
+    max-width:560px;margin:26px auto 28px;}
+  .quote .who{display:flex;align-items:center;justify-content:center;gap:12px;}
+  .quote .who img{width:40px;height:40px;border-radius:50%;object-fit:cover;filter:sepia(.1) saturate(.94);}
+  .quote .who span{font-size:.8125rem;color:var(--mute);}
+
+  /* S8 */
+  .keep{display:grid;grid-template-columns:repeat(3,1fr);gap:48px;margin-top:36px;}
+  .k .num{font-family:var(--mono);font-size:.6875rem;color:var(--accent);letter-spacing:.1em;}
+  .k h3{margin:12px 0 10px;}
+  .k p{font-size:.9375rem;color:var(--mute);line-height:1.9;}
+
+  /* 页脚 */
+  .foot{max-width:1280px;margin:0 auto;padding:64px 4vw 30px;display:grid;
+    grid-template-columns:1.5fr 1fr 1fr 1fr;gap:40px;}
+  .foot h5{font-size:.6875rem;letter-spacing:.16em;color:var(--mute);font-weight:500;margin-bottom:12px;}
+  .foot .bn{font-family:var(--serif);font-size:1rem;margin-bottom:10px;}
+  .foot li{list-style:none;font-size:.8125rem;color:var(--mute);line-height:2.2;}
+  .cr{max-width:1280px;margin:0 auto;padding:16px 4vw 34px;border-top:1px solid var(--rule);
+    font-size:.75rem;color:#9A958C;letter-spacing:.02em;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+
+  /* ---------- 索引浮层 ---------- */
+  .ov{position:fixed;inset:0;background:#fff;z-index:80;opacity:0;pointer-events:none;
+    transition:opacity .28s ease;overflow-y:auto;}
+  .ov.on{opacity:1;pointer-events:auto;}
+  .ov-in{max-width:1280px;margin:0 auto;padding:100px 4vw 60px;position:relative;}
+  .ov-hd{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:40px;}
+  .close{font-size:.8125rem;color:var(--mute);border-bottom:1px solid #DDD;padding-bottom:2px;}
+  .ilist{width:52%;}
+  .irow{display:flex;align-items:baseline;gap:18px;padding:16px 0;border-bottom:1px solid #F0F0F0;cursor:pointer;}
+  .irow .y{font-size:1.125rem;font-weight:400;width:70px;flex:none;font-family:var(--mono);}
+  .irow .t{font-size:.8125rem;color:var(--mute);}
+  .irow:hover .t,.irow:hover .y{color:var(--accent);}
+  .iprev{position:fixed;right:8vw;top:150px;width:20vw;aspect-ratio:4/5;opacity:0;
+    transition:opacity .18s;pointer-events:none;box-shadow:0 10px 40px rgba(0,0,0,.08);}
+  .iprev.on{opacity:1;}
+  .iprev img{width:100%;height:100%;object-fit:cover;filter:sepia(.1) saturate(.94);}
+
+  /* ---------- 大图 ---------- */
+  .lbx{position:fixed;inset:0;background:rgba(255,255,255,.985);z-index:90;display:flex;
+    align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;}
+  .lbx.on{opacity:1;pointer-events:auto;}
+  .lbx img{max-width:86vw;max-height:80vh;object-fit:contain;filter:sepia(.06) saturate(.96);}
+  .lbx .c{position:absolute;bottom:30px;left:4vw;font-size:.75rem;color:var(--mute);font-family:var(--mono);}
+  .lbx .x{position:absolute;top:20px;right:4vw;font-size:1.25rem;color:#999;}
+  .lbx .x:hover{color:var(--ink);}
+
+  /* ---------- 响应 ---------- */
+  @media (max-width:1023px){
+    .g4{grid-template-columns:repeat(2,1fr);}
+    .g6{grid-template-columns:repeat(3,1fr);}
+    .serie,.serie.r2,.serie.r3{grid-template-columns:1fr;padding-left:0;gap:22px;}
+    .serie.r2 .txt{order:2}.serie.r2 .ph{order:1}
+    .foot{grid-template-columns:1fr 1fr;}
+    .keep{grid-template-columns:1fr;gap:32px;}
+    .ilist{width:100%;}
+    .iprev{display:none;}
+  }
+  @media (max-width:767px){
+    html{font-size:15px;}
+    .nav a.yr{display:none;}
+    h2{font-size:1.625rem;}
+    .sec{padding:72px 20px;}
+    .s2{padding:80px 20px 60px;}
+    .himg{max-width:88vw;}
+    .g4{gap:16px;}
+    .g6{grid-template-columns:repeat(2,1fr);}
+    .tlrow,.tllabels{grid-template-columns:1fr;gap:18px;}
+    .tlline{display:none;}
+    .hcap{gap:1.2em;font-size:.6875rem;}
+    .quote{padding:64px 20px;}
+    .quote p{font-size:1.125rem;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important;}
+    .rv{opacity:1;transform:none;}
+  }
+</style>
+</head>
+<body>
+
+<header class="hd">
+  <div class="hd-in">
+    <a class="brand" href="#top">我们的孩子</a>
+    <nav class="nav">
+      <a class="yr" href="#s3">2019</a>
+      <a class="yr" href="#s3">2021</a>
+      <a class="yr" href="#s3">2023</a>
+      <a class="yr" href="#s3">2026</a>
+      <a class="srch" href="搜索-演示.html">搜索</a>
+      <button id="btnIdx" class="dim">索引</button>
+      <button id="btnBig" class="big" title="长辈模式：整体字号放大">字</button>
+    </nav>
+  </div>
+</header>
+
+<!-- 首屏 -->
+<section class="hero" id="top">
+  <div class="hstage" id="hstage">
+    <img class="himg" id="himg" alt="">
+    <button class="arw l" id="prev" aria-label="上一张">‹</button>
+    <button class="arw r" id="next" aria-label="下一张">›</button>
+  </div>
+  <div class="hcap"><b id="hnum">01 / 08</b><span id="htxt">一岁 · 2019 · 外婆家的窗口</span></div>
+  <div class="cue">向下看这一年</div>
+</section>
+
+<div class="hint" id="hint">← → 翻页　·　点击图片看大图</div>
+
+<!-- S2 -->
+<section class="s2 rv">
+  <div class="lb">— 我们的方式 —</div>
+  <h2>这些照片没有摆拍。<br>是他忘记镜头的那三秒。</h2>
+</section>
+
+<!-- 八年前的今天 -->
+<section class="today rv">
+  <div class="lb">— 八年前的今天 —</div>
+  <h3>他第一次自己走完那段路，<br>我们在后面跟着，谁都没敢出声。</h3>
+  <figure>
+    <img data-cap="2021.11.02 · 外婆家的楼下" src="https://picsum.photos/seed/today01/1600/900" alt="孩子自己走路的照片">
+    <figcaption>2021.11.02 · 外婆家的楼下</figcaption>
+  </figure>
+  <a class="more" href="故事内页-走路这件事.html">看这个故事 →</a>
+</section>
+
+<!-- S3 他几岁 -->
+<section class="sec" id="s3">
+  <div class="s3-hd rv">
+    <div><div class="lb">— 他几岁 —</div><h2 style="margin-top:14px;">从一岁，到八岁</h2></div>
+    <div class="lb">2019 — 2026 · 共 286 张</div>
+  </div>
+  <div class="g4">
+    <a class="card rv" href="故事集-1到3岁.html">
+      <img data-cap="一岁 · 2019 · 外婆家的窗口" src="https://picsum.photos/seed/gy01/800/1067" alt="一岁的孩子在窗前的照片">
+      <div class="lb">0–1 岁</div><div class="t">第一次被看见</div><div class="n">2019 · 4 个故事 · 24 张</div>
+      <div class="go">全部 4 个故事 →</div>
+    </a>
+    <a class="card rv" href="故事集-1到3岁.html">
+      <img data-cap="三岁 · 2021 · 幼儿园门口" src="https://picsum.photos/seed/gy02/800/1067" alt="三岁的孩子在幼儿园门口的照片">
+      <div class="lb">1–3 岁</div><div class="t">走路 · 说话 · 上早教</div><div class="n">2020–2022 · 27 个故事 · 196 张</div>
+      <div class="go">全部 27 个故事 →</div>
+    </a>
+    <a class="card rv" href="故事集-1到3岁.html">
+      <img data-cap="五岁 · 2023 · 掉了一颗牙" src="https://picsum.photos/seed/gy03/800/1067" alt="五岁的孩子笑着的照片">
+      <div class="lb">4–6 岁</div><div class="t">开始有自己的房间</div><div class="n">2023–2025 · 31 个故事 · 112 张</div>
+      <div class="go">全部 31 个故事 →</div>
+    </a>
+    <a class="card rv" href="故事集-1到3岁.html">
+      <img data-cap="八岁 · 2026 · 搬家后的第一个早晨" src="https://picsum.photos/seed/gy04/800/1067" alt="八岁的孩子背着书包回头的照片">
+      <div class="lb">7–12 岁</div><div class="t">背影变长了</div><div class="n">2026 · 12 个故事 · 54 张</div>
+      <div class="go">全部 12 个故事 →</div>
+    </a>
+  </div>
+</section>
+
+<!-- S4 这一年 -->
+<section class="sec" style="background:var(--bg-alt);max-width:none;">
+  <div style="max-width:1200px;margin:0 auto;padding:0 4vw;">
+    <div class="rv" style="margin-bottom:26px;"><div class="lb">— 这一年 —</div></div>
+
+    <div class="serie rv">
+      <div class="ph"><img data-cap="2019 · 第一次看见海" src="https://picsum.photos/seed/gs01/1400/875" alt="第一次看见海"></div>
+      <div class="txt"><div class="lb">Year 01 / 2019</div><h3>第一次看见海</h3>
+        <p>他站在沙滩上不肯往前走，一直回头看我们。后来是浪打湿了鞋，他才笑。</p>
+        <a class="more" href="#s3">看这一年的 24 张 →</a></div>
+    </div>
+
+    <div class="serie r2 rv">
+      <div class="ph"><img data-cap="2022 · 学会骑车的那年夏天" src="https://picsum.photos/seed/gs02/1400/875" alt="学会骑车的夏天"></div>
+      <div class="txt"><div class="lb">Year 04 / 2022</div><h3>学会骑车的那年夏天</h3>
+        <p>摔了两次，第三次自己骑出去了。那天拍了 38 张，大部分是糊的。</p>
+        <a class="more" href="#s3">看这一年的 38 张 →</a></div>
+    </div>
+
+    <div class="serie r3 rv">
+      <div class="ph"><img data-cap="2026 · 搬家后的第一个早晨" src="https://picsum.photos/seed/gs03/1400/875" alt="搬家后的第一个早晨"></div>
+      <div class="txt"><div class="lb">Year 08 / 2026</div><h3>搬家后的第一个早晨</h3>
+        <p>新家的窗朝东，六点半就有光。他坐在纸箱上吃早饭，说这里比以前好。</p>
+        <a class="more" href="#s3">看这一年的 54 张 →</a></div>
+    </div>
+  </div>
+</section>
+
+<!-- S5 时间轴 -->
+<section class="sec">
+  <div class="rv"><div class="lb">— 同一个人 —</div>
+    <h2 style="margin-top:14px;">每年春天，同一个窗口</h2></div>
+  <div class="tlwrap rv">
+    <div class="tlrow">
+      <figure><img data-cap="三岁 · 2021 · 同一个窗口" src="https://picsum.photos/seed/gt01/800/1067" alt="三岁时的照片"></figure>
+      <figure><img data-cap="六岁 · 2024 · 同一个窗口" src="https://picsum.photos/seed/gt02/800/1067" alt="六岁时的照片"></figure>
+      <figure><img data-cap="八岁 · 2026 · 同一个窗口" src="https://picsum.photos/seed/gt03/800/1067" alt="八岁时的照片"></figure>
+    </div>
+    <div class="tlline"><i style="left:9%"></i><i style="left:42%"></i><i style="left:75%"></i></div>
+    <div class="tllabels"><div>3 岁 · 2021</div><div>6 岁 · 2024</div><div>8 岁 · 2026</div></div>
+  </div>
+</section>
+
+<!-- S6 谁在身边 -->
+<section class="sec" style="background:var(--bg-alt);max-width:none;">
+  <div style="max-width:1200px;margin:0 auto;padding:0 4vw;">
+    <div class="rv"><div class="lb">— 谁在身边 —</div></div>
+    <div class="lead rv">大部分照片是家里人自己拍的，只有过年会请人拍一次。所以这本册子里，谁都在。</div>
+    <div class="g6">
+      <div class="p rv"><img data-cap="爸爸 · 出镜 41 次" src="https://picsum.photos/seed/gp1/600/600" alt="爸爸和孩子的合影"><div class="nm">爸爸</div><div class="ct">出镜 41 次</div></div>
+      <div class="p rv"><img data-cap="妈妈 · 出镜 58 次" src="https://picsum.photos/seed/gp2/600/600" alt="妈妈和孩子的合影"><div class="nm">妈妈</div><div class="ct">出镜 58 次</div></div>
+      <div class="p rv"><img data-cap="爷爷 · 出镜 22 次" src="https://picsum.photos/seed/gp3/600/600" alt="爷爷和孩子的合影"><div class="nm">爷爷</div><div class="ct">出镜 22 次</div></div>
+      <div class="p rv"><img data-cap="奶奶 · 出镜 34 次" src="https://picsum.photos/seed/gp4/600/600" alt="奶奶和孩子的合影"><div class="nm">奶奶</div><div class="ct">出镜 34 次</div></div>
+      <div class="p rv"><img data-cap="外公 · 出镜 17 次" src="https://picsum.photos/seed/gp5/600/600" alt="外公和孩子的合影"><div class="nm">外公</div><div class="ct">出镜 17 次</div></div>
+      <div class="p rv"><img data-cap="外婆 · 出镜 29 次" src="https://picsum.photos/seed/gp6/600/600" alt="外婆和孩子的合影"><div class="nm">外婆</div><div class="ct">出镜 29 次</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- S7 留言 -->
+<section class="quote">
+  <div class="rv">
+    <span class="mk">“</span>
+    <p>他三岁那年我在住院，是这些照片让我知道他每天都干了什么。</p>
+    <div class="who">
+      <img src="https://picsum.photos/seed/gq1/200/200" alt="外婆与孩子的合影">
+      <span>外婆 · 2025 年冬</span>
+    </div>
+  </div>
+</section>
+
+<!-- S8 留给家里 -->
+<section class="sec">
+  <div class="rv"><div class="lb">— 给家里人的三件事 —</div></div>
+  <div class="keep">
+    <div class="k rv"><div class="num">01</div><h3>原图都在</h3>
+      <p>点开任意一张可以看原图，长按或右键就存下来了。</p>
+      <a class="more" href="#top">去下载</a></div>
+    <div class="k rv"><div class="num">02</div><h3>做成一本册子</h3>
+      <p>每年印一本，放在客厅的桌上，谁来都能翻。</p>
+      <a class="more" href="#top">看看成品</a></div>
+    <div class="k rv"><div class="num">03</div><h3>只给家里人看</h3>
+      <p>这里要家庭口令才能进，搜索引擎找不到，照片也不会外传。</p>
+      <a class="more" href="#top">发给家人</a></div>
+  </div>
+</section>
+
+<!-- 页脚 -->
+<footer>
+  <div class="foot">
+    <div>
+      <div class="bn">我们的孩子</div>
+      <div style="font-size:.875rem;color:var(--mute);line-height:1.9;">把孩子的每一年，<br>存成家里人随时能翻开的一页。</div>
+    </div>
+    <div><h5>年份</h5><ul><li>2019 · 2020 · 2021</li><li>2022 · 2023 · 2024</li><li>2025 · 2026</li></ul></div>
+    <div><h5>家里人</h5><ul><li>爸爸 / 妈妈</li><li>爷爷 / 奶奶</li><li>外公 / 外婆</li></ul></div>
+    <div><h5>这本册子</h5><ul><li>关于</li><li>怎么存图</li><li><a href="上传确认页.html">上传与管理</a></li></ul></div>
+  </div>
+  <div class="cr">
+    <span>2019—2026 · 共 8 次 · 286 张 · 仅家人可见，请勿外传</span>
+    <span>演示版 · 当前图片为占位素材</span>
+  </div>
+</footer>
+
+<!-- 索引浮层 -->
+<div class="ov" id="ov">
+  <div class="ov-in">
+    <div class="ov-hd">
+      <div class="lb">索引 · INDEX</div>
+      <button class="close" id="ovClose">关闭</button>
+    </div>
+    <div class="ilist" id="ilist"></div>
+    <div class="iprev" id="iprev"><img id="ipimg" alt=""></div>
+  </div>
+</div>
+
+<!-- 大图 -->
+<div class="lbx" id="lbx">
+  <button class="x" id="lbxClose">✕</button>
+  <img id="lbxImg" alt="">
+  <div class="c" id="lbxCap"></div>
+</div>
+
+<script>
+(function(){
+  var SLIDES = [
+    {s:'gy01', w:1200, h:1600, cap:'一岁 · 2019 · 外婆家的窗口'},
+    {s:'gy02', w:1600, h:1067, cap:'两岁 · 2020 · 学会走路'},
+    {s:'gy03', w:1200, h:1600, cap:'三岁 · 2021 · 幼儿园门口'},
+    {s:'gy04', w:1600, h:1067, cap:'四岁 · 2022 · 第一次骑车'},
+    {s:'gy05', w:1200, h:1500, cap:'五岁 · 2023 · 掉了一颗牙'},
+    {s:'gy06', w:1600, h:1067, cap:'六岁 · 2024 · 自己睡的第一晚'},
+    {s:'gy07', w:1200, h:1600, cap:'七岁 · 2025 · 外婆住院那年'},
+    {s:'gy08', w:1600, h:1200, cap:'八岁 · 2026 · 搬家后的第一个早晨'}
+  ];
+
+  var img = document.getElementById('himg'),
+      num = document.getElementById('hnum'),
+      txt = document.getElementById('htxt'),
+      cur = 0, busy = false;
+
+  function pad(n){ return (n<10?'0':'')+n; }
+  function url(o){ return 'https://picsum.photos/seed/'+o.s+'/'+o.w+'/'+o.h; }
+
+  function fallbackSvg(w, h, label){
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'">' +
+      '<rect width="100%" height="100%" fill="#F1ECE3"/>' +
+      '<text x="50%" y="50%" font-size="16" fill="#B9B2A5" text-anchor="middle" ' +
+      'font-family="sans-serif" letter-spacing="1">'+(label||'照片位置')+'</text></svg>';
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+
+  function render(n){
+    var o = SLIDES[n];
+    num.textContent = pad(n+1) + ' / ' + pad(SLIDES.length);
+    txt.textContent = o.cap;
+    img.style.opacity = 0;
+    var pre = new Image();
+    pre.onload = function(){
+      img.src = pre.src;
+      img.onload = function(){ img.style.opacity = 1; };
+      if(img.complete){ img.style.opacity = 1; }
+      busy = false;
+    };
+    pre.onerror = function(){
+      img.src = fallbackSvg(o.w, o.h, '照片位置');
+      img.style.opacity = 1;
+      busy = false;
+    };
+    pre.src = url(o);
+  }
+
+  function go(d){
+    if(busy) return; busy = true;
+    cur = (cur + d + SLIDES.length) % SLIDES.length;
+    render(cur);
+  }
+
+  img.style.transition = 'opacity .28s ease';
+  render(0);
+
+  document.getElementById('prev').onclick = function(e){ e.stopPropagation(); go(-1); };
+  document.getElementById('next').onclick = function(e){ e.stopPropagation(); go(1); };
+
+  document.addEventListener('keydown', function(e){
+    if(document.getElementById('lbx').classList.contains('on')){
+      if(e.key === 'Escape') closeLbx();
+      return;
+    }
+    if(document.getElementById('ov').classList.contains('on')){
+      if(e.key === 'Escape') closeIdx();
+      return;
+    }
+    if(e.key === 'ArrowLeft'){ go(-1); }
+    if(e.key === 'ArrowRight'){ go(1); }
+  });
+
+  /* 触屏滑动 */
+  var sx = null;
+  document.addEventListener('touchstart', function(e){ sx = e.touches[0].clientX; }, {passive:true});
+  document.addEventListener('touchend', function(e){
+    if(sx === null) return;
+    var dx = e.changedTouches[0].clientX - sx;
+    if(Math.abs(dx) > 60 && window.scrollY < window.innerHeight * .5){
+      go(dx > 0 ? -1 : 1);
+    }
+    sx = null;
+  }, {passive:true});
+
+  /* 首次提示 3 秒 */
+  var hint = document.getElementById('hint');
+  setTimeout(function(){ hint.classList.add('on'); }, 700);
+  setTimeout(function(){ hint.classList.remove('on'); }, 4200);
+
+  /* 滚动入场 */
+  var io = new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
+    });
+  }, {threshold:.12});
+  document.querySelectorAll('.rv').forEach(function(el){ io.observe(el); });
+
+  /* 索引 */
+  var IDX = [
+    ['2019','第一次看见海 · 24 张','gy01'],
+    ['2020','会走路的第一年 · 31 张','gy02'],
+    ['2021','三岁 · 开始上幼儿园 · 40 张','gy03'],
+    ['2022','学会骑车的那年夏天 · 38 张','gy04'],
+    ['2023','掉了一颗牙 · 26 张','gy05'],
+    ['2024','第一次自己睡 · 19 张','gy06'],
+    ['2025','外婆住院的那一年 · 22 张','gy07'],
+    ['2026','搬家后的第一个早晨 · 54 张','gy08']
+  ];
+  var ilist = document.getElementById('ilist');
+  IDX.forEach(function(row, i){
+    var d = document.createElement('div');
+    d.className = 'irow';
+    d.innerHTML = '<div class="y">'+row[0]+'</div><div class="t">'+row[1]+'</div>';
+    d.addEventListener('mouseenter', function(){
+      var p = document.getElementById('iprev'), im = document.getElementById('ipimg');
+      im.src = 'https://picsum.photos/seed/'+row[2]+'/480/600';
+      p.classList.add('on');
+    });
+    d.addEventListener('mouseleave', function(){
+      document.getElementById('iprev').classList.remove('on');
+    });
+    d.addEventListener('click', function(){
+      closeIdx();
+      var el = document.getElementById('s3');
+      if(el){ el.scrollIntoView({behavior:'smooth'}); }
+    });
+    ilist.appendChild(d);
+  });
+
+  function openIdx(){ document.getElementById('ov').classList.add('on'); document.body.style.overflow='hidden'; }
+  function closeIdx(){ document.getElementById('ov').classList.remove('on'); document.body.style.overflow=''; }
+
+  document.getElementById('btnIdx').onclick = openIdx;
+  document.getElementById('ovClose').onclick = closeIdx;
+
+  /* 长辈模式 */
+  document.getElementById('btnBig').onclick = function(){
+    document.documentElement.classList.toggle('lg');
+  };
+
+  /* 大图 */
+  var lbx = document.getElementById('lbx'),
+      lbxImg = document.getElementById('lbxImg'),
+      lbxCap = document.getElementById('lbxCap');
+
+  function openLbx(src, cap){
+    lbxImg.src = src.replace(/\/\d+\/\d+$/, '/1400/1750');
+    lbxCap.textContent = cap || '';
+    lbx.classList.add('on');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeLbx(){
+    lbx.classList.remove('on');
+    document.body.style.overflow = '';
+  }
+  document.getElementById('lbxClose').onclick = closeLbx;
+  lbx.addEventListener('click', function(e){ if(e.target === lbx) closeLbx(); });
+
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if(t.tagName === 'IMG' && t.dataset.cap){
+      e.preventDefault();
+      openLbx(t.currentSrc || t.src, t.dataset.cap);
+    }
+  });
+
+  document.getElementById('himg').addEventListener('click', function(){
+    openLbx(url(SLIDES[cur]), SLIDES[cur].cap);
+  });
+
+  /* 图床不可达时优雅占位，避免破图 */
+  document.querySelectorAll('img[data-cap]').forEach(function(im){
+    im.addEventListener('error', function(){
+      if(im.dataset.ph === '1') return;
+      im.dataset.ph = '1';
+      im.src = fallbackSvg(800, 1000, '照片位置');
+    });
+  });
+})();
+</script>
+</body>
+</html>

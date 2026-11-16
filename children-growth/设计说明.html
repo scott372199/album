@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我们的孩子 · 设计说明 v1</title>
+<style>
+  :root{
+    --ink:#111; --mute:#6E6A63; --faint:#9A958C; --rule:#E8E8E8; --rule2:#DED8CD;
+    --bg:#fff; --rail:#FAF8F4; --accent:#B4795A;
+    --serif:"Source Han Serif SC","Noto Serif SC","Songti SC",SimSun,serif;
+    --sans:"Helvetica Neue",Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;
+    --mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
+  }
+  html{font-size:15px;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.8;
+    -webkit-font-smoothing:antialiased;}
+  a{color:inherit;text-decoration:none;}
+  img{display:block;max-width:100%;}
+
+  /* 封面 */
+  .cover{max-width:1180px;margin:0 auto;padding:72px 40px 40px;border-bottom:1px solid var(--rule);}
+  .cover .k{font-size:.6875rem;letter-spacing:.2em;color:var(--accent);}
+  .cover h1{font-family:var(--serif);font-weight:300;font-size:3rem;line-height:1.25;margin-top:16px;letter-spacing:.02em;}
+  .cover .lead{font-size:1rem;color:var(--mute);max-width:640px;margin-top:18px;line-height:1.95;}
+  .meta{display:flex;gap:44px;margin-top:34px;flex-wrap:wrap;}
+  .meta div{font-size:.75rem;color:var(--faint);}
+  .meta b{display:block;font-family:var(--mono);color:var(--ink);font-weight:400;font-size:.8125rem;margin-top:2px;}
+
+  /* 布局 */
+  .doc{max-width:1180px;margin:0 auto;padding:0 40px 100px;display:grid;
+    grid-template-columns:168px 1fr;gap:56px;align-items:start;}
+  .toc{position:sticky;top:32px;padding-top:34px;font-size:.8125rem;}
+  .toc .h{font-size:.625rem;letter-spacing:.18em;color:var(--faint);margin-bottom:12px;}
+  .toc a{display:block;color:var(--mute);padding:4px 0;border-left:1px solid transparent;padding-left:12px;
+    margin-left:-13px;}
+  .toc a:hover{color:var(--ink);border-left-color:var(--rule2);}
+  .toc a.sub{padding-left:24px;font-size:.75rem;}
+
+  main{padding-top:34px;min-width:0;}
+  section{margin-bottom:64px;scroll-margin-top:24px;}
+  h2{font-family:var(--serif);font-weight:300;font-size:1.75rem;letter-spacing:.02em;
+    padding-bottom:14px;border-bottom:1px solid var(--ink);display:flex;align-items:baseline;gap:14px;}
+  h2 span{font-family:var(--mono);font-size:.75rem;color:var(--accent);letter-spacing:.08em;}
+  h3{font-size:.9375rem;font-weight:500;margin:30px 0 10px;letter-spacing:.02em;}
+  p.note{font-size:.875rem;color:var(--mute);line-height:1.95;margin-top:12px;max-width:660px;}
+
+  /* 页面块 */
+  .page-hd{display:flex;align-items:baseline;gap:14px;margin-top:6px;}
+  .page-hd .id{font-family:var(--mono);font-size:.6875rem;background:var(--ink);color:#fff;padding:2px 7px;}
+  .page-hd .role{font-size:.8125rem;color:var(--mute);}
+  .cols{display:grid;grid-template-columns:400px 1fr;gap:36px;margin-top:22px;align-items:start;}
+
+  /* 缩略示意 */
+  .shot{border:1px solid var(--rule2);background:#fff;overflow:hidden;position:relative;}
+  .shot .bar{height:16px;border-bottom:1px solid #F0F0F0;display:flex;align-items:center;
+    padding:0 8px;font-size:5px;color:#C6C0B6;letter-spacing:.1em;justify-content:space-between;}
+  .shot .bd{padding:0;}
+  .shot .cap{font-size:.625rem;color:var(--faint);font-family:var(--mono);margin-top:8px;display:flex;
+    justify-content:space-between;}
+
+  /* 规则表 */
+  table{width:100%;border-collapse:collapse;font-size:.8125rem;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--rule);vertical-align:top;}
+  th{font-size:.625rem;letter-spacing:.14em;color:var(--faint);font-weight:500;text-transform:uppercase;}
+  td:first-child{width:112px;color:var(--mute);}
+  td code{font-family:var(--mono);font-size:.75rem;background:var(--rail);padding:1px 4px;}
+
+  pre{background:#FBF9F6;border:1px solid var(--rule);padding:16px 18px;overflow:auto;
+    font-family:var(--mono);font-size:.75rem;line-height:1.75;color:#3A3630;margin-top:12px;}
+  pre .c{color:#A39C90;}
+  pre .s{color:#8A6A3F;}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:28px;}
+  .kv{font-size:.8125rem;color:var(--mute);line-height:2;}
+  .kv b{color:var(--ink);font-weight:500;font-family:var(--mono);font-size:.75rem;}
+
+  .callout{border-left:2px solid var(--accent);background:#FCFAF7;padding:12px 16px;font-size:.8125rem;
+    color:#4A4640;line-height:1.9;margin-top:18px;}
+
+  /* 页面地图 */
+  .map{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:22px;}
+  .map a{border:1px solid var(--rule);padding:16px 18px;transition:.18s;}
+  .map a:hover{border-color:var(--ink);}
+  .map .n{font-family:var(--mono);font-size:.625rem;color:var(--accent);letter-spacing:.1em;}
+  .map .t{font-family:var(--serif);font-size:1rem;margin-top:6px;}
+  .map .d{font-size:.75rem;color:var(--faint);margin-top:4px;}
+
+  @media (max-width:940px){
+    .doc{grid-template-columns:1fr;gap:0;}
+    .toc{display:none;}
+    .cols{grid-template-columns:1fr;}
+    .map{grid-template-columns:1fr 1fr;}
+    .grid2{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="k">DESIGN SPEC · 家庭影像册</div>
+  <h1>我们的孩子</h1>
+  <p class="lead">一套只给家里人看的成长影像册：首页一次给一张照片，往下是年份与故事，能翻、能找、能存。本文档为可交付说明，含各页面的版式规则与数据结构。</p>
+  <div class="meta">
+    <div>版本<b>v1.0</b></div>
+    <div>日期<b>2026.11.16</b></div>
+    <div>页面<b>6 个</b></div>
+    <div>响应式<b>1440 / 768 / 375</b></div>
+    <div>图片<b>占位素材</b></div>
+  </div>
+</div>
+
+<div class="doc">
+  <aside class="toc">
+    <div class="h">目录</div>
+    <a href="#s1">01 概览与页面地图</a>
+    <a href="#s2">02 设计规范</a>
+    <a href="#p1" class="sub">首页</a>
+    <a href="#p2" class="sub">故事集列表</a>
+    <a href="#p3" class="sub">故事内页</a>
+    <a href="#p4" class="sub">搜索</a>
+    <a href="#p5" class="sub">上传与确认</a>
+    <a href="#p6" class="sub">故事卡片</a>
+    <a href="#s9">03 数据模型</a>
+    <a href="#s10">04 交互与状态</a>
+    <a href="#s11">05 交付清单</a>
+  </aside>
+
+  <main>
+
+    <!-- 01 -->
+    <section id="s1">
+      <h2><span>01</span>概览与页面地图</h2>
+      <p class="note">面向家庭成员（父母维护，祖辈观看）。全站不含预约、价格、套餐、摄影师与任何表单。核心原则：<b>照片挂在故事下面，年龄只做筛选。</b></p>
+      <div class="map">
+        <a href="demo-首页.html"><div class="n">P1</div><div class="t">首页</div><div class="d">一张图起手，往下给结构</div></a>
+        <a href="故事集-1到3岁.html"><div class="n">P2</div><div class="t">故事集列表</div><div class="d">按年龄筛选、按人和场景过滤</div></a>
+        <a href="故事内页-走路这件事.html"><div class="n">P3</div><div class="t">故事内页</div><div class="d">图文节奏 + 视频 + 归档</div></a>
+        <a href="搜索-演示.html"><div class="n">P4</div><div class="t">搜索</div><div class="d">用人、地点、事来找</div></a>
+        <a href="上传确认页.html"><div class="n">P5</div><div class="t">上传与确认</div><div class="d">草稿、候选标题、批量接受</div></a>
+        <a href="故事卡片.html"><div class="n">P6</div><div class="t">故事卡片</div><div class="d">3:4 竖图，发给家里人</div></a>
+      </div>
+      <div class="callout">链路：上传 → 确认草稿 → 首页 → 年龄 → 故事集 → 故事 → 单张。岔路：搜索、故事卡片。<br>导航恒为四项：年份 / 他几岁 / 索引 / 搜索；页脚恒定一行「仅家人可见」。</div>
+    </section>
+
+    <!-- 02 -->
+    <section id="s2">
+      <h2><span>02</span>设计规范</h2>
+      <div class="grid2">
+        <div>
+          <h3>色彩</h3>
+          <table>
+            <tr><td>页面底</td><td><code>#FFFFFF</code></td></tr>
+            <tr><td>交替区块</td><td><code>#FAF8F4</code></td></tr>
+            <tr><td>正文</td><td><code>#111111</code></td></tr>
+            <tr><td>次级文字</td><td><code>#6E6A63</code></td></tr>
+            <tr><td>分隔线</td><td><code>1px #E8E8E8</code></td></tr>
+            <tr><td>强调（赭）</td><td><code>#B4795A</code>　仅编号与节点，全站 ≤ 5 处</td></tr>
+          </table>
+        </div>
+        <div>
+          <h3>字体</h3>
+          <table>
+            <tr><td>标题</td><td>思源宋体 Light　H1 48 / H2 34 / H3 20</td></tr>
+            <tr><td>正文</td><td>思源黑体 17 / 1.85，单行 ≤ 30 字</td></tr>
+            <tr><td>故事正文</td><td>思源宋体 17 / 2.15，栏宽 620，像书</td></tr>
+            <tr><td>标注</td><td>等宽 12，用于时间、张数、编号</td></tr>
+            <tr><td>标签</td><td>11 / 字距 .18em / 全大写</td></tr>
+          </table>
+        </div>
+      </div>
+      <h3>栅格与形态</h3>
+      <div class="kv">
+        内容最大宽 <b>1280</b>　左右边距 <b>4vw</b>　区块上下留白 <b>110</b>　卡片间距 <b>26</b>　圆角 <b>0</b>　投影 <b>0</b>
+      </div>
+      <h3>图片</h3>
+      <div class="kv">
+        首屏 <b>contain 不裁切</b>，最大宽 76vw、最大高 72vh；列表卡 <b>cover 3:2 / 3:4</b>；统一滤镜 <b>sepia(.1) saturate(.94)</b> 用于拉齐不同来源的色温；加载失败显示浅色占位块，不出现破图。
+      </div>
+      <h3>动效</h3>
+      <div class="kv">
+        区块入场：上移 24px + 淡入 <b>700ms</b>，只播一次；图片 hover 仅 <b>1.02</b> 缩放；翻页 <b>280ms</b> 交叉淡入；禁自动轮播、禁视差；<b>prefers-reduced-motion</b> 全部关闭。
+      </div>
+    </section>
+
+    <!-- P1 首页 -->
+    <section id="p1">
+      <h2><span>P1</span>首页</h2>
+      <div class="page-hd"><span class="id">HOME</span><span class="role">第一屏让人停下来，第一屏之后让人找得到</span></div>
+      <div class="cols">
+        <div>
+          <div class="shot">
+            <div class="bar"><span>我们的孩子</span><span>2019　2021　2023　2026　搜索</span></div>
+            <img src="https://picsum.photos/seed/doc01/800/450" alt="" style="filter:sepia(.1) saturate(.94);aspect-ratio:16/9;object-fit:cover;width:100%">
+            <div style="padding:10px 12px 14px;">
+              <div style="font-family:var(--serif);font-size:15px;line-height:1.35">把长大，拍慢一点</div>
+              <div style="font-size:8px;color:#9A958C;font-family:var(--mono);margin-top:5px">01 / 08　一岁 · 2019 · 外婆家的窗口</div>
+            </div>
+          </div>
+          <div class="cap"><span>首页 · 首屏 1440×900</span><span>预览缩略</span></div>
+        </div>
+        <div>
+          <table>
+            <tr><th>区域</th><th>规则</th></tr>
+            <tr><td>首屏</td><td>100vh，只 1 张图、1 句主文案、1 个文字入口；无按钮、无圆点、无缩略图</td></tr>
+            <tr><td>翻页</td><td>← → / 点两侧 ‹ › / 手机左右滑；仅首屏区域内响应，不影响页面滚动</td></tr>
+            <tr><td>提示</td><td>首次进入 0.7s 浮出「← → 翻页 · 点击图片看大图」，3.5s 淡出，不再重复</td></tr>
+            <tr><td>今日回顾</td><td>第二屏，「N 年前的今天」一条浅底横带：一句 + 一张 16:9 + 文字链；每年自动更换</td></tr>
+            <tr><td>他几岁</td><td>4 栏 3:4，每栏为入口：年龄 / 一句 / 故事数 + 张数；hover 出「全部 N 个故事 →」</td></tr>
+            <tr><td>这一年</td><td>3 行错位（12% / 6%），章节名写事不写套系</td></tr>
+            <tr><td>谁在身边</td><td>6 张 1:1 + 名字 + 出镜次数</td></tr>
+            <tr><td>页脚</td><td>四列 + 一行「2019—2026 · 共 8 次 · 286 张 · 仅家人可见」</td></tr>
+            <tr><td>长辈模式</td><td>顶栏「字」按钮，根字号 16 → 18，全站 rem 等比放大</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- P2 -->
+    <section id="p2">
+      <h2><span>P2</span>故事集列表</h2>
+      <div class="page-hd"><span class="id">AGE</span><span class="role">年龄是筛选器，不是终点</span></div>
+      <div class="cols">
+        <div>
+          <div class="shot">
+            <div class="bar"><span>我们的孩子 / 他几岁 / 1–3 岁</span><span>搜索</span></div>
+            <div style="padding:12px;">
+              <div style="font-family:var(--serif);font-size:20px;line-height:1.2">1–3 岁</div>
+              <div style="font-size:8px;color:#9A958C;font-family:var(--mono);margin-top:6px">27 个故事 · 196 张 · 4 段视频</div>
+              <div style="display:flex;gap:4px;margin-top:10px">
+                <span style="font-size:7px;border:1px solid #111;background:#111;color:#fff;padding:1px 5px">全部</span>
+                <span style="font-size:7px;border:1px solid #E8E8E8;padding:1px 5px;color:#6E6A63">爸爸</span>
+                <span style="font-size:7px;border:1px solid #E8E8E8;padding:1px 5px;color:#6E6A63">妈妈</span>
+                <span style="font-size:7px;border:1px solid #E8E8E8;padding:1px 5px;color:#6E6A63">外婆</span>
+                <span style="font-size:7px;border:1px solid #E8E8E8;padding:1px 5px;color:#6E6A63">公园</span>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px">
+                <img src="https://picsum.photos/seed/doc02/300/200" style="aspect-ratio:3/2;object-fit:cover;filter:sepia(.1) saturate(.94);width:100%">
+                <img src="https://picsum.photos/seed/doc03/300/200" style="aspect-ratio:3/2;object-fit:cover;filter:sepia(.1) saturate(.94);width:100%">
+                <img src="https://picsum.photos/seed/doc04/300/200" style="aspect-ratio:3/2;object-fit:cover;filter:sepia(.1) saturate(.94);width:100%">
+              </div>
+              <div style="display:flex;gap:6px;margin-top:6px;font-size:7px;color:#6E6A63">
+                <span style="flex:1">走路这件事</span><span style="flex:1">过年回老家</span><span style="flex:1">楼下的小广场</span>
+              </div>
+            </div>
+          </div>
+          <div class="cap"><span>1–3 岁 · 27 个故事</span><span>预览缩略</span></div>
+        </div>
+        <div>
+          <table>
+            <tr><th>区域</th><th>规则</th></tr>
+            <tr><td>头部</td><td>面包屑 + 大标题 + 一句总述 + 统计行（故事数 / 照片数 / 视频数）</td></tr>
+            <tr><td>筛选条</td><td>吸顶；6 位家人 + 5 类场景；单选，点第二下不取消，回到「全部」用首项</td></tr>
+            <tr><td>排序</td><td>按时间（默认，新在前）/ 按张数；仅前端重排，不刷新</td></tr>
+            <tr><td>卡片</td><td>3 栏（≤1023 两栏，≤640 两栏紧凑）；封面 3:2 + 标题 + 时间区间 + 张数 + 涉及的人与场景</td></tr>
+            <tr><td>系列</td><td>跨年重复场景加「系列」角标，不归入单一年份</td></tr>
+            <tr><td>更多</td><td>底部「还有 N 个故事」，一次展开，不再分页</td></tr>
+            <tr><td>空状态</td><td>筛选无结果时给一句「这个条件下还没有故事」+ 清除筛选</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- P3 -->
+    <section id="p3">
+      <h2><span>P3</span>故事内页</h2>
+      <div class="page-hd"><span class="id">STORY</span><span class="role">挑过的照片讲一个故事，剩下的进归档</span></div>
+      <div class="cols">
+        <div>
+          <div class="shot">
+            <div class="bar"><span>我们的孩子 / 1–3 岁 / 走路这件事</span><span></span></div>
+            <div style="padding:12px;">
+              <div style="font-family:var(--serif);font-size:18px;line-height:1.3">走路这件事</div>
+              <div style="font-family:var(--serif);font-size:9px;color:#4A4640;line-height:1.7;margin-top:6px">
+                他第一次松开手，是三月的一个下午。那天我们什么都没拍到，只记得他笑得往后仰。
+              </div>
+              <img src="https://picsum.photos/seed/doc05/600/340" style="width:100%;aspect-ratio:16/9;object-fit:cover;filter:sepia(.1) saturate(.94);margin-top:10px">
+              <div style="font-family:var(--serif);font-size:8px;color:#3A3630;line-height:1.9;margin-top:8px">
+                三月的那个下午，他扶着沙发站起来，手心全是汗。我们都没出声，怕一说话他就坐回去。
+              </div>
+            </div>
+          </div>
+          <div class="cap"><span>故事内页 · 图文节奏</span><span>预览缩略</span></div>
+        </div>
+        <div>
+          <table>
+            <tr><th>区域</th><th>规则</th></tr>
+            <tr><td>头部</td><td>面包屑 + H1 + 一句引子（≤25 字）+ 元信息（时间区间 / 张数 / 视频数 / 人物）</td></tr>
+            <tr><td>正文</td><td>宋体 17 / 2.15，栏宽 620，三段，180–220 字</td></tr>
+            <tr><td>照片节奏</td><td>大图 → 双图并排 → 竖图 → 视频 → 错位双图 → 21:9 收尾；宽窄交替，不等距</td></tr>
+            <tr><td>旁白</td><td>居中，一句话，≤15 字，上下各一条 28px 细线</td></tr>
+            <tr><td>视频</td><td>置于约 65% 处；仅封面 + 时长，点击才播，不自动播放；每篇 ≤ 2 段</td></tr>
+            <tr><td>归档</td><td>「这一年的其他 N 张」折叠，展开为 6 列方形缩略；故事是挑过的，档案是全的</td></tr>
+            <tr><td>阅读进度</td><td>顶部 2px 赭色进度条，随滚动</td></tr>
+            <tr><td>导航</td><td>底部「上一个 / 下一个故事」，双向</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- P4 -->
+    <section id="p4">
+      <h2><span>P4</span>搜索</h2>
+      <div class="page-hd"><span class="id">SEARCH</span><span class="role">长辈不会点筛选，但会说话</span></div>
+      <div class="cols">
+        <div>
+          <div class="shot">
+            <div class="bar"><span>我们的孩子</span><span>搜索 · 索引</span></div>
+            <div style="padding:14px 12px;">
+              <div style="font-size:6px;letter-spacing:.2em;color:#9A958C">— 搜索 —</div>
+              <div style="border-bottom:1px solid #111;padding:8px 0 6px;font-family:var(--serif);font-size:16px;color:#111">
+                外婆抱他的照片
+              </div>
+              <div style="font-size:6px;color:#9A958C;margin-top:6px">用人 + 地点 + 事来说，比打字准。</div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:14px">
+                <img src="https://picsum.photos/seed/doc06/160/160" style="aspect-ratio:1;object-fit:cover;filter:sepia(.1) saturate(.94);width:100%">
+                <img src="https://picsum.photos/seed/doc07/160/160" style="aspect-ratio:1;object-fit:cover;filter:sepia(.1) saturate(.94);width:100%">
+                <img src="https://picsum.photos/seed/doc08/160/160" style="aspect-ratio:1;object-fit:cover;filter:sepia(.1) saturate(.94);width:100%">
+                <img src="https://picsum.photos/seed/doc09/160/160" style="aspect-ratio:1;object-fit:cover;filter:sepia(.1) saturate(.94);width:100%">
+              </div>
+            </div>
+          </div>
+          <div class="cap"><span>搜索 · 输入即出结果</span><span>预览缩略</span></div>
+        </div>
+        <div>
+          <table>
+            <tr><th>区域</th><th>规则</th></tr>
+            <tr><td>输入框</td><td>宋体 32、仅下划线；占位文字为真实场景「外婆抱他的照片」</td></tr>
+            <tr><td>提示</td><td>一行「用人 + 地点 + 事来说，比打字准」；下方 5 个示例 chip</td></tr>
+            <tr><td>结果分组</td><td>故事集 / 照片 / 视频，各带数量；命中词加赭色下划线</td></tr>
+            <tr><td>空态</td><td>「没找到」+ 三个替代说法，可一键替换</td></tr>
+            <tr><td>默认态</td><td>无输入时显示「最近看过」，不显示全部照片</td></tr>
+            <tr><td>退出</td><td>Esc 清空并失焦；点结果进故事或开大图</td></tr>
+          </table>
+          <div class="callout">检索方式：<b>CLIP 向量 + 人脸 ID + 时间/年龄过滤</b> 混合召回，先按故事聚合，再展开照片。不依赖文件名，不依赖手工标签。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- P5 -->
+    <section id="p5">
+      <h2><span>P5</span>上传与确认</h2>
+      <div class="page-hd"><span class="id">ADMIN</span><span class="role">批量上传后只做一件事：过一遍草稿</span></div>
+      <div class="cols">
+        <div>
+          <div class="shot">
+            <div class="bar"><span>我们的孩子 · 上传与管理</span><span>返回相册</span></div>
+            <div style="padding:12px;">
+              <div style="display:flex;gap:10px;font-size:7px;color:#9A958C;margin-bottom:10px">
+                <span>① 上传 286 张 ✓</span><span>② 自动识别 ✓</span><span style="color:#111">③ 确认草稿</span>
+              </div>
+              <div style="display:flex;gap:6px;margin-bottom:10px">
+                <div style="flex:1;border:1px solid #E8E8E8;padding:5px 7px">
+                  <div style="font-size:6px;color:#9A958C">照片</div>
+                  <div style="font-family:var(--serif);font-size:13px">286</div>
+                </div>
+                <div style="flex:1;border:1px solid #E8E8E8;padding:5px 7px">
+                  <div style="font-size:6px;color:#9A958C">草稿</div>
+                  <div style="font-family:var(--serif);font-size:13px">18</div>
+                </div>
+                <div style="flex:1;border:1px solid #E8E8E8;padding:5px 7px">
+                  <div style="font-size:6px;color:#9A958C">已认人</div>
+                  <div style="font-family:var(--serif);font-size:13px">6</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;border-top:1px solid #E8E8E8;padding-top:8px">
+                <img src="https://picsum.photos/seed/doc10/90/110" style="width:34px;height:44px;object-fit:cover;filter:sepia(.1) saturate(.94)">
+                <div style="flex:1">
+                  <div style="display:flex;gap:4px">
+                    <span style="font-family:var(--serif);font-size:8px;border:1px solid #111;padding:2px 5px">走路这件事</span>
+                    <span style="font-family:var(--serif);font-size:8px;border:1px solid #E8E8E8;padding:2px 5px;color:#6E6A63">学会走路</span>
+                  </div>
+                  <div style="font-size:6px;color:#9A958C;font-family:var(--mono);margin-top:5px">2021.03.14—11.02 · 23 张</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="cap"><span>上传与确认 · 草稿行</span><span>预览缩略</span></div>
+        </div>
+        <div>
+          <table>
+            <tr><th>区域</th><th>规则</th></tr>
+            <tr><td>步骤条</td><td>上传 → 自动识别 → 确认草稿，三段，当前段实心</td></tr>
+            <tr><td>摘要</td><td>照片数 / 视频数 / 已认人数 / 生成草稿数，四项等分</td></tr>
+            <tr><td>草稿行</td><td>封面 88×112 + 三个候选标题（可点选）+ 人物与场景 + 时间区间 + 置信度</td></tr>
+            <tr><td>置信度</td><td>高 / 中 / 低三档；高置信度支持「一键接受」</td></tr>
+            <tr><td>低置信度</td><td>不给假标题，直接说明「AI 说不出这是什么事」，附一行引导</td></tr>
+            <tr><td>批量</td><td>底部固定条：已确认 X / 总数 + 完成并发布</td></tr>
+            <tr><td>补一句</td><td>每行可填「当时还想说什么」，用于二次生成文案</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- P6 -->
+    <section id="p6">
+      <h2><span>P6</span>故事卡片</h2>
+      <div class="page-hd"><span class="id">SHARE</span><span class="role">家里人的最后一公里：存下来，发到家族群</span></div>
+      <div class="cols">
+        <div>
+          <div class="shot" style="display:flex;flex-direction:column;aspect-ratio:3/4;max-width:260px;">
+            <img src="https://picsum.photos/seed/doc11/400/500" style="flex:1;width:100%;object-fit:cover;filter:sepia(.1) saturate(.94)">
+            <div style="padding:10px 12px;border-top:1px solid #E8E8E8">
+              <div style="font-family:var(--serif);font-size:12px">走路这件事</div>
+              <div style="font-family:var(--serif);font-size:7px;color:#4A4640;margin-top:3px">他走得很慢，我们跟得更慢。</div>
+              <div style="font-size:5px;color:#9A958C;font-family:var(--mono);margin-top:6px;display:flex;justify-content:space-between">
+                <span>2021.03—11</span><span>23 张</span></div>
+            </div>
+          </div>
+          <div class="cap" style="max-width:260px"><span>1080 × 1440</span><span>预览缩略</span></div>
+        </div>
+        <div>
+          <table>
+            <tr><th>区域</th><th>规则</th></tr>
+            <tr><td>尺寸</td><td>1080 × 1440（3:4），微信内不裁切</td></tr>
+            <tr><td>文字</td><td>标题 + 一句旁白 + 年份区间 + 张数，四行以内</td></tr>
+            <tr><td>一句话</td><td>取故事旁白，不取简介；无旁白时取正文第一句</td></tr>
+            <tr><td>禁止</td><td>不带网址、不带二维码、不写「长按识别」</td></tr>
+            <tr><td>批量</td><td>一版九张竖图，供群发；单张可单独保存</td></tr>
+            <tr><td>权限</td><td>导出的是图片，不是入口；拿到图的人进不了册子</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 数据模型 -->
+    <section id="s9">
+      <h2><span>03</span>数据模型</h2>
+      <p class="note">五张表。人工必填仅三项：<b>孩子生日</b>、<b>六位家人的关系与参考照</b>、<b>时区</b>。其余由流水线生成。</p>
+      <table>
+        <tr><th>表</th><th>字段</th></tr>
+        <tr><td>people</td><td><code>id · relation(enum) · name · ref_photos[] · appear_count</code></td></tr>
+        <tr><td>media</td><td><code>id · file · type(photo|video) · taken_at · duration · time_source(exif|file|manual) · quality_score · scene_tags[]</code></td></tr>
+        <tr><td>faces</td><td><code>media_id · person_id · bbox · confidence</code></td></tr>
+        <tr><td>stories</td><td><code>id · title · title_candidates[3] · period_start · period_end · type(event|series) · age_range · cover_media_id · status(draft|published)</code></td></tr>
+        <tr><td>story_media</td><td><code>story_id · media_id · order_no · role(cover|lead|inline|archive)</code></td></tr>
+      </table>
+
+      <h3>一条故事的返回结构</h3>
+<pre>{
+  "id": "st_2021_walk",
+  "title": "走路这件事",
+  "period": { "start": "2021-03-14", "end": "2021-11-02" },
+  "type": "series",
+  "age": { "from_month": 11, "to_month": 19 },
+  "counts": { "photos": 23, "videos": 1 },
+  "people": ["妈妈", "外婆"],
+  "scenes": ["家里", "小区"],
+  "cover": "md_0182",
+  "video": { "media_id": "md_0347", "duration": 42, "position": 0.65 },
+  "text": {
+    "deck": "他第一次松开手，是三月的一个下午。",
+    "body": ["三月的那个下午……", "从那天到他自己走出家门……", "现在回头看……"],
+    "pull": "他走得很慢，我们跟得更慢。",
+    "source": "generated+human_note"
+  },
+  "status": "published"
+}</pre>
+      <p class="note">文案生成依赖三段输入：<b>事实层</b>（时间、人数、张数、月龄）、<b>推断层</b>（动作、场景、表情）、<b>留白层</b>（家人补的一句）。缺第三层时只写事实，不编造心理与对话。</p>
+
+      <h3>套壳工程里的落地</h3>
+      <p class="note">五张表在 Android 端落成四张：<code>people · media · stories · story_media</code>。人脸框不持久化，聚类结果只用来累计 <code>people.appear_count</code>；需要回溯时可再加一张 <code>faces</code> 表。</p>
+      <table>
+        <tr><th>方法</th><th>路径</th><th>作用</th></tr>
+        <tr><td>GET</td><td><code>/api/bootstrap</code></td><td>摘要数字 + 人物列表，上传确认页顶部四项</td></tr>
+        <tr><td>GET</td><td><code>/api/drafts</code></td><td>本次批次的全部故事，含已确认的，前端据 <code>status</code> 渲染完成态</td></tr>
+        <tr><td>POST</td><td><code>/api/drafts/{id}/accept</code></td><td>接受一条草稿 → <code>published</code></td></tr>
+        <tr><td>POST</td><td><code>/api/drafts/accept-all</code></td><td>接受本批次全部高置信度，返回影响行数</td></tr>
+        <tr><td>POST</td><td><code>/api/drafts/{id}/rename?title=</code></td><td>改名</td></tr>
+        <tr><td>GET</td><td><code>/api/stories</code> · <code>/api/stories/{id}</code></td><td>已发布列表 / 单条故事（带 <code>media</code>，按 <code>order_no</code> 排好）</td></tr>
+        <tr><td>GET</td><td><code>/api/today</code></td><td>「N 年前的今天」，取覆盖今天的故事</td></tr>
+      </table>
+      <p class="note">故事表比上面多两个字段：<code>batch</code>——标出「属于本次上传批次」，已确认的也要能回到列表，否则页头写的「全部 18 / 待确认 15 / 已确认 3」对不上；<code>ai_note</code>——AI 给自己这一行写的说明，直接显示在标题上方，比前端按置信度套模板更准。</p>
+    </section>
+
+    <!-- 04 交互 -->
+    <section id="s10">
+      <h2><span>04</span>交互与状态</h2>
+      <table>
+        <tr><th>场景</th><th>行为</th></tr>
+        <tr><td>翻页</td><td>← → / 点两侧 / 左右滑；一次只换一张，280ms 交叉淡入</td></tr>
+        <tr><td>放大</td><td>点任意照片进大图，Esc / 点空白关闭</td></tr>
+        <tr><td>索引</td><td>顶栏打开，年份列表，hover 出行预览图</td></tr>
+        <tr><td>长辈模式</td><td>根字号 16 → 18，全站等比；仅手动触发</td></tr>
+        <tr><td>加载</td><td>首屏图 fetchpriority=high；其余 lazy；失败显示浅色占位块</td></tr>
+        <tr><td>断点</td><td>≥1440 内容 1280；1024–1439 边距 56；768–1023 四栏→两栏；&lt;768 边距 20、单列</td></tr>
+        <tr><td>无障碍</td><td>正文对比度 ≥ 7:1；点击区 ≥ 44px；全部图片带描述性 alt；支持减少动效</td></tr>
+      </table>
+    </section>
+
+    <!-- 05 -->
+    <section id="s11">
+      <h2><span>05</span>交付清单</h2>
+      <table>
+        <tr><th>文件</th><th>说明</th></tr>
+        <tr><td>demo-首页.html</td><td>P1 首页，含首屏、今日回顾、他几岁、这一年、谁在身边、留言、留给家里</td></tr>
+        <tr><td>故事集-1到3岁.html</td><td>P2 故事集列表</td></tr>
+        <tr><td>故事内页-走路这件事.html</td><td>P3 故事内页</td></tr>
+        <tr><td>搜索-演示.html</td><td>P4 搜索</td></tr>
+        <tr><td>上传确认页.html</td><td>P5 上传与确认</td></tr>
+        <tr><td>故事卡片.html</td><td>P6 故事卡片导出</td></tr>
+        <tr><td>演示总览.html</td><td>全部页面的入口页</td></tr>
+        <tr><td>android/</td><td>套壳工程：单 Activity + WebView，含 Room 数据层与 <code>/api/*</code> 本地接口，可直接编译成 APK</td></tr>
+      </table>
+      <p class="note">全部页面为单文件 HTML（内联 CSS/JS），无外部依赖（图片除外）。替换图片：改 <code>&lt;img src&gt;</code> 与数据数组中的种子字段即可，版式与动效无需改动。</p>
+      <p class="note">「上传确认页」在两种环境下都能打开：App 内 <code>fetch</code> 到本地数据库，浏览器内请求失败则退回同一套版式的 6 条静态样例，判断逻辑写在同一份脚本里，不需要两个版本。</p>
+    </section>
+
+  </main>
+</div>
+
+</body>
+</html>

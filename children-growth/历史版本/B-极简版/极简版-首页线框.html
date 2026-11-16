@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>备选 B · 极简版（Nadav Kander 风格）· 线框稿</title>
+<style>
+  :root{
+    --ink:#111; --ink40:#6B6B6B; --rule:#E6E6E6; --rule2:#EFEFEF;
+    --accent:#B4795A; --bg:#fff;
+    --sans:"Helvetica Neue",Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;
+    --serif:"Source Han Serif SC","Noto Serif SC","Songti SC",SimSun,serif;
+    --mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#fff;color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased;}
+
+  /* 文档头 */
+  .head{max-width:1240px;margin:0 auto;padding:34px 40px 22px;border-bottom:1px solid var(--rule);}
+  .head .row{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;}
+  .doc{font-size:20px;font-weight:700;letter-spacing:0;}
+  .badge{font-size:10px;letter-spacing:.14em;border:1px solid var(--accent);color:var(--accent);padding:2px 7px;}
+  .meta{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--ink40);letter-spacing:.04em;}
+  .hint{font-size:12px;color:var(--ink40);margin-top:10px;max-width:760px;line-height:1.9;}
+  .hint b{color:var(--ink);font-weight:500;}
+
+  /* 参数条 */
+  .params{max-width:1240px;margin:0 auto;padding:20px 40px;border-bottom:1px solid var(--rule);
+    display:grid;grid-template-columns:repeat(5,1fr);gap:0;}
+  .params div{padding-right:18px;}
+  .params span{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:#999;margin-bottom:6px;text-transform:uppercase;}
+  .params b{font-size:12px;font-weight:400;}
+
+  .body{max-width:1240px;margin:0 auto;padding:34px 40px 70px;}
+
+  /* 屏幕框 */
+  .frame{margin-bottom:44px;position:relative;}
+  .ftitle{display:flex;align-items:baseline;gap:12px;margin-bottom:12px;}
+  .ftitle .id{font-family:var(--mono);font-size:10px;background:var(--ink);color:#fff;padding:2px 6px;letter-spacing:.08em;}
+  .ftitle h3{font-size:13px;font-weight:500;letter-spacing:.04em;}
+  .ftitle .n{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--ink40);}
+
+  .screen{position:relative;border:1px solid var(--rule);background:#fff;aspect-ratio:1440/820;overflow:visible;}
+
+  /* 顶栏 */
+  .shead{position:absolute;top:0;left:0;right:0;height:42px;display:flex;align-items:center;
+    padding:0 4%;border-bottom:1px solid var(--rule2);}
+  .brand{font-size:13px;font-weight:700;letter-spacing:0;}
+  .snav{margin-left:auto;display:flex;gap:1.5em;font-size:11px;color:var(--ink);}
+  .snav a{text-decoration:none;color:inherit;padding-bottom:2px;}
+  .snav a.on{border-bottom:1px solid var(--ink);}
+  .snav a.dim{color:#9A9A9A;}
+
+  /* 图片占位 */
+  .shot{position:absolute;border:1px dashed #D2D2D2;background:#FAFAFA;
+    display:grid;place-items:center;color:#A8A8A8;font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-align:center;}
+  .shot span{background:#fff;padding:3px 6px;border:1px solid #E6E6E6;}
+
+  /* 底部说明 */
+  .cap{position:absolute;bottom:14px;left:4%;font-size:11px;color:var(--ink40);font-family:var(--mono);letter-spacing:.02em;}
+  .cap b{color:var(--ink);font-weight:400;}
+
+  /* 箭头 */
+  .arrow{position:absolute;top:50%;transform:translateY(-50%);font-size:16px;color:#CFCFCF;user-select:none;}
+  .arrow.l{left:2%}.arrow.r{right:2%}
+
+  /* 索引屏 */
+  .ilist{position:absolute;left:4%;top:76px;width:44%;}
+  .irow{display:flex;align-items:baseline;gap:14px;padding:11px 0;border-bottom:1px solid transparent;}
+  .iy{font-size:17px;font-weight:400;width:56px;flex:none;letter-spacing:.02em;}
+  .it{font-size:11px;color:var(--ink40);}
+  .irow.hot .iy{border-bottom:1px solid var(--ink);}
+  .iprev{position:absolute;right:9%;top:96px;width:21%;aspect-ratio:4/5;border:1px dashed #D2D2D2;
+    background:#FAFAFA;display:grid;place-items:center;color:#A8A8A8;font-family:var(--mono);font-size:9px;}
+
+  /* 标注 */
+  .pin{position:absolute;z-index:9;width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;
+    font-family:var(--mono);font-size:9px;display:grid;place-items:center;cursor:help;
+    box-shadow:0 0 0 4px rgba(180,121,90,.12);}
+  .pin:hover::after{content:attr(data-tip);position:absolute;top:24px;right:-4px;width:200px;background:#fff;
+    border:1px solid var(--accent);color:var(--ink);font-family:var(--sans);font-size:11px;line-height:1.7;
+    padding:8px 10px;box-shadow:0 6px 18px rgba(0,0,0,.06);z-index:20;}
+
+  /* 对比表 */
+  .cmp{margin-top:20px;border-top:1px solid var(--ink);}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--rule);vertical-align:top;}
+  th{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink40);font-weight:500;}
+  td:first-child{width:150px;color:var(--ink40);}
+  td.b{background:#FCFBF9;}
+
+  .note{margin-top:34px;padding:16px 18px;border-left:2px solid var(--accent);background:#FCFAF7;
+    font-size:12px;line-height:1.95;color:#4A4640;}
+  .note b{color:var(--ink);}
+</style>
+</head>
+<body>
+
+<div class="head">
+  <div class="row">
+    <div class="doc">家庭影像册 · 极简方案</div>
+    <div class="badge">备选 B · NADAV KANDER 风格</div>
+    <div class="meta">WIREFRAME v1 / 1440 / 3 屏</div>
+  </div>
+  <div class="hint">参照 <b>nadavkander.com</b> 实测结构转译：纯白底、黑字、Helvetica 12px、固定顶栏 1px 分隔、一次只给一张图、底部一行说明。<b>没有按钮、没有圆点、没有缩略图网格。</b>橙色圆点可悬停查看标注。</div>
+</div>
+
+<div class="params">
+  <div><span>Background</span><b>#FFFFFF</b></div>
+  <div><span>Type</span><b>Helvetica · 12px / 1.6</b></div>
+  <div><span>Page pad</span><b>4vw / 4%</b></div>
+  <div><span>Image</span><b>contain · 不裁切</b></div>
+  <div><span>Chrome</span><b>0 按钮 · 0 圆点</b></div>
+</div>
+
+<div class="body">
+
+  <!-- B1 封面 -->
+  <div class="frame">
+    <div class="ftitle"><span class="id">B1</span><h3>封面 · 一次一张</h3><span class="n">A1 · 3:2 / 72vh</span></div>
+    <div class="screen">
+      <div class="shead">
+        <div class="brand">我们的孩子</div>
+        <div class="snav">
+          <a href="#">2019</a><a href="#">2020</a><a href="#">2021</a><a href="#">2022</a>
+          <a href="#">2023</a><a class="on" href="#">2026</a><a class="dim" href="#">索引</a>
+        </div>
+      </div>
+      <div class="shot" style="left:22%;top:44%;width:56%;height:56%;transform:translateY(-50%);">
+        <span>A1 · 3:2 · 2880×1920</span>
+      </div>
+      <div class="arrow l">‹</div>
+      <div class="arrow r">›</div>
+      <div class="cap"><b>01 / 286</b>　　六岁 · 春天 · 外婆家的院子</div>
+      <span class="pin" style="right:6%;top:60%" data-tip="① 一次只放一张图，contain 不裁切；四周全是白，没有任何标题、按钮、圆点。">1</span>
+      <span class="pin" style="left:6%;bottom:14%" data-tip="② 底部只有一行：序号 / 总数 + 年龄 · 季节 · 地点。字号 12px，灰 #666。">2</span>
+      <span class="pin" style="right:14%;top:16px" data-tip="③ 顶栏固定、白底、1px 分隔线；年份就是导航，当前年加下划线，不做图标不做按钮。">3</span>
+    </div>
+  </div>
+
+  <!-- B2 索引 -->
+  <div class="frame">
+    <div class="ftitle"><span class="id">B2</span><h3>索引 · 纯文字 + hover 小图</h3><span class="n">滚动即到，不跳页</span></div>
+    <div class="screen">
+      <div class="shead">
+        <div class="brand">我们的孩子</div>
+        <div class="snav">
+          <a href="#">2019</a><a href="#">2020</a><a href="#">2021</a><a href="#">2022</a>
+          <a href="#">2023</a><a href="#">2026</a><a class="on dim" href="#">索引</a>
+        </div>
+      </div>
+      <div class="ilist">
+        <div class="irow"><div class="iy">2019</div><div class="it">第一次看见海 · 24 张</div></div>
+        <div class="irow"><div class="iy">2020</div><div class="it">会走路的第一年 · 31 张</div></div>
+        <div class="irow hot"><div class="iy">2021</div><div class="it">三岁 · 开始上幼儿园 · 40 张</div></div>
+        <div class="irow"><div class="iy">2022</div><div class="it">学会骑车的那年夏天 · 38 张</div></div>
+        <div class="irow"><div class="iy">2023</div><div class="it">掉了一颗牙 · 26 张</div></div>
+        <div class="irow"><div class="iy">2024</div><div class="it">第一次自己睡 · 19 张</div></div>
+        <div class="irow"><div class="iy">2025</div><div class="it">外婆住院的那一年 · 22 张</div></div>
+        <div class="irow"><div class="iy">2026</div><div class="it">搬家后的第一个早晨 · 54 张</div></div>
+      </div>
+      <div class="iprev"><span>hover 小图 4:5</span></div>
+      <span class="pin" style="left:44%;top:120px" data-tip="④ 索引只有文字：年份 17px + 一句小字。hover 才浮出右侧 4:5 小图（150ms 淡入），移开即消失。">4</span>
+      <span class="pin" style="right:9%;top:76%" data-tip="⑤ 小图尺寸约为屏宽的 21%，永远是「一闪而过」的预览，不能变成缩略图墙。">5</span>
+    </div>
+  </div>
+
+  <!-- B3 单张 -->
+  <div class="frame">
+    <div class="ftitle"><span class="id">B3</span><h3>单张 · 全屏图 + 两行小字</h3><span class="n">Esc 返回索引</span></div>
+    <div class="screen">
+      <div class="shead">
+        <div class="brand">我们的孩子</div>
+        <div class="snav"><a class="dim" href="#">索引</a></div>
+      </div>
+      <div class="shot" style="left:12%;top:50%;width:76%;height:74%;transform:translateY(-50%);">
+        <span>D · 4:5 或 3:2 · 86vh</span>
+      </div>
+      <div class="arrow l">‹</div>
+      <div class="arrow r">›</div>
+      <div class="cap"><b>2021 · 三岁 · 幼儿园门口</b></div>
+      <div class="cap" style="left:auto;right:4%;">024 / 286</div>
+      <span class="pin" style="right:8%;bottom:20%" data-tip="⑥ 左下角写「年份 · 年龄 · 地点」，右下角写序号；除这两行外屏幕上不再有任何文字。">6</span>
+      <span class="pin" style="left:4%;top:52%" data-tip="⑦ 箭头只有 1px 线、20px 高，默认 20% 黑，hover 变 60%；点图片左右三分之一也能翻页。">7</span>
+    </div>
+  </div>
+
+  <!-- 首次提示 -->
+  <div class="frame">
+    <div class="ftitle"><span class="id">B4</span><h3>首次进入提示（3 秒后消失）</h3><span class="n">长辈最容易被这一步卡住</span></div>
+    <div class="screen" style="aspect-ratio:1440/420;">
+      <div class="shead">
+        <div class="brand">我们的孩子</div>
+        <div class="snav"><a href="#">2019</a><a class="on" href="#">2026</a><a class="dim" href="#">索引</a></div>
+      </div>
+      <div class="shot" style="left:26%;top:52%;width:48%;height:62%;transform:translateY(-50%);"><span>A1</span></div>
+      <div style="position:absolute;left:50%;bottom:16%;transform:translateX(-50%);font-size:12px;color:#767676;
+        border:1px solid var(--rule);background:#fff;padding:7px 14px;letter-spacing:.04em;">
+        ← → 翻页　·　点击图片看大图
+      </div>
+      <span class="pin" style="right:8%;top:26%" data-tip="⑧ 只在第一次进入出现，3 秒淡出，不再重复。没有它，长辈大概率会停在这一屏。">8</span>
+    </div>
+  </div>
+
+  <!-- 对比 -->
+  <div class="cmp">
+    <table>
+      <thead><tr><th>维度</th><th>备选 A · 家庭版</th><th>备选 B · 极简版</th></tr></thead>
+      <tbody>
+        <tr><td>第一感觉</td><td class="b">像一本编好的书，安静但有结构</td><td class="b">像一本只能一页页翻的相册，图最大</td></tr>
+        <tr><td>首页信息量</td><td class="b">10 个区块，一次能看到"全貌"</td><td class="b">1 张图 + 1 行字</td></tr>
+        <tr><td>长辈能否自己用</td><td class="b">能，导航有文字、有年份</td><td class="b">需要一次 3 秒提示，否则会卡住</td></tr>
+        <tr><td>找"2021 年那张"</td><td class="b">快，按年份/年龄直接点</td><td class="b">较慢，得先到索引再翻</td></tr>
+        <tr><td>图片显示</td><td class="b">按 3:4 / 16:10 裁切填充</td><td class="b">contain 不裁切，留白包住整张</td></tr>
+        <tr><td>文字层级</td><td class="b">6 级（H1→Label）</td><td class="b">1 级（12px 通吃）</td></tr>
+        <tr><td>开发量</td><td class="b">约 10 个组件</td><td class="b">3 个页面、1 套样式</td></tr>
+        <tr><td>适合</td><td class="b">内容多、要长期维护、家里人多</td><td class="b">图少而精、追求气质、给自己看</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <b>建议：</b>把两版拼起来用——首页用 B 的"一次一张"，让长辈第一眼就看到孩子；第二屏开始换成 A 的结构（年份 / 他几岁 / 谁在身边 / 时间轴），解决"找得到"的问题。这样既有 B 的气质，又不牺牲 A 的可用性。
+  </div>
+</div>
+
+</body>
+</html>

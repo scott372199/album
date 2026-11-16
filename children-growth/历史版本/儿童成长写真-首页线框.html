@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>备选 A · 家庭内部影像册 · 首页线框稿 v2</title>
+<style>
+  :root{
+    --ink:#1F1D1A; --mute:#5C574F; --line:#E2DACE;
+    --wf:#F1F1EF; --wf2:#E9E8E4; --wf-line:#C6C3BC;
+    --accent:#B4795A; --bg:#FBFAF8;
+    --serif:"Source Han Serif SC","Noto Serif SC","Songti SC",SimSun,serif;
+    --sans:"Source Han Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+    --mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.6;}
+
+  .topbar{border-bottom:1px solid var(--line);background:#fff;padding:18px 0 16px;}
+  .wrap{max-width:1360px;margin:0 auto;padding:0 40px;}
+  .topbar .wrap{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 28px;}
+  .doc-title{font-family:var(--serif);font-size:22px;font-weight:400;letter-spacing:.02em;}
+  .badge{font-size:10px;letter-spacing:.14em;border:1px solid var(--accent);color:var(--accent);padding:3px 8px;}
+  .doc-meta{font-family:var(--mono);font-size:11px;color:var(--mute);letter-spacing:.04em;}
+  .doc-meta b{color:var(--accent);font-weight:500;}
+  .toggle{margin-left:auto;font-size:12px;color:var(--mute);border:1px solid var(--line);
+    background:#fff;padding:6px 12px;cursor:pointer;font-family:var(--sans);letter-spacing:.04em;}
+  .toggle:hover{border-color:var(--accent);color:var(--accent);}
+
+  .spec{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line);background:#fff;}
+  .spec > div{padding:22px 32px;border-right:1px solid var(--line);}
+  .spec > div:last-child{border-right:0;}
+  .spec h4{font-size:10px;letter-spacing:.18em;color:var(--mute);font-weight:500;margin-bottom:12px;text-transform:uppercase;}
+  .sw{display:flex;gap:12px;flex-wrap:wrap;}
+  .sw i{display:block;width:38px;height:30px;border:1px solid var(--line);}
+  .sw span{display:block;font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:5px;}
+  .spec ul{list-style:none;font-size:12px;color:var(--mute);line-height:1.9;}
+  .spec ul b{color:var(--ink);font-weight:500;font-family:var(--mono);font-size:11px;}
+
+  .stage{max-width:1360px;margin:0 auto;padding:36px 40px 60px;}
+  .chrome{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-bottom:0;background:#fff;padding:10px 14px;}
+  .chrome i{width:8px;height:8px;border-radius:50%;background:var(--wf-line);display:block;}
+  .chrome .url{flex:1;margin-left:12px;font-family:var(--mono);font-size:10px;color:var(--mute);
+    background:var(--wf);padding:5px 10px;border:1px solid var(--line);}
+  .canvas{border:1px solid var(--line);background:#fff;}
+
+  .sec{position:relative;border-bottom:1px solid var(--line);}
+  .sec:last-child{border-bottom:0;}
+  .sec-head{display:flex;align-items:center;gap:12px;padding:12px 20px;background:#fff;border-bottom:1px dashed var(--line);}
+  .sec-id{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:#fff;background:var(--ink);padding:3px 7px;}
+  .sec-head h3{font-size:12px;font-weight:500;letter-spacing:.08em;}
+  .sec-note{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--mute);}
+  .inner{padding:0 56px;}
+
+  .ph{position:relative;background:var(--wf);border:1px dashed var(--wf-line);
+    display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  .ph::before{content:"";position:absolute;inset:0;
+    background:linear-gradient(to top right,transparent calc(50% - .5px),var(--wf2) 50%,transparent calc(50% + .5px));}
+  .ph::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(to bottom right,transparent calc(50% - .5px),var(--wf2) 50%,transparent calc(50% + .5px));}
+  .ph span{position:relative;z-index:2;font-family:var(--mono);font-size:10px;letter-spacing:.06em;
+    color:var(--mute);background:#fff;padding:4px 8px;border:1px solid var(--line);}
+
+  .bar{height:7px;background:var(--wf2);margin:9px 0;}
+  .bar.w80{width:80%}.bar.w60{width:60%}.bar.w40{width:40%}.bar.w100{width:100%}
+
+  .h1{font-family:var(--serif);font-size:34px;font-weight:300;letter-spacing:.02em;line-height:1.3;}
+  .h2{font-family:var(--serif);font-size:24px;font-weight:300;letter-spacing:.02em;line-height:1.5;}
+  .lb{font-size:10px;letter-spacing:.18em;color:var(--mute);text-transform:uppercase;}
+  .cap{font-size:11px;color:var(--mute);letter-spacing:.04em;line-height:1.9;}
+
+  .pin{position:absolute;z-index:9;width:20px;height:20px;border-radius:50%;background:var(--accent);
+    color:#fff;font-family:var(--mono);font-size:10px;display:grid;place-items:center;cursor:help;
+    box-shadow:0 0 0 4px rgba(180,121,90,.14);}
+  .pin:hover::after{content:attr(data-tip);position:absolute;top:26px;right:-6px;width:210px;
+    background:#fff;border:1px solid var(--accent);color:var(--ink);font-family:var(--sans);
+    font-size:11px;line-height:1.7;padding:9px 11px;letter-spacing:.02em;box-shadow:0 6px 18px rgba(0,0,0,.06);}
+  body.hide-anno .pin{display:none;}
+
+  /* S1 */
+  .hero{position:relative;}
+  .nav{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;padding:22px 56px;z-index:6;
+    background:linear-gradient(to bottom,rgba(255,255,255,.92),rgba(255,255,255,0));}
+  .logo{font-family:var(--serif);font-size:16px;letter-spacing:.06em;}
+  .menu{margin-left:auto;display:flex;align-items:center;gap:32px;}
+  .menu a{font-size:12px;letter-spacing:.12em;color:var(--ink);text-decoration:none;padding-bottom:4px;}
+  .menu a.on{border-bottom:1px solid var(--ink);}
+  .hero .ph{height:430px;}
+  .hero-copy{position:absolute;left:56px;bottom:46px;z-index:6;max-width:430px;}
+  .hero-copy .sub{font-size:13px;color:var(--mute);margin-top:14px;letter-spacing:.06em;}
+  .hero-copy .link{display:inline-block;margin-top:22px;font-size:12px;letter-spacing:.08em;
+    border-bottom:1px solid var(--ink);padding-bottom:3px;}
+
+  /* S3 */
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;padding:44px 0 56px;}
+  .card .ph{aspect-ratio:3/4;}
+  .card .lb{margin-top:16px;}
+  .card .t{font-family:var(--serif);font-size:15px;margin-top:7px;}
+  .card .n{font-size:11px;color:var(--mute);margin-top:6px;font-family:var(--mono);}
+  .card .u{height:1px;background:var(--wf-line);margin-top:12px;}
+
+  /* S4 */
+  .serie{display:grid;grid-template-columns:1.55fr 1fr;gap:40px;align-items:center;padding:30px 0;}
+  .serie.r2{grid-template-columns:1fr 1.55fr;padding-left:12%;}
+  .serie.r2 .txt{order:1}.serie.r2 .ph-wrap{order:2}
+  .serie.r3{padding-left:6%;}
+  .serie .ph{aspect-ratio:16/10;}
+  .serie .txt h3{font-family:var(--serif);font-size:19px;font-weight:400;margin:10px 0 12px;}
+  .serie .more{display:inline-block;margin-top:16px;font-size:11px;letter-spacing:.08em;
+    border-bottom:1px solid var(--wf-line);padding-bottom:3px;color:var(--mute);}
+
+  /* S5 */
+  .tl{padding:48px 0 56px;position:relative;}
+  .tl-row{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;}
+  .tl-row .ph{aspect-ratio:3/4;}
+  .tl-line{position:relative;height:1px;background:var(--wf-line);margin:56px 0 0;}
+  .tl-line .dot{position:absolute;top:-3px;width:7px;height:7px;border-radius:50%;background:var(--ink);}
+  .tl-labels{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:14px;}
+  .tl-labels div{font-family:var(--mono);font-size:10px;color:var(--mute);}
+  .arrow{position:absolute;top:50%;width:26px;height:26px;border:1px solid var(--wf-line);
+    display:grid;place-items:center;font-size:12px;color:var(--mute);background:#fff;}
+  .arrow.l{left:-13px}.arrow.r{right:-13px}
+  .tl .more{display:block;text-align:right;margin-top:26px;font-size:11px;letter-spacing:.08em;color:var(--mute);}
+
+  /* S6 家人 */
+  .people{padding:48px 0 56px;}
+  .people .lead{font-size:12px;color:var(--mute);margin:10px 0 30px;max-width:520px;line-height:1.9;}
+  .pgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:20px;}
+  .pcard .ph{aspect-ratio:1/1;}
+  .pcard .nm{font-family:var(--serif);font-size:14px;margin-top:12px;}
+  .pcard .ct{font-size:10px;color:var(--mute);font-family:var(--mono);margin-top:2px;}
+
+  /* S7 */
+  .quote{background:#F5F0E8;padding:64px 56px;text-align:center;}
+  .quote .mark{font-family:var(--serif);font-size:76px;color:var(--wf-line);line-height:.6;display:block;}
+  .quote p{font-family:var(--serif);font-size:19px;line-height:2;max-width:560px;margin:18px auto 26px;font-weight:300;}
+  .quote .who{display:flex;align-items:center;justify-content:center;gap:12px;}
+  .quote .who .av{width:32px;height:32px;border-radius:50%;background:var(--wf);border:1px dashed var(--wf-line);
+    display:grid;place-items:center;font-family:var(--mono);font-size:8px;color:var(--mute);}
+  .quote .who span{font-size:12px;color:var(--mute);letter-spacing:.06em;}
+
+  /* S8 留给家里 */
+  .keep{padding:52px 0 60px;}
+  .keep-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:48px;margin-top:34px;}
+  .kcol .num{font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:.1em;}
+  .kcol h3{font-family:var(--serif);font-size:19px;font-weight:400;margin:12px 0 12px;}
+  .kcol .more{display:inline-block;margin-top:16px;font-size:11px;letter-spacing:.08em;
+    border-bottom:1px solid var(--wf-line);padding-bottom:3px;color:var(--mute);}
+
+  /* S9 */
+  .foot{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:40px;padding:52px 56px 30px;}
+  .foot h5{font-size:10px;letter-spacing:.16em;color:var(--mute);font-weight:500;margin-bottom:14px;}
+  .foot .brand{font-family:var(--serif);font-size:16px;letter-spacing:.06em;margin-bottom:10px;}
+  .foot li{list-style:none;font-size:12px;color:var(--mute);line-height:2.2;}
+  .copyright{border-top:1px solid var(--line);padding:16px 56px;font-size:11px;color:var(--mute);letter-spacing:.04em;}
+
+  /* S10 */
+  .mobile{display:flex;gap:40px;padding:36px 56px 48px;align-items:flex-start;}
+  .phone{width:250px;border:1px solid var(--wf-line);flex:none;background:#fff;position:relative;}
+  .phone .ph-in{height:390px;background:var(--wf);border-bottom:1px dashed var(--wf-line);
+    display:grid;place-items:center;font-family:var(--mono);font-size:9px;color:var(--mute);}
+  .phone .barfix{display:flex;align-items:center;padding:10px 12px;gap:10px;}
+  .phone .barfix .txt{font-size:10px;color:var(--mute);flex:1;}
+  .phone .zz{position:absolute;right:10px;bottom:10px;width:22px;height:22px;border:1px solid var(--wf-line);
+    display:grid;place-items:center;font-size:10px;color:var(--mute);background:#fff;}
+  .mlist{font-size:12px;color:var(--mute);line-height:2.3;list-style:none;}
+
+  .legend{max-width:1360px;margin:0 auto;padding:10px 40px 30px;display:grid;
+    grid-template-columns:repeat(3,1fr);gap:10px 32px;font-size:12px;color:var(--mute);line-height:1.9;}
+  .legend b{color:var(--accent);font-family:var(--mono);font-weight:500;margin-right:6px;}
+
+  .tablewrap{max-width:1360px;margin:0 auto;padding:0 40px 70px;}
+  table{width:100%;border-collapse:collapse;font-size:11px;}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font-size:9px;letter-spacing:.14em;color:var(--mute);font-weight:500;text-transform:uppercase;border-bottom:1px solid var(--ink);}
+  td:first-child{font-family:var(--mono);color:var(--accent);width:60px;}
+  td:nth-child(2){width:110px;color:var(--mute);}
+  td:nth-child(3){width:80px;font-family:var(--mono);color:var(--mute);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <div class="doc-title">儿童成长 · 家庭影像册</div>
+    <div class="badge">备选 A · 家庭内部版</div>
+    <div class="doc-meta">WIREFRAME v2 &nbsp;/&nbsp; 1440 &nbsp;/&nbsp; 区块 <b>10</b> &nbsp;/&nbsp; 截图位 <b>13</b> &nbsp;/&nbsp; 无预约 · 无价格 · 无摄影师</div>
+    <button class="toggle" onclick="document.body.classList.toggle('hide-anno')">隐藏 / 显示标注</button>
+  </div>
+</div>
+
+<div class="spec">
+  <div>
+    <h4>Color</h4>
+    <div class="sw">
+      <div><i style="background:#FAF7F2"></i><span>#FAF7F2</span></div>
+      <div><i style="background:#1F1D1A"></i><span>#1F1D1A</span></div>
+      <div><i style="background:#B4795A"></i><span>#B4795A</span></div>
+    </div>
+  </div>
+  <div>
+    <h4>Type（长辈可读优先）</h4>
+    <ul>
+      <li><b>Body</b> 17/1.9 · 桌面移动同尺寸</li>
+      <li><b>H1</b> 64/1.25 宋体 300</li>
+      <li><b>对比度</b> ≥ 7:1 · 点击区 ≥ 44px</li>
+    </ul>
+  </div>
+  <div>
+    <h4>Grid &amp; Form</h4>
+    <ul>
+      <li><b>12</b> 栏 · 1200 · 栏距 24 · 边距 80</li>
+      <li><b>0</b> 圆角 · 0 投影 · 0 按钮</li>
+      <li><b>160</b> 区块留白 / 链接仅下划线</li>
+    </ul>
+  </div>
+  <div>
+    <h4>Removed</h4>
+    <ul>
+      <li>— 摄影师介绍</li>
+      <li>— 预约表单 / 价格 / 套餐</li>
+      <li>— 门店、电话、客服入口</li>
+    </ul>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="chrome"><i></i><i></i><i></i><div class="url">https://home.oureveryday.family/2019-2026</div></div>
+
+  <div class="canvas">
+
+    <!-- S1 -->
+    <section class="sec">
+      <div class="sec-head"><span class="sec-id">S1</span><h3>首屏</h3><span class="sec-note">单图 A1 / 1 句 + 1 入口 / 无按钮</span></div>
+      <div class="hero">
+        <div class="nav">
+          <div class="logo">拾 光 童 年</div>
+          <div class="menu"><a class="on" href="#">年份</a><a href="#">他几岁</a><a href="#">家里人</a><a href="#">这本册子</a></div>
+        </div>
+        <div class="ph"><span>A1 &nbsp;·&nbsp; 16:9 &nbsp;·&nbsp; 2880×1620</span></div>
+        <div class="hero-copy">
+          <div class="lb">OUR YEARS · 2019—2026</div>
+          <div class="h1" style="margin-top:14px;">把长大，<br>拍慢一点</div>
+          <div class="sub">我们的孩子 · 2019—2026 · 一共 12 次</div>
+          <div class="link">从 2019 开始看 →</div>
+        </div>
+      </div>
+      <span class="pin" style="right:70px;top:120px" data-tip="① 首屏只有 1 图、1 句、1 个文字入口。不放轮播，不放任何按钮。">1</span>
+      <span class="pin" style="right:430px;bottom:58px" data-tip="② 文案落在大图右侧留白区；对比度 ≥ 4.5:1，局部径向压暗 15%，禁止整图压黑。">2</span>
+      <span class="pin" style="right:150px;top:26px" data-tip="③ 导航只有 4 项文字，当前项 1px 下划线。全站没有实心按钮——这是「不做商业站」最直接的信号。">3</span>
+    </section>
+
+    <!-- S2 -->
+    <section class="sec">
+      <div class="sec-head"><span class="sec-id">S2</span><h3>一句主张</h3><span class="sec-note">居中 / 最大宽 680</span></div>
+      <div class="inner" style="text-align:center;padding-top:70px;padding-bottom:70px;">
+        <div class="lb">— 我们的方式 —</div>
+        <div class="h2" style="max-width:620px;margin:22px auto 0;">这些照片没有摆拍。<br>是他忘记镜头的那三秒。</div>
+        <div class="ph" style="width:250px;aspect-ratio:4/5;margin:44px auto 0;"><span>A2 · 4:5 · 可选</span></div>
+      </div>
+    </section>
+
+    <!-- S3 -->
+    <section class="sec">
+      <div class="sec-head"><span class="sec-id">S3</span><h3>他几岁</h3><span class="sec-note">4 栏 / 3:4 / 标注张数</span></div>
+      <div class="inner">
+        <div class="grid4">
+          <div class="card"><div class="ph"><span>B1 · 3:4</span></div>
+            <div class="lb">0–1 岁</div><div class="t">第一次被看见</div><div class="n">2019 · 共 24 张</div><div class="u"></div></div>
+          <div class="card"><div class="ph"><span>B2 · 3:4</span></div>
+            <div class="lb">1–3 岁</div><div class="t">走路这件事</div><div class="n">2020–2022 · 共 96 张</div><div class="u"></div></div>
+          <div class="card"><div class="ph"><span>B3 · 3:4</span></div>
+            <div class="lb">4–6 岁</div><div class="t">开始有自己的房间</div><div class="n">2023–2025 · 共 112 张</div><div class="u"></div></div>
+          <div class="card"><div class="ph"><span>B4 · 3:4</span></div>
+            <div class="lb">7–12 岁</div><div class="t">背影变长了</div><div class="n">2026 · 共 54 张</div><div class="u"></div></div>
+        </div>
+      </div>
+      <span class="pin" style="left:40px;top:130px" data-tip="④ 每张卡下方补一行「年份 · 共 N 张」：长辈关心有多少张，不在乎什么风格。">4</span>
+    </section>
+
+    <!-- S4 -->
+    <section class="sec">
+      <div class="sec-head"><span class="sec-id">S4</span><h3>这一年</h3><span class="sec-note">三行错位 / 章节而非套系</span></div>
+      <div class="inner">
+        <div class="serie">
+          <div class="ph-wrap"><div class="ph"><span>C1 · 16:10</span></div></div>
+          <div class="txt"><div class="lb">Year 01 / 2019</div>
+            <h3>第一次看见海</h3>
+            <div class="bar w100"></div><div class="bar w80"></div>
+            <span class="more">看这一年的 24 张 →</span></div>
+        </div>
+        <div class="serie r2">
+          <div class="ph-wrap"><div class="ph"><span>C2 · 16:10</span></div></div>
+          <div class="txt"><div class="lb">Year 04 / 2022</div>
+            <h3>学会骑车的那年夏天</h3>
+            <div class="bar w100"></div><div class="bar w60"></div>
+            <span class="more">看这一年的 38 张 →</span></div>
+        </div>
+        <div class="serie r3">
+          <div class="ph-wrap"><div class="ph"><span>C3 · 16:10</span></div></div>
+          <div class="txt"><div class="lb">Year 08 / 2026</div>
+            <h3>搬家后的第一个早晨</h3>
+            <div class="bar w100"></div><div class="bar w80"></div>
+            <span class="more">看这一年的 54 张 →</span></div>
+        </div>
+      </div>
+      <span class="pin" style="left:40px;top:210px" data-tip="⑤ 错位节奏：第 2 行右缩进 12% 且图文互换，第 3 行左缩进 6%。章节名写「事」，不写「套系名」。">5</span>
+    </section>
+
+    <!-- S5 -->
+    <section class="sec">
+      <div class="sec-head"><span class="sec-id">S5</span><h3>成长时间轴（核心）</h3><span class="sec-note">3 张同角度 / 禁自动轮播</span></div>
+      <div class="inner tl">
+        <div class="tl-row">
+          <div class="ph"><span>D1 · 3:4</span></div>
+          <div class="ph"><span>D2 · 3:4</span></div>
+          <div class="ph"><span>D3 · 3:4</span></div>
+        </div>
+        <div class="tl-line">
+          <span class="dot" style="left:8%"></span><span class="dot" style="left:41%"></span><span class="dot" style="left:74%"></span>
+          <span class="arrow l">‹</span><span class="arrow r">›</span>
+        </div>
+        <div class="tl-labels"><div>1 岁 · 2021</div><div>3 岁 · 2023</div><div>6 岁 · 2026</div></div>
+        <a class="more">看全部 12 次 →</a>
+      </div>
+      <span class="pin" style="left:40px;top:330px" data-tip="⑥ 禁止自动轮播；26px 细线箭头 + 键盘 ← →；移动端改纵向堆叠并隐藏箭头。">6</span>
+    </section>
+
+    <!-- S6 谁在身边 -->
+    <section class="sec">
+      <div class="sec-head"><span class="sec-id">S6</span><h3>谁在身边</h3><span class="sec-note">6 张 1:1 / 替代原「摄影师」</span></div>
+      <div class="inner people">
+        <div class="lb">— 谁在身边 —</div>
+        <div class="lead">大部分照片是家里人自己拍的，只有过年会请人拍一次。所以这本册子里，谁都在。</div>
+        <div class="pgrid">
+          <div class="pcard"><div class="ph"><span>H1</span></div><div class="nm">爸爸</div><div class="ct">出镜 41 次</div></div>
+          <div class="pcard"><div class="ph"><span>H2</span></div><div class="nm">妈妈</div><div class="ct">出镜 58 次</div></div>
+          <div class="pcard"><div class="ph"><span>H3</span></div><div class="nm">爷爷</div><div class="ct">出镜 22 次</div></div>
+          <div class="pcard"><div class="ph"><span>H4</span></div><div class="nm">奶奶</div><div class="ct">出镜 34 次</div></div>
+          <div class="pcard"><div class="ph"><span>H5</span></div><div class="nm">外公</div><div class="ct">出镜 17 次</div></div>
+          <div class="pcard"><div class="ph"><span>H6</span></div><div class="nm">外婆</div><div class="ct">出镜 29 次</div></div>
+        </div>
+      </div>
+      <span class="pin" style="left:40px;top:120px" data-tip="⑦ 这一块是「家庭感」的来源：不是团队介绍，是家里人的出镜次数。别写成摄影师履历。">7</span>
+    </section>
+
+    <!-- S7 -->
+    <section class="sec">
+      <div class="sec-head"><span class="sec-id">S7</span><h3>一句话</h3><span class="sec-note">仅 1 条长辈留言</span></div>
+      <div class="quote">
+        <span class="mark">“</span>
+        <p>他三岁那年我在住院，是这些照片让我知道他每天都干了什么。</p>
+        <div class="who"><div class="av">F1</div><span>外婆 · 2025 年冬</span></div>
+      </div>
+      <span class="pin" style="right:60px;top:80px" data-tip="⑧ 只放 1 条，不轮播、不九宫格。署名要写「谁 · 哪一年」，比「客户好评」可信。">8</span>
+    </section>
+
+    <!-- S8 留给家里 -->
+    <section class="sec">
+      <div class="sec-head"><span class="sec-id">S8</span><h3>留给家里</h3><span class="sec-note">3 栏 / 无价格 / 无表单</span></div>
+      <div class="inner keep">
+        <div class="lb">— 给家里人的三件事 —</div>
+        <div class="keep-grid">
+          <div class="kcol"><div class="num">01</div><h3>原图都在</h3>
+            <div class="bar w100"></div><div class="bar w80"></div>
+            <span class="more">去下载</span></div>
+          <div class="kcol"><div class="num">02</div><h3>做成一本册子</h3>
+            <div class="bar w100"></div><div class="bar w60"></div>
+            <span class="more">看看成品</span></div>
+          <div class="kcol"><div class="num">03</div><h3>只给家里人看</h3>
+            <div class="bar w100"></div><div class="bar w80"></div>
+            <span class="more">发给家人</span></div>
+        </div>
+      </div>
+      <span class="pin" style="right:60px;top:70px" data-tip="⑨ 三个功能都只是文字链：下载原图 / 印册子 / 家庭口令。没有价格、没有表单、没有客服。">9</span>
+    </section>
+
+    <!-- S9 -->
+    <section class="sec">
+      <div class="sec-head"><span class="sec-id">S9</span><h3>页脚</h3><span class="sec-note">4 列 / 只放家里的事</span></div>
+      <div class="foot">
+        <div><div class="brand">拾 光 童 年</div>
+          <div class="cap">把孩子的每一年，<br>存成家里人随时能翻开的一页。</div></div>
+        <div><h5>年份</h5><ul><li>2019 · 2020 · 2021</li><li>2022 · 2023 · 2024</li><li>2025 · 2026</li></ul></div>
+        <div><h5>家里人</h5><ul><li>爸爸 / 妈妈</li><li>爷爷 / 奶奶</li><li>外公 / 外婆</li></ul></div>
+        <div><h5>这本册子</h5><ul><li>关于</li><li>怎么存图</li><li>仅家人可见</li></ul></div>
+      </div>
+      <div class="copyright">2019—2026 · 共 12 次 · 286 张照片 · 仅家人可见，请勿外传</div>
+    </section>
+
+    <!-- S10 -->
+    <section class="sec">
+      <div class="sec-head"><span class="sec-id">S10</span><h3>移动端 &amp; 长辈模式</h3><span class="sec-note">&lt; 768 / 字号不缩小 / 右下角「字」开关</span></div>
+      <div class="mobile">
+        <div class="phone">
+          <div class="ph-in">A1 · 3:4 竖版裁切</div>
+          <div class="barfix"><div class="txt">我们的孩子 · 2019—2026</div></div>
+          <div class="zz">字</div>
+        </div>
+        <div>
+          <div class="lb">Mobile Rules</div>
+          <ul class="mlist" style="margin-top:12px;">
+            <li>· 边距 20；正文仍是 17px，<b style="font-weight:500;color:#1F1D1A">不在手机上缩小字号</b></li>
+            <li>· S3 四栏 → 2×2；S4 错位取消改上下堆叠；S5 改纵向</li>
+            <li>· 导航收为汉堡，展开为全屏米白抽屉（20px）</li>
+            <li>· 右下角「字」按钮：点一下整体字号 +2、行高 +0.1</li>
+            <li>· 微信内打开：首屏图 ≤ 300KB，点图进大图可长按保存</li>
+          </ul>
+        </div>
+        <span class="pin" style="right:40px;top:100px" data-tip="⑩ 长辈模式是 A 版的关键差异：手动开关、字号 +2，不做自动 UA 判断。">10</span>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div class="legend">
+  <div><b>①</b>首屏 1 图 1 句 1 入口，无按钮</div>
+  <div><b>②</b>文案落留白区，对比度 ≥ 4.5:1</div>
+  <div><b>③</b>导航纯文字，当前项下划线</div>
+  <div><b>④</b>每档补「年份 · 张数」</div>
+  <div><b>⑤</b>章节错位 12% / 6%</div>
+  <div><b>⑥</b>时间轴禁自动轮播</div>
+  <div><b>⑦</b>家人出镜次数，非团队介绍</div>
+  <div><b>⑧</b>只留 1 条长辈留言</div>
+  <div><b>⑨</b>三个功能均无价格无表单</div>
+  <div><b>⑩</b>移动端字号不减 + 长辈模式</div>
+</div>
+
+<div class="tablewrap">
+  <h4 style="font-size:10px;letter-spacing:.18em;color:#5C574F;margin:0 0 16px;font-weight:500;text-transform:uppercase;">Screenshot Slots · 13</h4>
+  <table>
+    <thead><tr><th>编号</th><th>所属区块</th><th>比例</th><th>内容要求</th></tr></thead>
+    <tbody>
+      <tr><td>A1</td><td>S1 首屏</td><td>16:9</td><td>3–5 岁孩子侧身站窗前，光从左侧进入，右侧 40% 留白，不看镜头</td></tr>
+      <tr><td>A2</td><td>S2 引言</td><td>4:5</td><td>手 / 后颈 / 鞋尖局部特写，极简背景（可选）</td></tr>
+      <tr><td>B1</td><td>S3 他几岁</td><td>3:4</td><td>0–1 岁仰躺婴儿，白棉布，俯拍</td></tr>
+      <tr><td>B2</td><td>S3 他几岁</td><td>3:4</td><td>1–3 岁学步，单手扶墙</td></tr>
+      <tr><td>B3</td><td>S3 他几岁</td><td>3:4</td><td>4–6 岁坐木椅晃脚，正面偏 15°</td></tr>
+      <tr><td>B4</td><td>S3 他几岁</td><td>3:4</td><td>7–12 岁背书包回头，中景带环境</td></tr>
+      <tr><td>C1</td><td>S4 这一年</td><td>16:10</td><td>第一次看见海，左侧 25% 留白给章节名</td></tr>
+      <tr><td>C2</td><td>S4 这一年</td><td>16:10</td><td>学会骑车，侧逆光，保留地面纹理</td></tr>
+      <tr><td>C3</td><td>S4 这一年</td><td>16:10</td><td>搬家后的第一个早晨，自然光不摆拍</td></tr>
+      <tr><td>D1–D3</td><td>S5 时间轴</td><td>3:4 ×3</td><td>同一孩子 1 / 3 / 6 岁，机位焦段背景尽量一致</td></tr>
+      <tr><td>H1–H6</td><td>S6 谁在身边</td><td>1:1 ×6</td><td>爸爸 / 妈妈 / 爷爷 / 奶奶 / 外公 / 外婆与孩子的合影，生活照质感</td></tr>
+      <tr><td>F1</td><td>S7 留言</td><td>1:1</td><td>留言长辈与孩子，可裁为头像</td></tr>
+      <tr><td>G1</td><td>S8 / 页脚</td><td>3:2</td><td>堆着相册的书桌或沙发一角，无人，暖光（可选）</td></tr>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>搜索 | 我们的孩子</title>
+<style>
+  :root{
+    --bg:#FFFFFF; --bg-alt:#FAF8F4;
+    --ink:#111111; --mute:#767676; --rule:#E8E8E8; --rule2:#DED8CD; --accent:#B4795A;
+    --serif:"Source Han Serif SC","Noto Serif SC","Songti SC",SimSun,serif;
+    --sans:"Helvetica Neue",Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;
+    --mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
+  }
+  html{font-size:16px;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.8;
+    -webkit-font-smoothing:antialiased;}
+  img{display:block;max-width:100%;}
+  a{color:inherit;text-decoration:none;}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
+
+  .hd{position:fixed;top:0;left:0;right:0;height:44px;background:rgba(255,255,255,.94);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--rule);z-index:60;}
+  .hd-in{max-width:1280px;height:100%;margin:0 auto;padding:0 4vw;display:flex;align-items:center;}
+  .brand{font-weight:700;font-size:.875rem;}
+  .nav{margin-left:auto;display:flex;gap:1.4em;font-size:.75rem;}
+  .nav a{padding-bottom:2px;border-bottom:1px solid transparent;}
+  .nav a:hover{border-bottom-color:var(--ink);}
+  .nav .on{border-bottom-color:var(--ink);}
+  .nav .dim{color:#9A9A9A;}
+
+  .wrap{max-width:1280px;margin:0 auto;padding:0 4vw;}
+
+  /* 搜索框 */
+  .sbox{padding-top:104px;}
+  .sbox .lb{font-size:.6875rem;letter-spacing:.18em;color:var(--mute);}
+  .field{display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--ink);
+    padding:18px 0 14px;margin-top:14px;}
+  .field .mag{font-size:1.25rem;color:#B5B0A8;}
+  #q{flex:1;border:0;outline:none;background:transparent;font-family:var(--serif);
+    font-size:2rem;font-weight:300;color:var(--ink);letter-spacing:.02em;}
+  #q::placeholder{color:#C6C0B6;}
+  .field .k{font-size:.6875rem;color:#B5B0A8;border:1px solid var(--rule);padding:2px 7px;
+    font-family:var(--mono);}
+  .hint{font-size:.75rem;color:#9A958C;margin-top:14px;letter-spacing:.02em;}
+
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:26px;align-items:center;}
+  .chips .k{font-size:.6875rem;color:var(--mute);letter-spacing:.1em;margin-right:4px;}
+  .chip{font-size:.8125rem;padding:5px 12px;border:1px solid var(--rule);color:#4A4A4A;transition:.18s;}
+  .chip:hover{border-color:var(--ink);color:var(--ink);}
+
+  /* 结果 */
+  .res{margin-top:56px;padding-bottom:20px;}
+  .grp{margin-bottom:58px;}
+  .grp-hd{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--rule);
+    padding-bottom:10px;margin-bottom:22px;}
+  .grp-hd .n{font-size:.6875rem;letter-spacing:.18em;color:var(--mute);}
+  .grp-hd .c{font-family:var(--mono);font-size:.6875rem;color:var(--accent);margin-left:auto;}
+
+  .slist{display:grid;grid-template-columns:repeat(3,1fr);gap:26px;}
+  .sc{cursor:pointer;}
+  .sc .ph{overflow:hidden;margin-bottom:12px;}
+  .sc img{width:100%;aspect-ratio:3/2;object-fit:cover;filter:sepia(.1) saturate(.94);transition:transform .5s;}
+  .sc:hover img{transform:scale(1.03);}
+  .sc h4{font-family:var(--serif);font-weight:400;font-size:1.0625rem;letter-spacing:.01em;}
+  .sc .m{font-size:.75rem;color:var(--mute);font-family:var(--mono);margin-top:4px;}
+  .sc mark{background:transparent;color:var(--accent);border-bottom:1px solid var(--accent);}
+
+  .pgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;}
+  .pgrid figure{cursor:zoom-in;position:relative;}
+  .pgrid img{width:100%;aspect-ratio:1/1;object-fit:cover;filter:sepia(.1) saturate(.94);transition:.4s;}
+  .pgrid figure:hover img{opacity:.86;}
+  .pgrid figcaption{font-size:.625rem;color:#9A958C;font-family:var(--mono);margin-top:6px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+  .vid{display:flex;gap:18px;align-items:center;max-width:520px;cursor:pointer;}
+  .vid .th{position:relative;width:180px;flex:none;}
+  .vid img{width:180px;aspect-ratio:16/9;object-fit:cover;filter:sepia(.1) saturate(.94);}
+  .vid .dur{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.5);color:#fff;
+    font-size:.625rem;font-family:var(--mono);padding:1px 5px;}
+  .vid .t{font-family:var(--serif);font-size:1rem;}
+  .vid .m{font-size:.75rem;color:var(--mute);font-family:var(--mono);margin-top:4px;}
+
+  .empty{padding:70px 0 40px;text-align:center;display:none;}
+  .empty .t{font-family:var(--serif);font-size:1.25rem;color:#5A5650;}
+  .empty .s{font-size:.8125rem;color:#9A958C;margin-top:12px;}
+  .empty .tips{display:flex;gap:8px;justify-content:center;margin-top:22px;flex-wrap:wrap;}
+
+  .foot{max-width:1280px;margin:40px auto 0;padding:18px 4vw 40px;border-top:1px solid var(--rule);
+    font-size:.75rem;color:#9A958C;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+
+  /* 灯箱 */
+  .lbx{position:fixed;inset:0;background:rgba(255,255,255,.985);display:flex;align-items:center;
+    justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;z-index:90;}
+  .lbx.on{opacity:1;pointer-events:auto;}
+  .lbx img{max-width:88vw;max-height:80vh;object-fit:contain;}
+  .lbx .c{position:absolute;bottom:28px;left:4vw;font-size:.75rem;color:var(--mute);font-family:var(--mono);}
+  .lbx .x{position:absolute;top:18px;right:4vw;font-size:1.25rem;color:#999;}
+
+  @media (max-width:1023px){
+    .slist{grid-template-columns:repeat(2,1fr);gap:18px;}
+    .pgrid{grid-template-columns:repeat(4,1fr);}
+    #q{font-size:1.5rem;}
+  }
+  @media (max-width:640px){
+    html{font-size:15px;}
+    .pgrid{grid-template-columns:repeat(3,1fr);gap:8px;}
+    .slist{grid-template-columns:1fr 1fr;}
+    .vid .th{width:130px;}
+    .vid img{width:130px;}
+  }
+</style>
+</head>
+<body>
+
+<header class="hd">
+  <div class="hd-in">
+    <a class="brand" href="home.html">我们的孩子</a>
+    <nav class="nav">
+      <a href="home.html">2019</a>
+      <a href="home.html">2021</a>
+      <a href="home.html">2023</a>
+      <a href="home.html">2026</a>
+      <a class="on" href="search.html">搜索</a>
+      <a class="dim" href="age.html">索引</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap sbox">
+  <div class="lb">— 搜索 —</div>
+  <div class="field">
+    <span class="mag">⌕</span>
+    <input id="q" type="text" placeholder="外婆抱他的照片" autocomplete="off" spellcheck="false">
+    <span class="k">ESC</span>
+  </div>
+  <div class="hint">用人 + 地点 + 事来说，比打字准。比如「外婆 海边」「他哭的那张」「2021 年冬天」。</div>
+
+  <div class="chips" id="chips">
+    <span class="k">试试</span>
+    <button class="chip">外婆</button>
+    <button class="chip">海边</button>
+    <button class="chip">医院</button>
+    <button class="chip">骑车</button>
+    <button class="chip">过年</button>
+    <button class="chip">哭</button>
+  </div>
+</div>
+
+<div class="wrap res" id="res"></div>
+
+<div class="wrap">
+  <div class="empty" id="empty">
+    <div class="t">没找到。</div>
+    <div class="s">这个册子里暂时没有相关的东西。换个说法试试：</div>
+    <div class="tips">
+      <button class="chip">外婆</button><button class="chip">海边</button><button class="chip">过年</button>
+    </div>
+  </div>
+</div>
+
+<div class="foot">
+  <span>搜索范围：本册全部 8 年、286 张照片、8 段视频</span>
+  <span>演示版 · 结果为模拟数据</span>
+</div>
+
+<div class="lbx" id="lbx">
+  <button class="x" id="lbxX">✕</button>
+  <img id="lbxImg" alt="">
+  <div class="c" id="lbxC"></div>
+</div>
+
+<script>
+(function(){
+  var STORIES = [
+    {title:'走路这件事', tags:'外婆 妈妈 家里 小区 走路 摔倒 学步 2021', seed:'ss01', meta:'2021.03—2021.11 · 23 张'},
+    {title:'过年回老家', tags:'爷爷 奶奶 过年 春节 老家 2021', seed:'ss02', meta:'2021.02 · 34 张'},
+    {title:'第一次看见海', tags:'爸爸 妈妈 海边 沙滩 旅行 2019', seed:'ss03', meta:'2019.08 · 24 张'},
+    {title:'学会骑车的那年夏天', tags:'爸爸 骑车 自行车 小区 2022', seed:'ss04', meta:'2022.06—08 · 38 张'},
+    {title:'发高烧那三天', tags:'爸爸 妈妈 医院 哭 生病 急诊 2021', seed:'ss05', meta:'2021.07 · 9 张'},
+    {title:'每天早上的那扇窗', tags:'妈妈 外婆 家里 窗 早晨 2020', seed:'ss06', meta:'2020.04—2022.12 · 58 张'}
+  ];
+
+  var PHOTOS = [
+    {cap:'外婆抱他在小区门口 · 2021.05', tags:'外婆 小区 抱 2021 走路', seed:'sp01'},
+    {cap:'海边第一次下水 · 2019.08', tags:'海边 沙滩 爸爸 2019 旅行', seed:'sp02'},
+    {cap:'在医院走廊 · 2021.07', tags:'医院 爸爸 哭 2021 生病', seed:'sp03'},
+    {cap:'学会骑车那天 · 2022.07', tags:'骑车 自行车 爸爸 2022 小区', seed:'sp04'},
+    {cap:'外婆和他一起包饺子 · 2021.02', tags:'外婆 过年 春节 厨房 2021', seed:'sp05'},
+    {cap:'早上的窗边 · 2020.10', tags:'家里 窗 早晨 妈妈 2020', seed:'sp06'},
+    {cap:'第一次自己走完那段路 · 2021.11', tags:'走路 小区 2021 外婆', seed:'sp07'},
+    {cap:'他在沙滩上回头看 · 2019.08', tags:'海边 沙滩 妈妈 2019 旅行', seed:'sp08'},
+    {cap:'摔了第七次 · 2021.05', tags:'走路 摔倒 哭 2021 家里', seed:'sp09'}
+  ];
+
+  var VIDEOS = [
+    {title:'他第一次自己走完那段路', cap:'2021.06.20 · 00:42', tags:'走路 小区 2021 外婆', seed:'sv01'}
+  ];
+
+  var res = document.getElementById('res');
+  var empty = document.getElementById('empty');
+  var q = document.getElementById('q');
+
+  function hit(o, k){
+    if(!k) return true;
+    return (o.title || o.cap || '').indexOf(k) > -1 || o.tags.indexOf(k) > -1;
+  }
+
+  function hl(text, k){
+    if(!k) return text;
+    return text.split(k).join('<mark>' + k + '</mark>');
+  }
+
+  function render(k){
+    k = (k || '').trim();
+    var s = STORIES.filter(function(o){ return hit(o, k); });
+    var p = PHOTOS.filter(function(o){ return hit(o, k); });
+    var v = VIDEOS.filter(function(o){ return hit(o, k); });
+    var html = '';
+
+    if(s.length){
+      html += '<section class="grp"><div class="grp-hd"><span class="n">故事集</span>' +
+        '<span class="c">' + s.length + ' 个</span></div><div class="slist">';
+      s.forEach(function(o){
+        html += '<article class="sc" data-go="story.html">' +
+          '<div class="ph"><img src="https://picsum.photos/seed/' + o.seed + '/800/533" alt=""></div>' +
+          '<h4>' + hl(o.title, k) + '</h4><div class="m">' + o.meta + '</div></article>';
+      });
+      html += '</div></section>';
+    }
+
+    if(p.length){
+      html += '<section class="grp"><div class="grp-hd"><span class="n">照片</span>' +
+        '<span class="c">' + p.length + ' 张</span></div><div class="pgrid">';
+      p.forEach(function(o){
+        html += '<figure data-cap="' + o.cap + '">' +
+          '<img src="https://picsum.photos/seed/' + o.seed + '/320/320" alt="' + o.cap + '">' +
+          '<figcaption>' + o.cap + '</figcaption></figure>';
+      });
+      html += '</div></section>';
+    }
+
+    if(v.length){
+      html += '<section class="grp"><div class="grp-hd"><span class="n">视频</span>' +
+        '<span class="c">' + v.length + ' 段</span></div>';
+      v.forEach(function(o){
+        html += '<div class="vid" data-cap="' + o.title + ' · ' + o.cap + '">' +
+          '<div class="th"><img src="https://picsum.photos/seed/' + o.seed + '/360/203" alt="">' +
+          '<span class="dur">00:42</span></div>' +
+          '<div><div class="t">' + o.title + '</div><div class="m">' + o.cap + '</div></div></div>';
+      });
+      html += '</section>';
+    }
+
+    if(!k){
+      html = '<section class="grp"><div class="grp-hd"><span class="n">最近看过</span></div>' +
+        '<div class="slist">' +
+        '<article class="sc" data-go="story.html"><div class="ph">' +
+        '<img src="https://picsum.photos/seed/ss01/800/533" alt=""></div><h4>走路这件事</h4>' +
+        '<div class="m">2021.03—2021.11 · 23 张</div></article>' +
+        '<article class="sc" data-go="age.html"><div class="ph">' +
+        '<img src="https://picsum.photos/seed/ss06/800/533" alt=""></div><h4>每天早上的那扇窗</h4>' +
+        '<div class="m">2020.04—2022.12 · 58 张</div></article>' +
+        '</div></section>';
+    }
+
+    res.innerHTML = html;
+    var total = s.length + p.length + v.length;
+    empty.style.display = (k && total === 0) ? 'block' : 'none';
+  }
+
+  q.addEventListener('input', function(){ render(q.value); });
+  document.querySelectorAll('.chip').forEach(function(c){
+    c.addEventListener('click', function(){
+      q.value = c.textContent;
+      render(q.value);
+      q.focus();
+    });
+  });
+
+  document.addEventListener('click', function(e){
+    var sc = e.target.closest('.sc');
+    if(sc && sc.dataset.go){ location.href = sc.dataset.go; return; }
+    var fig = e.target.closest('figure[data-cap]');
+    if(fig){
+      document.getElementById('lbxImg').src = fig.querySelector('img').src.replace(/\/\d+\/\d+$/, '/1200/1200');
+      document.getElementById('lbxC').textContent = fig.dataset.cap;
+      document.getElementById('lbx').classList.add('on');
+      document.body.style.overflow = 'hidden';
+      return;
+    }
+    var vd = e.target.closest('.vid');
+    if(vd){
+      document.getElementById('lbxImg').src = 'https://picsum.photos/seed/sv01/1600/900';
+      document.getElementById('lbxC').textContent = vd.dataset.cap;
+      document.getElementById('lbx').classList.add('on');
+      document.body.style.overflow = 'hidden';
+    }
+  });
+
+  function closeLbx(){
+    document.getElementById('lbx').classList.remove('on');
+    document.body.style.overflow = '';
+  }
+  document.getElementById('lbxX').addEventListener('click', closeLbx);
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){ closeLbx(); q.blur(); }
+  });
+
+  render('');
+})();
+</script>
+</body>
+</html>

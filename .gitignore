@@ -23,6 +23,9 @@ photos/**
 # data/ 只应存在于 S3 站点桶；本地只在做词表审计等只读分析时临时落一份。
 # 里面是真实照片 id 与识别标签，属于私人相册内容，任何情况下都不进公开仓库。
 data/
+# 例外：V7 交付的 Android 工程里有一个 Kotlin 源码包也叫 data/（Room 实体与 DAO）。
+# 它是源码不是数据，必须入库，否则克隆下来编不过。只放开这一条路径。
+!children-growth/android/app/src/main/java/family/ourkids/app/data/
 
 # ---------- 系统与编辑器 ----------
 .DS_Store

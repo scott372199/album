@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>走路这件事 · 2021 | 我们的孩子</title>
+<style>
+  :root{
+    --bg:#FFFFFF; --bg-alt:#FAF8F4;
+    --ink:#111111; --mute:#767676; --rule:#E8E8E8; --accent:#B4795A;
+    --serif:"Source Han Serif SC","Noto Serif SC","Songti SC",SimSun,serif;
+    --sans:"Helvetica Neue",Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;
+    --mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
+  }
+  html{font-size:16px;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.8;
+    -webkit-font-smoothing:antialiased;}
+  img{display:block;max-width:100%;}
+  a{color:inherit;text-decoration:none;}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
+
+  .hd{position:fixed;top:0;left:0;right:0;height:44px;background:rgba(255,255,255,.94);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--rule);z-index:60;}
+  .hd-in{max-width:1280px;height:100%;margin:0 auto;padding:0 4vw;display:flex;align-items:center;}
+  .brand{font-weight:700;font-size:.875rem;}
+  .nav{margin-left:auto;display:flex;gap:1.4em;font-size:.75rem;}
+  .nav a{padding-bottom:2px;border-bottom:1px solid transparent;}
+  .nav a:hover{border-bottom-color:var(--ink);}
+  .nav .dim{color:#9A9A9A;}
+  .progbar{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;z-index:70;}
+
+  .wrap{max-width:1280px;margin:0 auto;padding:0 4vw;}
+  .narrow{max-width:620px;margin:0 auto;padding:0 4vw;}
+  .wide{max-width:1000px;margin:0 auto;padding:0 4vw;}
+
+  .crumb{padding-top:90px;font-size:.75rem;color:var(--mute);letter-spacing:.04em;}
+  .crumb span{margin:0 .5em;color:#CFCAC2;}
+
+  h1{font-family:var(--serif);font-weight:300;font-size:3rem;line-height:1.25;letter-spacing:.02em;
+    margin-top:24px;}
+  .deck{font-family:var(--serif);font-size:1.25rem;line-height:1.9;color:#3A3A3A;margin-top:22px;max-width:560px;}
+  .meta{font-size:.75rem;color:var(--mute);font-family:var(--mono);margin-top:22px;letter-spacing:.02em;}
+
+  figure{margin:0;}
+  figure img{width:100%;filter:sepia(.1) saturate(.94);}
+  figcaption{font-size:.75rem;color:#9A958C;margin-top:10px;font-family:var(--mono);letter-spacing:.02em;}
+
+  .lead{margin-top:56px;}
+
+  p.body{font-family:var(--serif);font-size:1.0625rem;line-height:2.15;letter-spacing:.01em;
+    margin:64px auto;color:#1A1A1A;}
+  p.body + p.body{margin-top:-24px;}
+
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:76px auto;}
+  .pair img{aspect-ratio:4/5;object-fit:cover;}
+  .pair.off{padding-left:8%;}
+
+  .single{max-width:660px;margin:76px auto;padding:0 4vw;}
+
+  .pull{max-width:620px;margin:0 auto;padding:0 4vw;text-align:center;}
+  .pull p{font-family:var(--serif);font-size:1.375rem;line-height:2;color:#3A3A3A;font-weight:300;}
+  .pull span{display:block;width:28px;height:1px;background:#D6CFC2;margin:26px auto;}
+
+  /* 视频 */
+  .vid{position:relative;overflow:hidden;cursor:pointer;margin:80px auto;}
+  .vid img{width:100%;aspect-ratio:16/9;object-fit:cover;transition:transform 6s linear,filter .4s;}
+  .vid .play{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.14);
+    transition:background .3s;}
+  .vid:hover .play{background:rgba(0,0,0,.22);}
+  .vid .play i{width:66px;height:66px;border-radius:50%;border:1px solid rgba(255,255,255,.92);
+    background:rgba(0,0,0,.16);display:grid;place-items:center;color:#fff;font-size:16px;
+    font-style:normal;padding-left:4px;transition:transform .3s;}
+  .vid:hover .play i{transform:scale(1.06);}
+  .vid .dur{position:absolute;right:12px;bottom:12px;color:#fff;font-size:.6875rem;
+    font-family:var(--mono);background:rgba(0,0,0,.42);padding:2px 7px;}
+  .vid .demo{position:absolute;left:0;top:0;color:#fff;font-size:.625rem;letter-spacing:.1em;
+    background:rgba(0,0,0,.5);padding:3px 9px;opacity:0;transition:opacity .3s;}
+  .vid .bar{position:absolute;left:0;bottom:0;height:2px;width:0;background:var(--accent);}
+  .vid.playing .play{opacity:0;pointer-events:none;}
+  .vid.playing img{transform:scale(1.06);filter:sepia(.1) saturate(.94) brightness(.86);}
+  .vid.playing .demo{opacity:1;}
+  .vid.playing .bar{animation:run 9s linear forwards;}
+  @keyframes run{from{width:0}to{width:100%}}
+
+  /* 归档 */
+  .arch{margin:110px auto 0;padding:44px 4vw 0;border-top:1px solid var(--rule);max-width:1000px;}
+  .arch .hd2{display:flex;align-items:baseline;justify-content:space-between;}
+  .arch .lb{font-size:.6875rem;letter-spacing:.18em;color:var(--mute);}
+  .arch .toggle{font-size:.8125rem;color:var(--ink);border-bottom:1px solid #D8D4CC;padding-bottom:2px;}
+  .arch .g{display:none;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:26px;}
+  .arch.open .g{display:grid;}
+  .arch .g img{width:100%;aspect-ratio:1/1;object-fit:cover;filter:sepia(.1) saturate(.94);cursor:zoom-in;}
+
+  /* 下一篇 */
+  .next{max-width:1000px;margin:90px auto 0;padding:34px 4vw 0;border-top:1px solid var(--rule);
+    display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;}
+  .next .it{max-width:46%;}
+  .next .k{font-size:.6875rem;letter-spacing:.14em;color:var(--mute);}
+  .next .t{font-family:var(--serif);font-size:1.125rem;margin-top:8px;}
+  .next a:hover .t{color:var(--accent);}
+  .next .r{text-align:right;margin-left:auto;}
+
+  .foot{max-width:1280px;margin:70px auto 0;padding:18px 4vw 44px;border-top:1px solid var(--rule);
+    font-size:.75rem;color:#9A958C;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+
+  .lbx{position:fixed;inset:0;background:rgba(255,255,255,.985);display:flex;align-items:center;
+    justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;z-index:90;}
+  .lbx.on{opacity:1;pointer-events:auto;}
+  .lbx img{max-width:88vw;max-height:80vh;object-fit:contain;}
+  .lbx .c{position:absolute;bottom:28px;left:4vw;font-size:.75rem;color:var(--mute);font-family:var(--mono);}
+  .lbx .x{position:absolute;top:18px;right:4vw;font-size:1.25rem;color:#999;}
+  .lbx .x:hover{color:var(--ink);}
+  figcaption{cursor:default;}
+  article img{cursor:zoom-in;}
+
+  @media (max-width:767px){
+    html{font-size:15px;}
+    h1{font-size:2rem;}
+    .deck{font-size:1.0625rem;}
+    p.body{margin:44px auto;line-height:2.05;}
+    .pair{gap:10px;margin:52px auto;}
+    .pair.off{padding-left:0;}
+    .arch .g{grid-template-columns:repeat(3,1fr);}
+  }
+</style>
+</head>
+<body>
+
+<div class="progbar" id="pb"></div>
+
+<header class="hd">
+  <div class="hd-in">
+    <a class="brand" href="home.html">我们的孩子</a>
+    <nav class="nav">
+      <a href="home.html">2019</a>
+      <a href="home.html">2021</a>
+      <a href="home.html">2023</a>
+      <a href="home.html">2026</a>
+      <a class="dim" href="age.html">索引</a>
+    </nav>
+  </div>
+</header>
+
+<article>
+
+  <div class="wrap">
+    <div class="crumb">
+      <a href="home.html">我们的孩子</a><span>/</span>
+      <a href="age.html">1–3 岁</a><span>/</span>走路这件事
+    </div>
+  </div>
+
+  <div class="narrow">
+    <h1>走路这件事</h1>
+    <p class="deck">他第一次松开手，是三月的一个下午。那天我们什么都没拍到，只记得他笑得往后仰。</p>
+    <div class="meta">2021.03.14 — 2021.11.02 &nbsp;·&nbsp; 23 张 &nbsp;·&nbsp; 1 段视频 &nbsp;·&nbsp; 妈妈 · 外婆</div>
+  </div>
+
+  <div class="wide">
+    <figure class="lead">
+      <img src="https://picsum.photos/seed/wk01/1600/1000" alt="孩子扶着沙发站起来的照片">
+      <figcaption>三月的那个下午 · 2021.03.14</figcaption>
+    </figure>
+  </div>
+
+  <p class="body narrow">三月的那个下午，他扶着沙发站起来，手心全是汗。我们都没出声，怕一说话他就坐回去。<br><br>
+  他迈了一步，两步，第三步的时候突然发现自己什么都没扶。先是愣住，然后笑得整个人往后仰，一屁股坐在地上，还是笑。</p>
+
+  <div class="wide">
+    <div class="pair">
+      <figure><img src="https://picsum.photos/seed/wk02/800/1000" alt="孩子扶着墙走路的照片"><figcaption>扶墙 · 2021.04</figcaption></figure>
+      <figure><img src="https://picsum.photos/seed/wk03/800/1000" alt="孩子摔倒在地的照片"><figcaption>第七次摔 · 2021.05</figcaption></figure>
+    </div>
+  </div>
+
+  <p class="body narrow">从那天到他自己走出家门，用了八个月。这八个月里我们拍了很多：扶墙的、摔倒的、蹲在地上不肯起来的，还有一次在小区门口站着不动，坚持要自己走完那段路。</p>
+
+  <div class="pull">
+    <span></span>
+    <p>他走得很慢，我们跟得更慢。</p>
+    <span></span>
+  </div>
+
+  <div class="wide">
+    <figure class="single">
+      <img src="https://picsum.photos/seed/wk04/900/1200" alt="孩子蹲在地上的照片">
+      <figcaption>蹲在楼下不肯走 · 2021.07.11</figcaption>
+    </figure>
+  </div>
+
+  <!-- 视频：放在中段偏后，情绪最高点 -->
+  <div class="wide">
+    <figure class="vid" id="vid">
+      <img src="https://picsum.photos/seed/wk05/1600/900" alt="孩子自己走路的视频截图">
+      <div class="play"><i>▶</i></div>
+      <div class="dur">00:42</div>
+      <div class="demo">演示：视频在此处播放</div>
+      <div class="bar"></div>
+    </figure>
+    <figcaption style="max-width:1000px;margin:2px auto 0;padding:0 4vw;">
+      他第一次自己走完那段路 · 2021.06.20 · 00:42
+    </figcaption>
+  </div>
+
+  <div class="wide">
+    <div class="pair off">
+      <figure><img src="https://picsum.photos/seed/wk06/800/1000" alt="在小区门口的照片"><figcaption>小区门口 · 2021.08</figcaption></figure>
+      <figure><img src="https://picsum.photos/seed/wk07/800/1000" alt="牵着大人的手的照片"><figcaption>还是要牵手 · 2021.09</figcaption></figure>
+    </div>
+  </div>
+
+  <p class="body narrow">现在回头看，这些照片里他几乎都没有看镜头。当时我们还嫌没拍到正脸，现在觉得，正因为没看镜头，才看得出他当时在想什么。<br><br>
+  每一年都会有一个这样的下午。我们只是刚好按了快门。</p>
+
+  <div class="wide">
+    <figure>
+      <img src="https://picsum.photos/seed/wk08/1600/690" alt="傍晚孩子走在路上的照片">
+      <figcaption>八个月后的一个傍晚 · 2021.11.02</figcaption>
+    </figure>
+  </div>
+
+  <!-- 归档 -->
+  <section class="arch" id="arch">
+    <div class="hd2">
+      <div class="lb">这一年的其他 15 张 · 没放进故事里</div>
+      <button class="toggle" id="archBtn">展开全部</button>
+    </div>
+    <div class="g">
+      <img src="https://picsum.photos/seed/wk09/300/300" alt="">
+      <img src="https://picsum.photos/seed/wk10/300/300" alt="">
+      <img src="https://picsum.photos/seed/wk11/300/300" alt="">
+      <img src="https://picsum.photos/seed/wk12/300/300" alt="">
+      <img src="https://picsum.photos/seed/wk13/300/300" alt="">
+      <img src="https://picsum.photos/seed/wk14/300/300" alt="">
+      <img src="https://picsum.photos/seed/wk15/300/300" alt="">
+      <img src="https://picsum.photos/seed/wk16/300/300" alt="">
+      <img src="https://picsum.photos/seed/wk17/300/300" alt="">
+      <img src="https://picsum.photos/seed/wk18/300/300" alt="">
+      <img src="https://picsum.photos/seed/wk19/300/300" alt="">
+      <img src="https://picsum.photos/seed/wk20/300/300" alt="">
+      <img src="https://picsum.photos/seed/wk21/300/300" alt="">
+      <img src="https://picsum.photos/seed/wk22/300/300" alt="">
+      <img src="https://picsum.photos/seed/wk23/300/300" alt="">
+    </div>
+  </section>
+
+  <nav class="next">
+    <a class="it" href="age.html">
+      <div class="k">上一个故事</div><div class="t">每天早上的那扇窗</div>
+    </a>
+    <a class="it r" href="age.html">
+      <div class="k">下一个故事</div><div class="t">楼下的小广场</div>
+    </a>
+  </nav>
+
+</article>
+
+<div class="lbx" id="lbx">
+  <button class="x" id="lbxX">✕</button>
+  <img id="lbxImg" alt="">
+  <div class="c" id="lbxC"></div>
+</div>
+
+<div class="foot">
+  <span>走路这件事 · 2021.03—2021.11 · 23 张 · <a href="card.html" style="border-bottom:1px solid #D8D4CC;">生成故事卡片</a> · 仅家人可见</span>
+  <span>演示版 · 图片与视频为占位素材</span>
+</div>
+
+<script>
+(function(){
+  var pb = document.getElementById('pb');
+  function onScroll(){
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    var p = h > 0 ? (window.scrollY / h) * 100 : 0;
+    pb.style.width = Math.min(100, Math.max(0, p)) + '%';
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+
+  var arch = document.getElementById('arch');
+  var btn = document.getElementById('archBtn');
+  btn.addEventListener('click', function(){
+    arch.classList.toggle('open');
+    btn.textContent = arch.classList.contains('open') ? '收起' : '展开全部';
+  });
+
+  var lbx = document.getElementById('lbx'),
+      lbxImg = document.getElementById('lbxImg'),
+      lbxC = document.getElementById('lbxC');
+
+  function closeLbx(){ lbx.classList.remove('on'); document.body.style.overflow=''; }
+  document.getElementById('lbxX').addEventListener('click', closeLbx);
+  lbx.addEventListener('click', function(e){ if(e.target === lbx) closeLbx(); });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeLbx(); });
+
+  document.querySelectorAll('article img').forEach(function(im){
+    if(im.closest('.vid')) return;
+    im.addEventListener('click', function(){
+      var fig = im.closest('figure');
+      var cap = fig && fig.querySelector('figcaption');
+      lbxImg.src = im.src.replace(/\/\d+\/\d+$/, '/1600/1200');
+      lbxC.textContent = cap ? cap.textContent : '';
+      lbx.classList.add('on');
+      document.body.style.overflow = 'hidden';
+    });
+  });
+
+  var vid = document.getElementById('vid');
+  vid.addEventListener('click', function(){
+    if(vid.classList.contains('playing')){
+      vid.classList.remove('playing');
+    } else {
+      vid.classList.add('playing');
+    }
+  });
+})();
+</script>
+</body>
+</html>

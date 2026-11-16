@@ -8,6 +8,10 @@
 > 状态 / Status：V6 已于 2026-11-16 收尾（见 [`spec/v6/V6-ACCEPTANCE.md`](../v6/V6-ACCEPTANCE.md)），
 > 本文件是下一迭代的**唯一需求入口**。B-01~B-06 之间没有优先级顺序，B-05、B-06 对用户日常
 > 使用的影响最大。
+>
+> **2026-11-16 更新 / Superseded**：B-01~B-06 已全部落入 [`spec.md`](./spec.md) v1.0 的 FR 编号（追溯表见其 §0.1）。
+> 此后**需求以 `spec.md` 为准**，本文件转为历史入口，不再单独维护；新的诉求请先写进 spec 的开放问题，不要在本文追加条目。
+> *All six items now live in spec v1.0; the spec is authoritative from here on.*
 
 ---
 

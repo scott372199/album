@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>套壳预览 · Android</title>
+<style>
+  :root{
+    --ink:#111; --mute:#6E6A63; --faint:#9A958C; --rule:#E8E8E8; --accent:#B4795A;
+    --serif:"Source Han Serif SC","Noto Serif SC","Songti SC",SimSun,serif;
+    --sans:"Helvetica Neue",Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;
+    --mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
+  }
+  html{font-size:16px;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#F7F6F2;color:var(--ink);font-family:var(--sans);line-height:1.8;
+    -webkit-font-smoothing:antialiased;}
+  img{display:block;max-width:100%;}
+  a{color:inherit;text-decoration:none;}
+
+  .wrap{max-width:1120px;margin:0 auto;padding:56px 32px 80px;}
+  .k{font-size:.6875rem;letter-spacing:.2em;color:var(--accent);}
+  h1{font-family:var(--serif);font-weight:300;font-size:2.25rem;margin-top:12px;letter-spacing:.02em;}
+  .lead{font-size:.9375rem;color:var(--mute);max-width:520px;margin-top:12px;line-height:1.95;}
+
+  .row{display:flex;gap:56px;margin-top:48px;align-items:flex-start;flex-wrap:wrap;}
+
+  /* 手机 */
+  .phone{width:390px;height:844px;background:#fff;border:9px solid #141414;border-radius:46px;
+    overflow:hidden;position:relative;flex:none;box-shadow:0 24px 60px rgba(0,0,0,.12);}
+  .sbar{height:44px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 26px;font-size:12px;font-weight:500;letter-spacing:.02em;}
+  .sbar .ic{display:flex;align-items:center;gap:5px;}
+  .bars{display:flex;align-items:flex-end;gap:1.5px;height:9px;}
+  .bars i{width:2.5px;background:#111;display:block;border-radius:.5px;}
+  .bars i:nth-child(1){height:3px}.bars i:nth-child(2){height:5px}
+  .bars i:nth-child(3){height:7px}.bars i:nth-child(4){height:9px}
+  .wifi{width:11px;height:9px;border:1.5px solid #111;border-radius:50%;
+    clip-path:polygon(0 0,100% 0,50% 60%);}
+  .batt{width:18px;height:9px;border:1.2px solid #111;border-radius:2px;position:relative;padding:1px;}
+  .batt::after{content:"";display:block;height:100%;width:72%;background:#111;border-radius:1px;}
+  .batt::before{content:"";position:absolute;right:-3px;top:2.5px;width:2px;height:4px;
+    background:#111;border-radius:0 1px 1px 0;}
+
+  .app{position:absolute;top:44px;left:0;right:0;bottom:0;display:flex;flex-direction:column;
+    background:#fff;}
+  .navbar{height:44px;display:flex;align-items:center;padding:0 16px;
+    border-bottom:1px solid #F2F2F2;font-size:.75rem;}
+  .navbar .b{font-weight:700;font-size:.8125rem;}
+  .navbar .n{margin-left:auto;display:flex;gap:14px;color:#6E6A63;}
+  .navbar .n .on{border-bottom:1px solid #111;padding-bottom:1px;color:#111;}
+  .navbar .n .big{border:1px solid #E8E8E8;padding:1px 5px;border-bottom:1px solid #E8E8E8;}
+
+  .body{flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 16px;
+    padding-bottom:38px;}
+  .hero{width:100%;aspect-ratio:3/4;max-height:470px;object-fit:cover;
+    filter:sepia(.1) saturate(.94);}
+  .hcap{display:flex;gap:14px;font-size:.6875rem;color:#9A958C;font-family:var(--mono);
+    margin-top:16px;}
+  .hcap b{color:#111;font-weight:400;}
+  .hint{position:absolute;left:50%;bottom:34px;transform:translateX(-50%);font-size:.6875rem;
+    color:#8C8C8C;border:1px solid #E8E8E8;padding:5px 12px;background:#fff;white-space:nowrap;}
+  .gest{position:absolute;left:0;right:0;bottom:0;height:24px;display:grid;place-items:center;}
+  .gest::after{content:"";width:120px;height:4px;border-radius:2px;background:#111;opacity:.85;}
+
+  /* 第二屏：故事内页 */
+  .story{padding:0 16px;flex:1;overflow:hidden;}
+  .crumb{font-size:.625rem;color:#9A958C;padding-top:14px;}
+  .story h2{font-family:var(--serif);font-weight:300;font-size:1.625rem;margin-top:10px;line-height:1.3;}
+  .deck{font-family:var(--serif);font-size:.8125rem;color:#4A4640;line-height:1.85;margin-top:8px;}
+  .story img{width:100%;aspect-ratio:16/9;object-fit:cover;margin-top:14px;
+    filter:sepia(.1) saturate(.94);}
+  .story .p{font-family:var(--serif);font-size:.8125rem;line-height:2;color:#1A1A1A;margin-top:12px;}
+  .fade{position:absolute;left:0;right:0;bottom:24px;height:90px;
+    background:linear-gradient(to bottom,rgba(255,255,255,0),#fff);}
+
+  /* 右侧说明 */
+  .side{flex:1;min-width:300px;padding-top:6px;}
+  .side h3{font-size:.9375rem;font-weight:500;margin-bottom:14px;}
+  table{width:100%;border-collapse:collapse;font-size:.8125rem;}
+  td{text-align:left;padding:10px 0;border-bottom:1px solid #E4E1D9;vertical-align:top;color:#4A4640;
+    line-height:1.8;}
+  td:first-child{width:96px;color:var(--faint);font-family:var(--mono);font-size:.6875rem;
+    letter-spacing:.04em;padding-right:14px;}
+  .note{font-size:.75rem;color:var(--faint);margin-top:18px;line-height:1.9;}
+
+  .cap{font-size:.6875rem;color:var(--faint);font-family:var(--mono);margin-top:14px;
+    display:flex;justify-content:space-between;}
+  .frame{display:flex;flex-direction:column;}
+
+  @media (max-width:900px){
+    .row{gap:32px;}
+    .phone{width:320px;height:692px;}
+    .hero{max-height:390px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="k">ANDROID SHELL · 套壳预览</div>
+  <h1>装进手机里的样子</h1>
+  <p class="lead">同一个 Activity + WebView，页面全部来自本地 assets。下面是在 390 × 844 的安卓屏上的排版示意（静态图，非真机截图）。</p>
+
+  <div class="row">
+
+    <div class="frame">
+      <div class="phone">
+        <div class="sbar">
+          <span>11:34</span>
+          <span class="ic">
+            <span class="bars"><i></i><i></i><i></i><i></i></span>
+            <span class="wifi"></span>
+            <span class="batt"></span>
+          </span>
+        </div>
+        <div class="app" style="top:44px;">
+          <div class="navbar">
+            <span class="b">我们的孩子</span>
+            <span class="n"><span>搜索</span><span class="on">索引</span><span class="big">字</span></span>
+          </div>
+          <div class="body">
+            <img class="hero" src="https://picsum.photos/seed/app01/700/900" alt="">
+            <div class="hcap"><b>01 / 08</b><span>一岁 · 2019 · 外婆家的窗口</span></div>
+          </div>
+          <div class="hint">← → 翻页 · 点击图片看大图</div>
+        </div>
+        <div class="gest"></div>
+      </div>
+      <div class="cap" style="width:390px;"><span>首页 · 首屏</span><span>390 × 844</span></div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="sbar">
+          <span>11:34</span>
+          <span class="ic">
+            <span class="bars"><i></i><i></i><i></i><i></i></span>
+            <span class="wifi"></span>
+            <span class="batt"></span>
+          </span>
+        </div>
+        <div class="app" style="top:44px;">
+          <div class="navbar">
+            <span class="b">我们的孩子</span>
+            <span class="n"><span>搜索</span><span>索引</span><span class="big">字</span></span>
+          </div>
+          <div class="story">
+            <div class="crumb">我们的孩子 / 1–3 岁 / 走路这件事</div>
+            <h2>走路这件事</h2>
+            <div class="deck">他第一次松开手，是三月的一个下午。那天我们什么都没拍到，只记得他笑得往后仰。</div>
+            <img src="https://picsum.photos/seed/app02/700/394" alt="">
+            <div class="p">三月的那个下午，他扶着沙发站起来，手心全是汗。我们都没出声，怕一说话他就坐回去。</div>
+          </div>
+          <div class="fade"></div>
+        </div>
+        <div class="gest"></div>
+      </div>
+      <div class="cap" style="width:390px;"><span>故事内页 · 图文</span><span>390 × 844</span></div>
+    </div>
+
+    <div class="side">
+      <h3>壳层做了什么</h3>
+      <table>
+        <tr><td>44</td><td>状态栏高度由系统占掉，页面里固定的 44px 顶栏正好接在下面，不会被压住</td></tr>
+        <tr><td>390</td><td>视口宽 = 屏宽，网页的移动端断点（≤767）生效，四栏自动变两栏</td></tr>
+        <tr><td>字号</td><td>正文仍是 17px，手机上不缩小；「字」按钮把根字号切到 18</td></tr>
+        <tr><td>手势条</td><td>底部 24px 让给系统手势，底栏与固定条自动上移</td></tr>
+        <tr><td>长按</td><td>长按任意照片 → 「保存这张照片」，存进相册的「我们的孩子」</td></tr>
+        <tr><td>返回</td><td>有历史就返回上一页，到首页再按一次才退出</td></tr>
+        <tr><td>视频</td><td>必须点一下才播，不会自动播放</td></tr>
+        <tr><td>旋转</td><td>横竖屏切换不重载页面</td></tr>
+        <tr><td>数据</td><td>本地 Room 库存照片索引与故事草稿；「上传确认页」的读取、接受、改名都打到 <code>/api/*</code></td></tr>
+        <tr><td>离线</td><td>页面全部打包在 assets 里，断网也能翻；只有占位图需要联网</td></tr>
+      </table>
+      <p class="note">以上为排版与壳层行为的示意。工程在 <code>android/</code> 目录，用 Android Studio 打开即可运行；构建说明见 <code>android/README.md</code>。</p>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

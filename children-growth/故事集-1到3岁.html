@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>1–3 岁 · 27 个故事 | 我们的孩子</title>
+<style>
+  :root{
+    --bg:#FFFFFF; --bg-alt:#FAF8F4;
+    --ink:#111111; --mute:#767676; --rule:#E8E8E8; --accent:#B4795A;
+    --serif:"Source Han Serif SC","Noto Serif SC","Songti SC",SimSun,serif;
+    --sans:"Helvetica Neue",Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;
+    --mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
+  }
+  html{font-size:16px;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:1rem;line-height:1.8;
+    -webkit-font-smoothing:antialiased;}
+  img{display:block;max-width:100%;}
+  a{color:inherit;text-decoration:none;}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
+
+  .hd{position:fixed;top:0;left:0;right:0;height:44px;background:rgba(255,255,255,.94);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--rule);z-index:60;}
+  .hd-in{max-width:1280px;height:100%;margin:0 auto;padding:0 4vw;display:flex;align-items:center;}
+  .brand{font-weight:700;font-size:.875rem;}
+  .nav{margin-left:auto;display:flex;align-items:center;gap:1.4em;font-size:.75rem;}
+  .nav a,.nav button{padding-bottom:2px;border-bottom:1px solid transparent;}
+  .nav a:hover{border-bottom-color:var(--ink);}
+  .nav .on{border-bottom-color:var(--ink);}
+  .nav .dim{color:#9A9A9A;}
+
+  .wrap{max-width:1280px;margin:0 auto;padding:0 4vw;}
+  .crumb{padding-top:82px;font-size:.75rem;color:var(--mute);letter-spacing:.04em;}
+  .crumb span{margin:0 .5em;color:#CFCAC2;}
+
+  .head{padding:22px 0 0;}
+  .head h1{font-family:var(--serif);font-weight:300;font-size:2.75rem;line-height:1.2;letter-spacing:.02em;}
+  .head .sub{font-size:.9375rem;color:var(--mute);margin-top:12px;max-width:560px;line-height:1.9;}
+  .stats{display:flex;gap:1.5em;font-size:.75rem;color:var(--mute);font-family:var(--mono);margin-top:18px;}
+  .stats i{font-style:normal;color:var(--accent);}
+
+  /* 筛选条 */
+  .bar{position:sticky;top:44px;z-index:50;background:rgba(255,255,255,.96);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--rule);
+    display:flex;align-items:center;gap:18px;padding:12px 0;margin-top:26px;flex-wrap:wrap;}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;}
+  .chip{font-size:.75rem;padding:5px 11px;border:1px solid var(--rule);color:#4A4A4A;letter-spacing:.02em;
+    transition:.18s;}
+  .chip:hover{border-color:#C9C2B7;}
+  .chip.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .sep{width:1px;height:18px;background:var(--rule);}
+  .bar .sort{margin-left:auto;display:flex;gap:14px;font-size:.75rem;color:var(--mute);}
+  .bar .sort button{border-bottom:1px solid transparent;padding-bottom:1px;}
+  .bar .sort button.on{color:var(--ink);border-bottom-color:var(--ink);}
+
+  /* 卡片 */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:44px 26px;padding:40px 0 20px;}
+  .sc{cursor:pointer;transition:opacity .3s;}
+  .sc .ph{position:relative;overflow:hidden;margin-bottom:16px;}
+  .sc .ph img{width:100%;aspect-ratio:3/2;object-fit:cover;filter:sepia(.1) saturate(.94);
+    transition:transform .55s cubic-bezier(.22,.61,.36,1);}
+  .sc:hover .ph img{transform:scale(1.03);}
+  .sc .badge{position:absolute;top:10px;left:10px;font-size:.6875rem;letter-spacing:.1em;
+    background:rgba(255,255,255,.94);color:var(--accent);padding:2px 7px;}
+  .sc h3{font-family:var(--serif);font-weight:400;font-size:1.1875rem;line-height:1.5;letter-spacing:.01em;}
+  .sc .m{font-size:.75rem;color:var(--mute);margin-top:7px;font-family:var(--mono);}
+  .sc .p{font-size:.75rem;color:#9A958C;margin-top:3px;}
+  .sc.hide{display:none;}
+
+  .loadmore{display:block;margin:44px auto 0;font-size:.8125rem;letter-spacing:.06em;
+    border:1px solid var(--rule);padding:12px 30px;transition:.2s;}
+  .loadmore:hover{border-color:var(--ink);}
+  .loadmore i{font-style:normal;color:var(--mute);}
+
+  .foot{max-width:1280px;margin:80px auto 0;padding:18px 4vw 40px;border-top:1px solid var(--rule);
+    font-size:.75rem;color:#9A958C;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+
+  @media (max-width:1023px){
+    .grid{grid-template-columns:repeat(2,1fr);gap:34px 18px;}
+    .head h1{font-size:2.25rem;}
+  }
+  @media (max-width:640px){
+    html{font-size:15px;}
+    .grid{grid-template-columns:1fr 1fr;gap:26px 14px;}
+    .sc h3{font-size:1rem;}
+    .bar .sort{display:none;}
+  }
+</style>
+</head>
+<body>
+
+<header class="hd">
+  <div class="hd-in">
+    <a class="brand" href="demo-首页.html">我们的孩子</a>
+    <nav class="nav">
+      <a href="demo-首页.html">2019</a>
+      <a href="demo-首页.html">2021</a>
+      <a href="demo-首页.html">2023</a>
+      <a href="demo-首页.html">2026</a>
+      <a class="on dim" href="故事集-1到3岁.html">索引</a>
+    </nav>
+  </div>
+</header>
+
+<div class="crumb wrap">
+  <a href="demo-首页.html">我们的孩子</a><span>/</span><a href="demo-首页.html">他几岁</a><span>/</span>1–3 岁
+</div>
+
+<div class="head wrap">
+  <h1>1–3 岁</h1>
+  <p class="sub">2020 年 4 月 — 2022 年 12 月。走路、说话、上幼儿园之前的这两年，故事比任何一年都多。</p>
+  <div class="stats"><span><i>27</i> 个故事</span><span><i>196</i> 张照片</span><span><i>4</i> 段视频</span><span>更新到 2026.11</span></div>
+</div>
+
+<div class="bar wrap">
+  <div class="chips" id="chips">
+    <button class="chip on" data-f="all">全部</button>
+    <span class="sep"></span>
+    <button class="chip" data-f="爸爸">爸爸</button>
+    <button class="chip" data-f="妈妈">妈妈</button>
+    <button class="chip" data-f="爷爷">爷爷</button>
+    <button class="chip" data-f="奶奶">奶奶</button>
+    <button class="chip" data-f="外公">外公</button>
+    <button class="chip" data-f="外婆">外婆</button>
+    <span class="sep"></span>
+    <button class="chip" data-f="家里">家里</button>
+    <button class="chip" data-f="公园">公园</button>
+    <button class="chip" data-f="医院">医院</button>
+    <button class="chip" data-f="旅行">旅行</button>
+    <button class="chip" data-f="节日">节日</button>
+  </div>
+  <div class="sort">
+    <button class="on" data-s="date">按时间</button>
+    <button data-s="count">按张数</button>
+  </div>
+</div>
+
+<main class="wrap">
+  <div class="grid" id="grid">
+
+    <article class="sc" data-href="故事内页-走路这件事.html" data-people="妈妈 外婆" data-scene="家里" data-count="23" data-date="20210314">
+      <div class="ph"><img src="https://picsum.photos/seed/st01/900/600" alt="孩子学走路的照片"><span class="badge">系列</span></div>
+      <h3>走路这件事</h3>
+      <div class="m">2021.03 — 2021.11 · 23 张</div>
+      <div class="p">妈妈 · 外婆 · 家里</div>
+    </article>
+
+    <article class="sc" data-people="妈妈 外婆" data-scene="家里" data-count="58" data-date="20200402">
+      <div class="ph"><img src="https://picsum.photos/seed/st02/900/600" alt="窗前的照片"><span class="badge">系列</span></div>
+      <h3>每天早上的那扇窗</h3>
+      <div class="m">2020.04 — 2022.12 · 58 张</div>
+      <div class="p">家里 · 每天早上</div>
+    </article>
+
+    <article class="sc" data-people="妈妈" data-scene="家里" data-count="8" data-date="20200908">
+      <div class="ph"><img src="https://picsum.photos/seed/st03/900/600" alt="叫妈妈的照片"></div>
+      <h3>第一次叫妈妈</h3>
+      <div class="m">2020.09.08 · 8 张</div>
+      <div class="p">妈妈 · 家里</div>
+    </article>
+
+    <article class="sc" data-people="妈妈 外婆" data-scene="家里" data-count="12" data-date="20201120">
+      <div class="ph"><img src="https://picsum.photos/seed/st04/900/600" alt="断奶那几天的照片"></div>
+      <h3>断奶的那一周</h3>
+      <div class="m">2020.11 · 12 张</div>
+      <div class="p">妈妈 · 外婆 · 家里</div>
+    </article>
+
+    <article class="sc" data-people="爷爷 奶奶" data-scene="节日" data-count="34" data-date="20210211">
+      <div class="ph"><img src="https://picsum.photos/seed/st05/900/600" alt="回老家过年的照片"></div>
+      <h3>过年回老家</h3>
+      <div class="m">2021.02 · 34 张</div>
+      <div class="p">爷爷 · 奶奶 · 老家</div>
+    </article>
+
+    <article class="sc" data-people="外婆" data-scene="公园" data-count="41" data-date="20210405">
+      <div class="ph"><img src="https://picsum.photos/seed/st06/900/600" alt="楼下小广场的照片"><span class="badge">系列</span></div>
+      <h3>楼下的小广场</h3>
+      <div class="m">2021.04 — 2022.10 · 41 张</div>
+      <div class="p">外婆 · 公园</div>
+    </article>
+
+    <article class="sc" data-people="外婆" data-scene="公园" data-count="14" data-date="20210516">
+      <div class="ph"><img src="https://picsum.photos/seed/st07/900/600" alt="在沙坑的照片"></div>
+      <h3>沙坑里的一个下午</h3>
+      <div class="m">2021.05.16 · 14 张</div>
+      <div class="p">外婆 · 公园</div>
+    </article>
+
+    <article class="sc" data-people="爸爸 妈妈" data-scene="医院" data-count="9" data-date="20210722">
+      <div class="ph"><img src="https://picsum.photos/seed/st08/900/600" alt="发烧时的照片"></div>
+      <h3>发高烧那三天</h3>
+      <div class="m">2021.07 · 9 张</div>
+      <div class="p">爸爸 · 妈妈 · 医院</div>
+    </article>
+
+    <article class="sc" data-people="妈妈" data-scene="公园" data-count="17" data-date="20210912">
+      <div class="ph"><img src="https://picsum.photos/seed/st09/900/600" alt="和小伙伴的照片"></div>
+      <h3>他第一个朋友</h3>
+      <div class="m">2021.09 · 17 张</div>
+      <div class="p">妈妈 · 公园</div>
+    </article>
+
+    <article class="sc" data-people="爸爸 妈妈" data-scene="旅行" data-count="21" data-date="20211003">
+      <div class="ph"><img src="https://picsum.photos/seed/st10/900/600" alt="第一次坐飞机的照片"></div>
+      <h3>第一次坐飞机</h3>
+      <div class="m">2021.10 · 21 张</div>
+      <div class="p">爸爸 · 妈妈 · 旅行</div>
+    </article>
+
+    <article class="sc" data-people="妈妈" data-scene="旅行" data-count="11" data-date="20211206">
+      <div class="ph"><img src="https://picsum.photos/seed/st11/900/600" alt="上早教第一天的照片"></div>
+      <h3>上早教的第一天</h3>
+      <div class="m">2021.12.06 · 11 张</div>
+      <div class="p">妈妈 · 早教中心</div>
+    </article>
+
+    <article class="sc" data-people="爸爸" data-scene="家里" data-count="26" data-date="20200815">
+      <div class="ph"><img src="https://picsum.photos/seed/st12/900/600" alt="洗澡时的照片"><span class="badge">系列</span></div>
+      <h3>洗澡这件事</h3>
+      <div class="m">2020.08 — 2022.08 · 26 张</div>
+      <div class="p">爸爸 · 家里</div>
+    </article>
+
+  </div>
+
+  <button class="loadmore" id="more">还有 <i>15</i> 个故事</button>
+</main>
+
+<div class="foot">
+  <span>1–3 岁 · 27 个故事 · 196 张 · 仅家人可见</span>
+  <span>演示版 · 图片为占位素材</span>
+</div>
+
+<script>
+(function(){
+  var chips = document.querySelectorAll('.chip');
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.sc'));
+  var grid = document.getElementById('grid');
+  var curF = 'all';
+
+  function apply(){
+    cards.forEach(function(c){
+      var ok = curF === 'all'
+        || (c.dataset.people + ' ' + c.dataset.scene).indexOf(curF) > -1;
+      c.classList.toggle('hide', !ok);
+    });
+  }
+
+  chips.forEach(function(b){
+    b.addEventListener('click', function(){
+      chips.forEach(function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+      curF = b.dataset.f;
+      apply();
+    });
+  });
+
+  document.querySelectorAll('.sort button').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.sort button').forEach(function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+      var key = b.dataset.s;
+      cards.sort(function(a, c){
+        return key === 'count'
+          ? Number(c.dataset.count) - Number(a.dataset.count)
+          : Number(c.dataset.date) - Number(a.dataset.date);
+      });
+      cards.forEach(function(c){ grid.appendChild(c); });
+      apply();
+    });
+  });
+
+  document.getElementById('more').addEventListener('click', function(){
+    this.textContent = '已经没有更多了';
+    this.style.color = '#9A958C';
+    this.disabled = true;
+  });
+
+  document.querySelectorAll('.sc').forEach(function(c){
+    c.addEventListener('click', function(){
+      location.href = c.dataset.href || 'demo-首页.html';
+    });
+  });
+})();
+</script>
+</body>
+</html>
