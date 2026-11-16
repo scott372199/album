@@ -17,14 +17,13 @@
 ## 运行
 
 1. Android Studio → Open → 选择本目录 `android/`
-2. 首次同步会自己下载 Gradle 与依赖（本仓库没有带 wrapper 的 jar，Studio 会自动补）
+2. 首次同步会自己下载 Gradle 与依赖
 3. 连真机或开模拟器 → Run
 
-命令行构建（需本机已装 Gradle 8.7+）：
+命令行构建：
 
 ```
 cd android
-gradle wrapper          # 只跑一次，生成 gradlew
 ./gradlew assembleDebug
 # 产物：app/build/outputs/apk/debug/app-debug.apk
 ```

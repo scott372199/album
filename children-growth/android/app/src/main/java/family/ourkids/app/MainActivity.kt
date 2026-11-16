@@ -11,7 +11,7 @@ import android.os.Environment
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.webkit.HitTestResult
+import android.webkit.WebView.HitTestResult
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -44,7 +44,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bar: ProgressBar
     private var pendingFile: ValueCallback<Array<Uri>>? = null
 
-    /** 本地接口：把 Room 里的数据以 /api/* 的形式给 WebView */
+    /** 本地 API：把 Room 里的数据以 API 路由形式提供给 WebView */
     private val api by lazy { ApiServer(this) }
 
     private val fileChooser =

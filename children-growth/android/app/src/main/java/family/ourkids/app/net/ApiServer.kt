@@ -124,7 +124,7 @@ class ApiServer(context: Context) {
         }
     }
 
-    private fun people(): String = """{"items":$peopleArray()}"""
+    private fun people(): String = """{"items":${peopleArray()}}"""
 
     private fun peopleArray(): String = buildString {
         append("[")
