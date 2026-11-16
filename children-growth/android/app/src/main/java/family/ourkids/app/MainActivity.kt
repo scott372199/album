@@ -13,11 +13,13 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView.HitTestResult
 import android.webkit.ValueCallback
+import android.webkit.JsPromptResult
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.Toast
@@ -158,6 +160,27 @@ class MainActivity : AppCompatActivity() {
         }
 
         web.webChromeClient = object : WebChromeClient() {
+            override fun onJsPrompt(
+                view: WebView?,
+                url: String?,
+                message: String?,
+                defaultValue: String?,
+                result: JsPromptResult?
+            ): Boolean {
+                val input = EditText(this@MainActivity).apply {
+                    setText(defaultValue.orEmpty())
+                    selectAll()
+                }
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle(message ?: "输入")
+                    .setView(input)
+                    .setNegativeButton("取消") { _, _ -> result?.cancel() }
+                    .setPositiveButton("确定") { _, _ -> result?.confirm(input.text.toString()) }
+                    .setOnCancelListener { result?.cancel() }
+                    .show()
+                return true
+            }
+
             override fun onShowFileChooser(
                 webView: WebView?,
                 filePathCallback: ValueCallback<Array<Uri>>?,
