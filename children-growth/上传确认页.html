@@ -423,11 +423,12 @@
   var picker = document.getElementById('file-picker');
   document.getElementById('pick-files').addEventListener('click', function(){ picker.click(); });
   picker.addEventListener('change', function(){
-    var before = Number(document.getElementById('n-photo').textContent || 0);
+    var beforePhotos = Number(document.getElementById('n-photo').textContent || 0);
+    var beforeVideos = Number(document.getElementById('n-video').textContent || 0);
     document.getElementById('picked-count').textContent = picker.files.length;
     if (picker.files.length) {
       src.textContent = '正在导入 ' + picker.files.length + ' 个文件到本机…';
-      watchImport(0, before);
+      watchImport(0, beforePhotos, beforeVideos);
     }
   });
 
@@ -448,9 +449,11 @@
       return res[0].stats;
     });
   }
-  function watchImport(attempt, beforePhotos){
+  function watchImport(attempt, beforePhotos, beforeVideos){
     refreshLocal().then(function(stats){
-      if (Number(stats.photos || 0) > beforePhotos || attempt >= 20) {
+      var photoChanged = Number(stats.photos || 0) > beforePhotos;
+      var videoChanged = Number(stats.videos || 0) > beforeVideos;
+      if (photoChanged || videoChanged || attempt >= 20) {
         if (Number(stats.photos || 0) > beforePhotos) {
           src.textContent = '导入完成 · 本地数据库已更新';
         } else {
@@ -459,9 +462,9 @@
         picker.value = '';
         return;
       }
-      window.setTimeout(function(){ watchImport(attempt + 1, beforePhotos); }, 400);
+      window.setTimeout(function(){ watchImport(attempt + 1, beforePhotos, beforeVideos); }, 400);
     }).catch(function(){
-      if (attempt < 20) window.setTimeout(function(){ watchImport(attempt + 1, beforePhotos); }, 400);
+      if (attempt < 20) window.setTimeout(function(){ watchImport(attempt + 1, beforePhotos, beforeVideos); }, 400);
       else src.textContent = '导入状态暂时无法读取，请稍后刷新';
     });
   }

@@ -78,7 +78,7 @@ class MediaImporter(context: Context) {
                     confidence = "low",
                     status = "draft",
                     batch = 1,
-                    aiNote = "AI 还没有整理这批照片，请稍后确认",
+                    aiNote = "本地导入完成 · AI 整理功能尚未接入",
                     deck = "",
                     body = "",
                     pull = ""
