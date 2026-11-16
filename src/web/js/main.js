@@ -267,13 +267,27 @@ function renderSite() {
   renderAlbums(el('album-grid'), ctx.index.albums, {
     photos: ctx.index.photos,
     byId: ctx.index.byId,
-    onOpenAlbum: (name) => {
-      state.view = 'album';
-      state.album = name;
-      applyView();
-      syncUrl(true);
-    },
+    onOpenAlbum: enterAlbum,
   });
+}
+
+/**
+ * 进某个相册。**必须走 `refresh()`**：`applyView()` 只切显隐，不动目录——
+ * 曾经这里直接调 `applyView()`，于是点「2026」和点「未分类」都停在上一屏、
+ * 看到的是同一批照片，只有标题变了。
+ * `applyView()` only toggles visibility; the catalog is repainted by `refresh()`.
+ */
+function enterAlbum(name) {
+  state.view = 'album';
+  state.album = String(name || '');
+  state.q = '';
+  state.tag = '';
+  state.year = '';
+  state.month = '';
+  state.mode = null;
+  refresh();
+  syncUrl(true);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 /**

@@ -70,3 +70,69 @@ has no model credentials — either wire generation into the pipeline or delete 
 The budget was raised again (128 → 132 KB) to fit the growth-scale work. The gate
 measures source *including comments*; the real fix is to strip comments at build
 time so the budget constrains what users download.
+
+---
+
+## B-05 「相册」到底是什么 / What an album even is
+
+**中文 / Chinese**
+用户原话：「相册里面 2026 和未分类，我发现对相册的定义很模糊，这个相册的定义有什么用？
+我在上传时要我填相册，其实我是不知道选什么相册的，它能帮助我怎么管理这个站点？有其他
+更好的办法，不要让我选上传什么相册。」
+
+现状（2026-11-16 线上）：`albums = [{2026: 51}, {未分类: 2}]`。原因是——
+- 上传页「放进哪个相册」默认填**当前年份**（`src/web/js/upload.js:180`），所以绝大多数照片
+  落在 `2026`；服务端兜底写 `未分类`（`src/server/processor/derive.mjs:43`），那 2 张就是
+  兜底的结果。
+- 索引又把 `album` 塞进 `tags`，于是「标签」栏也变成 `[相册名, 年份]`（这条已在 V6 第二轮
+  用 `usefulTags()` 处理掉：不够两个有效值就整栏隐藏）。
+- 结论：**「相册」现在只是「年份」的副本**，外加一个「未分类」垃圾桶。它不承担任何
+  「管理」职责，却在上传时向用户要一次决策——这次决策是纯粹的成本。
+
+**待讨论的三个方向（不要再叠第四种）**
+1. **去掉它**：上传不再问相册，导航里不再有「相册」入口，`album` 字段只留在数据里不对外
+   表达。代价＝以后想做策展要重新设计。
+2. **改成自动分组**：不让人填，按拍摄时间的连续性自动切段（「11 月 · 周末出门」），名字由
+   时间与地点生成，不可手改。
+3. **保留但设门槛**：沿用 V6 已确立的规则——**有效值不足两个就整栏隐藏**；只有用户真的
+   建了 ≥2 个具名相册时才出现。等于「默认看不见，需要时再用」。
+
+倾向：短期按 1 收掉上传的决策成本，同时保留 3 的隐藏规则作为过渡；2 留给「策展」这个
+V8 话题。**在定下来之前，不要再往上传表单里加任何需要用户思考的字段。**
+
+*English*
+Albums are currently just a copy of the year (`2026`: 51, `未分类`: 2 — the upload form
+defaults to the current year and the server falls back to `未分类`), so the upload page
+asks the user to make a decision that carries no information. Either drop the concept,
+generate groups automatically, or keep it but hide it until two real named albums exist.
+
+---
+
+## B-06 「每月一句话」的语感 / The voice of the monthly line
+
+**中文 / Chinese**
+用户原话：「src/web/js/family.json 这里每句话都很生硬。」——说得对，而且能说清为什么生硬：
+
+现在这 9 句都是**记录者的口吻**，写的是「我拍了什么 / 数据为什么是这样」，不是「孩子身上
+发生了什么」。长辈要读的是孩子，不是拍摄日志。
+
+| 现在（记录者） | 问题 | 讨论候选（看孩子） |
+|---|---|---|
+| 第一次注意到，他的头发变长了 | 「第一次注意到」是观察者的动作 | 头发长到能扎起来了 |
+| 整月只留下一张，正是他笑的那张 | 在解释数据为什么少 | 这个月只拍了一张，正好在笑 |
+| 拍得最多，还多了个小女孩 | 统计口吻 | 这个月最热闹，还多了个一起玩的小伙伴 |
+| 第一次拍到他端着自己的碗 | 仍然是「拍到了」 | 会自己端着碗吃饭了，端得很稳 |
+
+**可以写进规矩的判据**（V7 定稿时用来自检，比「读起来温不温柔」可执行）：
+1. 主语优先是孩子，其次是他身上的东西；**不出现拍摄者**（我/拍到/注意到/记录）。
+2. 不解释数据（张数多少、为什么只有一张）——那是产品指标，不是生活。
+3. 一句话只放一个具体动作或一个具体物件，不放形容词堆砌。
+4. 长度仍受卡片排版限制（现在 10–26 字）：温柔不等于长。
+5. 允许留白与平淡。真实的一句「这个月没拍什么」，比一句抒情更可信。
+
+*English*
+All nine lines are written from the photographer's point of view ("first time I noticed",
+"took the most this month") — they narrate the shooting log, not the child. V7 should
+rewrite them with the child as the subject, and adopt the five checks above so the voice
+does not drift back into ad copy.
+
