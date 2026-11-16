@@ -12,7 +12,7 @@ import { chapterLine, endingLine } from '../js/story.js';
  * 这一层最容易被写错又最难被发现的两个点：
  *   1. 月龄差一个月没人看得出来——生日 2021-12，2026-11 是满 4 岁 11 个月，
  *      不是 4 岁 10 个月，也不是 5 岁；早于出生时它必须**闭嘴**而不是显示负数；
- *   2. 文案会越长越像广告词。这里按「12–24 字、不带数字、不用套话」硬卡。
+ *   2. 文案会越长越像广告词。这里按「10–26 字、不带数字、不用套话」硬卡。
  *
  * Month-age off-by-one is invisible by eye, and copy drifts into ad-speak over
  * time; both are pinned here.
@@ -50,7 +50,7 @@ test('装上真实文案后，生日与每月一句都读得到', () => {
   assert.equal(monthLine('2026-02'), '', '没有的月份返回空串，由调用方回退');
 });
 
-test('文案规矩：12–24 字、不带数字与日期、不用套话', () => {
+test('文案规矩：10–26 字、不带数字与日期、不用套话', () => {
   const banned = ['时光飞逝', '记录美好生活', '这一段', '走完了'];
   for (const [key, text] of Object.entries(copy.months)) {
     assert.match(key, /^\d{4}-\d{2}$/, `${key} 不是 YYYY-MM`);
