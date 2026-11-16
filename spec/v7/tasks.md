@@ -115,7 +115,7 @@
 
 - **状态**：✅
 - **内容**：检查壳层返回、文件选择、长按存图、视频点击播放、旋转和站外链接分流；本机若无 JDK/SDK，明确记录未编译。
-- **证据**：`python3 scripts/check-android.py` 通过；`ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew assembleDebug` 构建成功，产物为 `app/build/outputs/apk/debug/app-debug.apk`。
+- **证据**：`python3 scripts/check-android.py` 通过；`./gradlew assembleDebug` 构建成功；已安装并启动到 USB 设备 `SM-F956U`（serial `RFCX70MZLHT`），WebView Activity 可见，运行日志无 `AndroidRuntime` / `FATAL EXCEPTION`。
 - **验收**：可编译则运行构建与安装验证；不可编译则完成源码结构检查并记录阻塞原因。
 
 ## 发布与生产 Terraform
