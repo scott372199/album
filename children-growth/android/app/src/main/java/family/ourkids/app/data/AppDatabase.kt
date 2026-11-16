@@ -38,6 +38,7 @@ abstract class AppDatabase : RoomDatabase() {
                     .build()
                     .also {
                         Seed.ensure(it)
+                        it.storyDao().normalizeLegacyImportNotes()
                         instance = it
                     }
             }
