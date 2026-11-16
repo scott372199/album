@@ -6,13 +6,14 @@
 <title>生成故事卡片 | 我们的孩子</title>
 <style>
   :root{
-    --bg:#FAF9F6; --card:#FFFFFF;
+    --bg:#FFFFFF; --card:#FFFFFF;
     --ink:#111111; --mute:#767676; --rule:#E8E8E8; --rule2:#DED8CD; --accent:#B4795A;
     --serif:"Source Han Serif SC","Noto Serif SC","Songti SC",SimSun,serif;
     --sans:"Helvetica Neue",Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;
     --mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
   }
   html{font-size:16px;}
+  html.lg{font-size:18px;}
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.8;
     -webkit-font-smoothing:antialiased;padding-bottom:60px;}
@@ -20,7 +21,7 @@
   a{color:inherit;text-decoration:none;}
   button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
 
-  .hd{height:48px;border-bottom:1px solid var(--rule);background:#fff;display:flex;align-items:center;
+  .hd{height:44px;border-bottom:1px solid var(--rule);background:#fff;display:flex;align-items:center;
     padding:0 28px;position:sticky;top:0;z-index:50;}
   .hd .b{font-weight:700;font-size:.9375rem;}
   .hd .r{margin-left:auto;font-size:.8125rem;color:var(--mute);display:flex;gap:20px;}
@@ -93,7 +94,8 @@
   <span class="b">我们的孩子</span>
   <div class="r">
     <a href="story.html">回到故事</a>
-    <a href="home.html">相册</a>
+    <button id="btnBig" type="button" aria-label="切换长辈模式">字</button>
+    <a href="home.html">返回首页</a>
   </div>
 </header>
 
@@ -187,6 +189,11 @@
     });
   });
 })();
+  document.getElementById('btnBig').addEventListener('click', function(){
+    document.documentElement.classList.toggle('lg');
+    try { localStorage.setItem('kids-large-type', document.documentElement.classList.contains('lg') ? '1' : '0'); } catch (e) {}
+  });
+  try { if (localStorage.getItem('kids-large-type') === '1') document.documentElement.classList.add('lg'); } catch (e) {}
 </script>
 </body>
 </html>
