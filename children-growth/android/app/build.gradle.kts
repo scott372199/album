@@ -12,8 +12,8 @@ android {
         applicationId = "family.ourkids.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 700
+        versionName = "7.0.0-test"
     }
 
     buildTypes {
