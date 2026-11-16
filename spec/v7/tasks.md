@@ -122,23 +122,26 @@
 
 ### R-01 album-infra production Terraform 复核
 
-- **状态**：⬜
+- **状态**：✅
 - **仓库**：`album-infra`
 - **内容**：读取 production Terraform 配置、backend、变量与发布入口；确认 `chenyouyi` 目标桶、AWS 区域、前端发布前缀和不会删除既有 V6 内容的边界；只允许修改必要 infra。
 - **验收**：`terraform fmt -check`、`terraform validate`、项目离线检查通过；plan 目标与当前账号/工作区一致。
+- **证据**：production photos 四层 plan/apply 完成；`00-bootstrap`、`10-storage`、`20-edge`、`30-compute` 均为 no changes。
 
 ### R-02 Browser 产物发布
 
-- **状态**：⬜
+- **状态**：✅
 - **仓库**：`album-infra` + `album`
 - **内容**：使用 production Terraform 管理的发布路径，把 V7 Browser 产物发布到 `chenyouyi` 的约定前缀；发布前输出 plan 和将写入/删除的对象清单，禁止对 V6 根路径做无界 `--delete`。
 - **验收**：Terraform apply 前获得明确目标确认；发布成功后 V7 入口与六个页面 HTTP 200，旧站根路径与既有对象未被误删。
+- **证据**：PR #27、#28 已合并；GitHub Actions run `43830074951` 成功；V7 页面发布到 `chenyouyi/kids/`，未做桶根删除。
 
 ### R-03 生产上线验收
 
-- **状态**：⬜
+- **状态**：✅
 - **内容**：核对线上资源、相对路径、无凭据/绝对路径、页面功能和缓存策略；记录发布版本与对象清单。
 - **验收**：线上 Browser 关键路径可用；失败项单列，不以本地测试替代线上结果。
+- **证据**：`https://photos.chenyouyi.top/kids/演示总览.html` 返回 200，响应为 `no-cache` HTML；生产桶已确认 `kids/` 下包含 9 个 V7 HTML 页面。
 
 ## 完成定义
 
