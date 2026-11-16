@@ -11,6 +11,10 @@
 > *Source: the V6 backlog plus the 2026-11-14 requirement review.*
 > 流程约束 / Process: 本文确认后才进入 Plan；`tasks.md` 打勾只代表代码入库，**是否验收只由验收矩阵决定**。
 > *Only after this spec is confirmed does the Plan stage start; a checked task means code merged, and acceptance is decided solely by the acceptance matrix.*
+> **2026-11-16 迭代收尾 / Iteration closed**：四轮生产验收后关闭。判定与结转清单见
+> [`V6-ACCEPTANCE.md`](./V6-ACCEPTANCE.md)。本文保持确认时的原样，**不追写**收尾结论。
+> *Closed on 2026-11-16 after four acceptance rounds; see V6-ACCEPTANCE.md. This document
+> stays as confirmed and is not rewritten with closure notes.*
 
 ---
 

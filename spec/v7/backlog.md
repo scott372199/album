@@ -1,8 +1,13 @@
 # V7 产品优化 Backlog / V7 Product Optimization Backlog
 
-> 来源 / Source：V6 第二轮验收（2026-11-16）中与产品方向有关的讨论。仅记录需求，
-> 方案待 V7 spec 阶段细化。 / Captured during V6 round-2 acceptance; requirements
-> only, solutions to be refined in the V7 spec phase.
+> 来源 / Source：V6 第二～四轮验收（2026-11-16）中与产品方向有关的讨论，以及 V6 收尾时
+> 明确结转的遗留项。仅记录需求与证据，**方案待 V7 spec 阶段细化**；未定案前不要照着某一条
+> 直接写代码。/ Captured during V6 acceptance rounds 2–4 and the V6 closure carry-over;
+> requirements and evidence only, solutions to be refined in the V7 spec phase.
+>
+> 状态 / Status：V6 已于 2026-11-16 收尾（见 [`spec/v6/V6-ACCEPTANCE.md`](../v6/V6-ACCEPTANCE.md)），
+> 本文件是下一迭代的**唯一需求入口**。B-01~B-06 之间没有优先级顺序，B-05、B-06 对用户日常
+> 使用的影响最大。
 
 ---
 
