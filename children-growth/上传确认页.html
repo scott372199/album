@@ -423,8 +423,12 @@
   var picker = document.getElementById('file-picker');
   document.getElementById('pick-files').addEventListener('click', function(){ picker.click(); });
   picker.addEventListener('change', function(){
+    var before = Number(document.getElementById('n-photo').textContent || 0);
     document.getElementById('picked-count').textContent = picker.files.length;
-    if (picker.files.length) src.textContent = '正在导入 ' + picker.files.length + ' 个文件到本机…';
+    if (picker.files.length) {
+      src.textContent = '正在导入 ' + picker.files.length + ' 个文件到本机…';
+      watchImport(0, before);
+    }
   });
 
   // 先读本地数据库（bootstrap 出摘要，drafts 出列表）；不是 App 环境时退回演示数据
@@ -435,13 +439,34 @@
     });
   };
 
-  Promise.all([get('/bootstrap'), get('/drafts')])
-    .then(function(res){
+  function refreshLocal(){
+    return Promise.all([get('/bootstrap'), get('/drafts')]).then(function(res){
       state.live = true;
       fillStats(res[0].stats);
       src.textContent = '本地数据库 · ' + res[1].total + ' 个草稿';
       render(res[1]);
-    })
+      return res[0].stats;
+    });
+  }
+  function watchImport(attempt, beforePhotos){
+    refreshLocal().then(function(stats){
+      if (Number(stats.photos || 0) > beforePhotos || attempt >= 20) {
+        if (Number(stats.photos || 0) > beforePhotos) {
+          src.textContent = '导入完成 · 本地数据库已更新';
+        } else {
+          src.textContent = '导入仍在后台处理，请稍后刷新';
+        }
+        picker.value = '';
+        return;
+      }
+      window.setTimeout(function(){ watchImport(attempt + 1, beforePhotos); }, 400);
+    }).catch(function(){
+      if (attempt < 20) window.setTimeout(function(){ watchImport(attempt + 1, beforePhotos); }, 400);
+      else src.textContent = '导入状态暂时无法读取，请稍后刷新';
+    });
+  }
+
+  refreshLocal()
     .catch(function(){
       src.textContent = '演示数据 · 6 条样例（App 内读本地数据库）';
       render(DEMO);

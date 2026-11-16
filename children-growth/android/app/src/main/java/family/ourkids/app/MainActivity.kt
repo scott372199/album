@@ -49,7 +49,14 @@ class MainActivity : AppCompatActivity() {
 
     private val fileChooser =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            val selected = WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+            val data = result.data
+            val parsed = WebChromeClient.FileChooserParams.parseResult(result.resultCode, data)
+            val fallback = when {
+                data?.clipData != null -> Array(data.clipData!!.itemCount) { i -> data.clipData!!.getItemAt(i).uri }
+                data?.data != null -> arrayOf(data.data!!)
+                else -> null
+            }
+            val selected = parsed?.takeIf { it.isNotEmpty() } ?: fallback
             if (selected != null) api.importFiles(selected.toList())
             pendingFile?.onReceiveValue(selected)
             pendingFile = null
