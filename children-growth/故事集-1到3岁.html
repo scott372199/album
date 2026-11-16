@@ -13,6 +13,7 @@
     --mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
   }
   html{font-size:16px;}
+  html.lg{font-size:18px;}
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:1rem;line-height:1.8;
     -webkit-font-smoothing:antialiased;}
@@ -67,6 +68,8 @@
   .sc .m{font-size:.75rem;color:var(--mute);margin-top:7px;font-family:var(--mono);}
   .sc .p{font-size:.75rem;color:#9A958C;margin-top:3px;}
   .sc.hide{display:none;}
+  .empty{display:none;grid-column:1/-1;padding:54px 0;text-align:center;color:var(--mute);font-family:var(--serif);font-size:1.05rem;}
+  .empty button{margin-left:10px;border-bottom:1px solid var(--ink);font-size:.8125rem;}
 
   .loadmore{display:block;margin:44px auto 0;font-size:.8125rem;letter-spacing:.06em;
     border:1px solid var(--rule);padding:12px 30px;transition:.2s;}
@@ -94,11 +97,8 @@
   <div class="hd-in">
     <a class="brand" href="demo-首页.html">我们的孩子</a>
     <nav class="nav">
-      <a href="demo-首页.html">2019</a>
-      <a href="demo-首页.html">2021</a>
-      <a href="demo-首页.html">2023</a>
-      <a href="demo-首页.html">2026</a>
-      <a class="on dim" href="故事集-1到3岁.html">索引</a>
+      <a href="demo-首页.html">返回首页</a>
+      <button id="btnBig" type="button" aria-label="切换长辈模式">字</button>
     </nav>
   </div>
 </header>
@@ -115,20 +115,20 @@
 
 <div class="bar wrap">
   <div class="chips" id="chips">
-    <button class="chip on" data-f="all">全部</button>
+    <button class="chip on" data-g="all" data-f="all">全部</button>
     <span class="sep"></span>
-    <button class="chip" data-f="爸爸">爸爸</button>
-    <button class="chip" data-f="妈妈">妈妈</button>
-    <button class="chip" data-f="爷爷">爷爷</button>
-    <button class="chip" data-f="奶奶">奶奶</button>
-    <button class="chip" data-f="外公">外公</button>
-    <button class="chip" data-f="外婆">外婆</button>
+    <button class="chip" data-g="people" data-f="爸爸">爸爸</button>
+    <button class="chip" data-g="people" data-f="妈妈">妈妈</button>
+    <button class="chip" data-g="people" data-f="爷爷">爷爷</button>
+    <button class="chip" data-g="people" data-f="奶奶">奶奶</button>
+    <button class="chip" data-g="people" data-f="外公">外公</button>
+    <button class="chip" data-g="people" data-f="外婆">外婆</button>
     <span class="sep"></span>
-    <button class="chip" data-f="家里">家里</button>
-    <button class="chip" data-f="公园">公园</button>
-    <button class="chip" data-f="医院">医院</button>
-    <button class="chip" data-f="旅行">旅行</button>
-    <button class="chip" data-f="节日">节日</button>
+    <button class="chip" data-g="scene" data-f="家里">家里</button>
+    <button class="chip" data-g="scene" data-f="小区">小区</button>
+    <button class="chip" data-g="scene" data-f="公园">公园</button>
+    <button class="chip" data-g="scene" data-f="旅行">旅行</button>
+    <button class="chip" data-g="scene" data-f="节日">节日</button>
   </div>
   <div class="sort">
     <button class="on" data-s="date">按时间</button>
@@ -225,6 +225,8 @@
 
   </div>
 
+  <div class="empty" id="empty">这个筛选下没有故事，换一个家人试试。<button type="button" id="clear">清除筛选</button></div>
+
   <button class="loadmore" id="more">还有 <i>15</i> 个故事</button>
 </main>
 
@@ -238,44 +240,83 @@
   var chips = document.querySelectorAll('.chip');
   var cards = Array.prototype.slice.call(document.querySelectorAll('.sc'));
   var grid = document.getElementById('grid');
-  var curF = 'all';
+  var filters = { people:'all', scene:'all' };
+  var sortKey = 'date';
+
+  function readHash(){
+    location.hash.replace(/^#/, '').split('&').forEach(function(pair){
+      var bits = pair.split('='), key = decodeURIComponent(bits[0] || ''), value = decodeURIComponent(bits[1] || '');
+      if (key === 'people' || key === 'scene') filters[key] = value || 'all';
+      if (key === 'sort' && (value === 'date' || value === 'count')) sortKey = value;
+    });
+  }
+
+  function writeHash(){
+    location.hash = 'people=' + encodeURIComponent(filters.people) + '&scene=' + encodeURIComponent(filters.scene) + '&sort=' + sortKey;
+  }
+
+  function syncControls(){
+    chips.forEach(function(b){
+      var group = b.dataset.g;
+      b.classList.toggle('on', group === 'all'
+        ? filters.people === 'all' && filters.scene === 'all'
+        : filters[group] === b.dataset.f);
+    });
+    document.querySelectorAll('.sort button').forEach(function(b){ b.classList.toggle('on', b.dataset.s === sortKey); });
+  }
 
   function apply(){
+    var visible = 0;
     cards.forEach(function(c){
-      var ok = curF === 'all'
-        || (c.dataset.people + ' ' + c.dataset.scene).indexOf(curF) > -1;
-      c.classList.toggle('hide', !ok);
+      var personOk = filters.people === 'all' || (c.dataset.people || '').split(' ').indexOf(filters.people) > -1;
+      var sceneOk = filters.scene === 'all' || (c.dataset.scene || '').split(' ').indexOf(filters.scene) > -1;
+      var show = personOk && sceneOk;
+      c.classList.toggle('hide', !show);
+      if (show) visible++;
     });
+    document.getElementById('empty').style.display = visible ? 'none' : 'block';
+  }
+
+  function render(){
+    cards.sort(function(a, c){
+      return sortKey === 'count' ? Number(c.dataset.count) - Number(a.dataset.count) : Number(c.dataset.date) - Number(a.dataset.date);
+    });
+    cards.forEach(function(c){ grid.appendChild(c); });
+    syncControls();
+    apply();
   }
 
   chips.forEach(function(b){
     b.addEventListener('click', function(){
-      chips.forEach(function(x){ x.classList.remove('on'); });
-      b.classList.add('on');
-      curF = b.dataset.f;
-      apply();
+      if (b.dataset.g === 'all') { filters.people = 'all'; filters.scene = 'all'; }
+      else filters[b.dataset.g] = filters[b.dataset.g] === b.dataset.f ? 'all' : b.dataset.f;
+      writeHash();
+      render();
     });
   });
 
   document.querySelectorAll('.sort button').forEach(function(b){
     b.addEventListener('click', function(){
-      document.querySelectorAll('.sort button').forEach(function(x){ x.classList.remove('on'); });
-      b.classList.add('on');
-      var key = b.dataset.s;
-      cards.sort(function(a, c){
-        return key === 'count'
-          ? Number(c.dataset.count) - Number(a.dataset.count)
-          : Number(c.dataset.date) - Number(a.dataset.date);
-      });
-      cards.forEach(function(c){ grid.appendChild(c); });
-      apply();
+      sortKey = b.dataset.s;
+      writeHash();
+      render();
     });
   });
+
+  readHash();
+  render();
 
   document.getElementById('more').addEventListener('click', function(){
     this.textContent = '已经没有更多了';
     this.style.color = '#9A958C';
     this.disabled = true;
+  });
+
+  document.getElementById('clear').addEventListener('click', function(){
+    filters.people = 'all';
+    filters.scene = 'all';
+    writeHash();
+    render();
   });
 
   document.querySelectorAll('.sc').forEach(function(c){
@@ -284,6 +325,11 @@
     });
   });
 })();
+  document.getElementById('btnBig').addEventListener('click', function(){
+    document.documentElement.classList.toggle('lg');
+    try { localStorage.setItem('kids-large-type', document.documentElement.classList.contains('lg') ? '1' : '0'); } catch (e) {}
+  });
+  try { if (localStorage.getItem('kids-large-type') === '1') document.documentElement.classList.add('lg'); } catch (e) {}
 </script>
 </body>
 </html>

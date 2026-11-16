@@ -217,12 +217,7 @@
   <div class="hd-in">
     <a class="brand" href="#top">我们的孩子</a>
     <nav class="nav">
-      <a class="yr" href="#s3">2019</a>
-      <a class="yr" href="#s3">2021</a>
-      <a class="yr" href="#s3">2023</a>
-      <a class="yr" href="#s3">2026</a>
-      <a class="srch" href="搜索-演示.html">搜索</a>
-      <button id="btnIdx" class="dim">索引</button>
+      <button id="btnIdx">索引</button>
       <button id="btnBig" class="big" title="长辈模式：整体字号放大">字</button>
     </nav>
   </div>
@@ -497,10 +492,16 @@
     sx = null;
   }, {passive:true});
 
-  /* 首次提示 3 秒 */
+  /* 首次提示 3.5 秒；同一会话只提示一次，减少动效时不出现 */
   var hint = document.getElementById('hint');
-  setTimeout(function(){ hint.classList.add('on'); }, 700);
-  setTimeout(function(){ hint.classList.remove('on'); }, 4200);
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var hintSeen = false;
+  try { hintSeen = sessionStorage.getItem('kids-hint-seen') === '1'; } catch (e) {}
+  if (!reduceMotion && !hintSeen) {
+    try { sessionStorage.setItem('kids-hint-seen', '1'); } catch (e) {}
+    setTimeout(function(){ hint.classList.add('on'); }, 700);
+    setTimeout(function(){ hint.classList.remove('on'); }, 4200);
+  }
 
   /* 滚动入场 */
   var io = new IntersectionObserver(function(es){
@@ -551,7 +552,9 @@
   /* 长辈模式 */
   document.getElementById('btnBig').onclick = function(){
     document.documentElement.classList.toggle('lg');
+    try { localStorage.setItem('kids-large-type', document.documentElement.classList.contains('lg') ? '1' : '0'); } catch (e) {}
   };
+  try { if (localStorage.getItem('kids-large-type') === '1') document.documentElement.classList.add('lg'); } catch (e) {}
 
   /* 大图 */
   var lbx = document.getElementById('lbx'),
