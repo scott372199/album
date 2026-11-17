@@ -104,8 +104,12 @@
   .empty{display:none;padding:60px 0;text-align:center;color:#9A958C;font-size:.875rem;}
 
   /* 底部条 */
-  .barfix{position:fixed;left:0;right:0;bottom:0;height:64px;background:#fff;border-top:1px solid var(--rule);
-    display:flex;align-items:center;padding:0 28px;z-index:70;}
+  .publish-auth{position:fixed;inset:0;background:rgba(17,17,17,.35);z-index:90;display:grid;place-items:center;padding:20px;}
+  .publish-auth[hidden]{display:none;}
+  .publish-auth .box{background:#fff;max-width:360px;width:100%;padding:24px;box-shadow:0 16px 40px rgba(0,0,0,.18);}
+  .publish-auth h3{font-family:var(--serif);font-weight:400;margin-bottom:14px;}
+  .publish-auth input{width:100%;border:0;border-bottom:1px solid var(--rule2);padding:9px 0;margin:6px 0 12px;font:inherit;}
+  .publish-auth .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;}
   .barfix .cnt{font-size:.8125rem;color:var(--mute);font-family:var(--mono);}
   .barfix .cnt b{color:var(--ink);font-weight:400;}
   .barfix .tip{font-size:.75rem;color:#9A958C;margin-left:18px;}
@@ -165,6 +169,18 @@
 
   <div class="empty" id="empty">这个分类下没有草稿了。</div>
 
+</div>
+
+<div class="publish-auth" id="publish-auth" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="publish-auth-title">
+    <h3 id="publish-auth-title">发布到 V7</h3>
+    <input id="publish-phone" type="tel" inputmode="numeric" placeholder="手机号" autocomplete="tel">
+    <input id="publish-key" type="password" placeholder="共享密钥" autocomplete="off">
+    <div class="actions">
+      <button class="btn sm" id="publish-cancel" type="button">取消</button>
+      <button class="btn sm solid" id="publish-confirm" type="button">开始发布</button>
+    </div>
+  </div>
 </div>
 
 <div class="barfix">
@@ -426,14 +442,12 @@
       canvas.toBlob(function(blob){ blob ? resolve(blob) : reject(new Error('image encode failed')); }, 'image/jpeg', .86);
     });
   }
-  async function publishSelected(){
+  async function publishSelected(phone, key){
     if (location.hostname !== 'appassets.androidplatform.net' || !state.pickedFiles.length) return false;
     var images = state.pickedFiles.filter(function(file){ return /^image\//.test(file.type); });
     var videos = state.pickedFiles.filter(function(file){ return /^video\//.test(file.type); });
     if (!images.length) { window.alert('本轮没有可发布的照片；视频发布将在视频展示图处理接入后开放。'); return false; }
     if (videos.length) window.alert('本轮先发布照片，视频已保留在本机，视频发布将在展示图处理接入后开放。');
-    var phone = window.prompt('手机号');
-    var key = window.prompt('共享密钥');
     if (!phone || !key) return false;
     var base = 'https://3y07fqxete.execute-api.ap-southeast-1.amazonaws.com';
     var auth = await fetch(base + '/auth', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({phone:phone,key:key}) });
@@ -457,30 +471,42 @@
     return true;
   }
 
-  document.getElementById('finish').addEventListener('click', async function(){
-    if (state.pickedFiles.length && location.hostname === 'appassets.androidplatform.net') {
-      this.disabled = true;
-      this.textContent = '发布中…';
-      try {
-        var published = await publishSelected();
-        if (published) {
-          this.textContent = '已发布到 V7';
-          this.style.background = '#3B6D11';
-          this.style.borderColor = '#3B6D11';
-        } else {
-          this.disabled = false;
-          this.textContent = '完成并发布到相册';
-        }
-      } catch (e) {
-        window.alert(e.message || '发布失败');
-        this.disabled = false;
-        this.textContent = '完成并发布到相册';
+  var authBox = document.getElementById('publish-auth');
+  var finish = document.getElementById('finish');
+  function closePublishAuth(){ authBox.hidden = true; }
+  document.getElementById('publish-cancel').addEventListener('click', closePublishAuth);
+  document.getElementById('publish-confirm').addEventListener('click', async function(){
+    var phone = document.getElementById('publish-phone').value.trim();
+    var key = document.getElementById('publish-key').value;
+    if (!phone || !key) return;
+    this.disabled = true;
+    this.textContent = '发布中…';
+    try {
+      var published = await publishSelected(phone, key);
+      if (published) {
+        closePublishAuth();
+        finish.textContent = '已发布到 V7';
+        finish.style.background = '#3B6D11';
+        finish.style.borderColor = '#3B6D11';
       }
+    } catch (e) {
+      window.alert(e.message || '发布失败');
+    } finally {
+      this.disabled = false;
+      this.textContent = '开始发布';
+    }
+  });
+  finish.addEventListener('click', function(){
+    if (location.hostname !== 'appassets.androidplatform.net') {
+      this.textContent = '已发布 · 去相册看看';
       return;
     }
-    this.textContent = '已发布 · 去相册看看';
-    this.style.background = '#3B6D11';
-    this.style.borderColor = '#3B6D11';
+    if (!state.pickedFiles.length) {
+      window.alert('请先选择照片');
+      return;
+    }
+    authBox.hidden = false;
+    document.getElementById('publish-phone').focus();
   });
 
   var picker = document.getElementById('file-picker');
