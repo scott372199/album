@@ -92,6 +92,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupWeb()
+        web.clearCache(true)
         web.loadUrl(START_URL)
 
         // 加载失败时也不让转圈一直挂着
