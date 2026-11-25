@@ -22,6 +22,9 @@ interface MediaDao {
     @Query("SELECT * FROM media WHERE id = :id")
     fun byId(id: String): MediaItem?
 
+    @Query("SELECT * FROM media WHERE id LIKE 'md_import_%' AND type = 'photo' ORDER BY takenAt DESC")
+    fun importedPhotos(): List<MediaItem>
+
     @Query("SELECT COUNT(*) FROM media WHERE type = 'photo'")
     fun photoCount(): Int
 

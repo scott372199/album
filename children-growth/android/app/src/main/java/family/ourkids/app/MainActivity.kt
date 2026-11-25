@@ -92,6 +92,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupWeb()
+        api.prewarm()
         web.clearCache(true)
         web.loadUrl(START_URL)
 
@@ -134,6 +135,9 @@ class MainActivity : AppCompatActivity() {
                 // /api/* 交给本地数据接口，其余静态资源仍由 assets 提供
                 if (url.host == ASSET_HOST && (url.path ?: "").startsWith("/api/")) {
                     return api.handle(request)
+                }
+                if (url.host == ASSET_HOST && (url.path ?: "").startsWith("/publish-media/")) {
+                    return api.publishMedia(url.path ?: "")
                 }
                 if (url.host == ASSET_HOST && (url.path ?: "").startsWith("/media/")) {
                     return api.media(url.path ?: "")

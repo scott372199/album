@@ -87,7 +87,7 @@ class MediaImporter(context: Context) {
                 candidates = "这一日的照片|这段时间的照片|未命名合集",
                 startAt = startAt,
                 endAt = endAt,
-                cover = "https://appassets.androidplatform.net/media/${items.first().id}",
+                cover = "https://appassets.androidplatform.net/publish-media/${items.first().id}.jpg",
                 photoCount = photoCount,
                 videoCount = videoCount,
                 confidence = "low",

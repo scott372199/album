@@ -2,10 +2,12 @@ package family.ourkids.app.net
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import family.ourkids.app.data.AppDatabase
 import family.ourkids.app.data.MediaImporter
+import family.ourkids.app.data.PublishDerivatives
 import family.ourkids.app.data.Story
 import family.ourkids.app.data.StoryMedia
 import java.io.File
@@ -26,11 +28,25 @@ class ApiServer(context: Context) {
 
     private val appContext = context.applicationContext
     private val importer = MediaImporter(appContext)
+    private val derivatives = PublishDerivatives(appContext)
+
+    fun prewarm() {
+        Thread {
+            val count = derivatives.all().size
+            Log.i("OurKidsPublish", "prepared $count metadata-free display derivatives")
+        }.start()
+    }
     private fun db() = AppDatabase.get(appContext)
 
     /** File chooser callback runs on the UI thread; Room work happens in the importer thread. */
     fun importFiles(uris: List<Uri>) {
         Thread { importer.import(uris) }.start()
+    }
+
+    fun publishMedia(path: String): WebResourceResponse {
+        val id = path.removePrefix("/publish-media/").removeSuffix(".jpg")
+        val file = derivatives.file(id) ?: return error(404, "publish derivative not found")
+        return WebResourceResponse("image/jpeg", null, 200, "OK", mapOf("Cache-Control" to "no-store"), FileInputStream(file))
     }
 
     fun media(path: String): WebResourceResponse {
@@ -49,6 +65,7 @@ class ApiServer(context: Context) {
 
         return try {
             when {
+                path == "/api/publishable" && method == "GET" -> ok(publishable())
                 path == "/api/bootstrap" && method == "GET" -> ok(bootstrap())
 
                 path == "/api/drafts" && method == "GET" -> ok(drafts())
@@ -102,6 +119,21 @@ class ApiServer(context: Context) {
     }
 
     /* ---------------- 各接口 ---------------- */
+
+    private fun publishable(): String = buildString {
+        val items = derivatives.all()
+        append("{\"items\":[")
+        items.forEachIndexed { index, item ->
+            if (index > 0) append(',')
+            append("{\"id\":\"").append(esc(item.id)).append("\",")
+            append("\"name\":\"").append(esc("${item.id}.jpg")).append("\",")
+            append("\"size\":").append(item.file.length()).append(',')
+            append("\"sha256\":\"").append(item.sha256).append("\",")
+            append("\"url\":\"https://appassets.androidplatform.net/publish-media/")
+                .append(esc(item.id)).append(".jpg\"}")
+        }
+        append("]}")
+    }
 
     private fun merge(sourceId: String, targetId: String): WebResourceResponse {
         if (sourceId.isBlank() || targetId.isBlank()) return error(400, "into required")
