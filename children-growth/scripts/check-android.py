@@ -28,7 +28,7 @@ require(JAVA / "data/AppDatabase.kt", 'if (db.storyDao().count() > 0) return', "
 api = require(JAVA / "net/ApiServer.kt", "class ApiServer", "api server")
 for route in [
     '"/api/bootstrap"', '"/api/drafts"', '"/api/drafts/accept-all"',
-    '"/api/stories"', '"/api/people"', '"/api/today"', '"/accept"', '"/rename"', '"/merge"'
+    '"/api/stories"', '"/api/people"', '"/api/today"', '"/api/publishable"', '"/accept"', '"/rename"', '"/merge"'
 ]:
     if route not in api:
         errors.append(f"api route missing: {route}")

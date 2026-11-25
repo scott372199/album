@@ -430,42 +430,25 @@
       .catch(function(){ finish(remainHigh()); });
   });
 
-  async function publishImage(file){
-    var bitmap = await createImageBitmap(file);
-    var scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
-    var canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
-    return new Promise(function(resolve, reject){
-      canvas.toBlob(function(blob){ blob ? resolve(blob) : reject(new Error('image encode failed')); }, 'image/jpeg', .86);
-    });
-  }
   async function publishSelected(phone, key){
-    if (location.hostname !== 'appassets.androidplatform.net' || !state.pickedFiles.length) return false;
-    var images = state.pickedFiles.filter(function(file){ return /^image\//.test(file.type); });
-    var videos = state.pickedFiles.filter(function(file){ return /^video\//.test(file.type); });
-    if (!images.length) { window.alert('本轮没有可发布的照片；视频发布将在视频展示图处理接入后开放。'); return false; }
-    if (videos.length) window.alert('本轮先发布照片，视频已保留在本机，视频发布将在展示图处理接入后开放。');
+    if (location.hostname !== 'appassets.androidplatform.net') return false;
     if (!phone || !key) return false;
+    var local = await get('/publishable');
+    var prepared = local.items || [];
+    if (!prepared.length) throw new Error('没有可发布的本地展示图');
     var base = 'https://3y07fqxete.execute-api.ap-southeast-1.amazonaws.com';
     var auth = await fetch(base + '/auth', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({phone:phone,key:key}) });
     if (!auth.ok) throw new Error('登录失败');
     var authJson = await auth.json();
-    var prepared = [];
-    for (var i=0; i<images.length; i++) {
-      var blob = await publishImage(images[i]);
-      var buffer = await blob.arrayBuffer();
-      var digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buffer))).map(function(x){ return x.toString(16).padStart(2,'0'); }).join('');
-      prepared.push({ name:'import-' + i + '.jpg', blob:blob, buffer:buffer, sha256:digest });
-    }
-    var signed = await fetch(base + '/v7/publish-url', { method:'POST', headers:{'content-type':'application/json', authorization:'Bearer ' + authJson.token}, body:JSON.stringify({files:prepared.map(function(x){ return {name:x.name,size:x.buffer.byteLength,sha256:x.sha256}; })}) });
+    var signed = await fetch(base + '/v7/publish-url', { method:'POST', headers:{'content-type':'application/json', authorization:'Bearer ' + authJson.token}, body:JSON.stringify({files:prepared.map(function(x){ return {name:x.name,size:x.size,sha256:x.sha256}; })}) });
     if (!signed.ok) throw new Error('无法取得发布地址');
     var items = (await signed.json()).items || [];
     if (items.some(function(x){ return x.multipart; })) throw new Error('存在过大的照片，请稍后使用分片发布');
     for (var j=0; j<items.length; j++) {
-      var put = await fetch(items[j].url, { method:'PUT', headers:items[j].headers, body:prepared[j].buffer });
+      var localResponse = await fetch(prepared[j].url, {cache:'no-store'});
+      if (!localResponse.ok) throw new Error('本地展示图读取失败');
+      var buffer = await localResponse.arrayBuffer();
+      var put = await fetch(items[j].url, { method:'PUT', headers:items[j].headers, body:buffer });
       if (!put.ok) throw new Error('照片发布失败');
     }
     return true;
